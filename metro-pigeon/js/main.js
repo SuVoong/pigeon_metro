@@ -117,6 +117,7 @@ function render() {
   drawHUD();
 
   if (state === STATE.START)     drawStartScreen();    // pantallas/inicio.js
+  if (state === STATE.PAUSED)    drawPauseScreen();    // pantallas/pausa.js
   if (state === STATE.GAME_OVER) drawGameOverScreen(); // pantallas/fin.js
 }
 

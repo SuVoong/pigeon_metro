@@ -94,7 +94,7 @@ const FONT = {
   '-': ['000','000','111','000','000'],
 };
 
-const STATE = { START: 0, PLAYING: 1, GAME_OVER: 2 };
+const STATE = { START: 0, PLAYING: 1, GAME_OVER: 2, PAUSED: 3 };
 
 let state = STATE.START;
 let score = 0;
