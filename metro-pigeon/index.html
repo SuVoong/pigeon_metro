@@ -28,6 +28,27 @@
 </head>
 <body>
   <canvas id="game"></canvas>
-  <script src="game.js"></script>
+
+  <!-- Mecánica: cargados primero, definen el estado global -->
+  <script src="js/mecanica/estado.js"></script>
+  <script src="js/mecanica/input.js"></script>
+  <script src="js/mecanica/camara.js"></script>
+  <script src="js/mecanica/colisiones.js"></script>
+  <script src="js/mecanica/spawning.js"></script>
+
+  <!-- Personajes -->
+  <script src="js/personajes/paloma.js"></script>
+
+  <!-- Escenarios -->
+  <script src="js/escenarios/metro.js"></script>
+  <script src="js/escenarios/renfe.js"></script>
+
+  <!-- Pantallas -->
+  <script src="js/pantallas/inicio.js"></script>
+  <script src="js/pantallas/pausa.js"></script>
+  <script src="js/pantallas/fin.js"></script>
+
+  <!-- Bucle principal: cargado al final, depende de todo lo anterior -->
+  <script src="js/main.js"></script>
 </body>
 </html>
