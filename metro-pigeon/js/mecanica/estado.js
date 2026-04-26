@@ -1,170 +1,195 @@
-'use strict';
-// Estado global compartido: canvas, constantes, paleta, estado de juego
+// Estado global compartido — exporta canvas, paleta, fuente y mutables del juego
 
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-ctx.imageSmoothingEnabled = false;
+export const canvas = document.getElementById('game');
+export const ctx = canvas.getContext('2d');
 
-const VIEW_W = 320;
-const VIEW_H = 200;
-
-const PAL = {
-  bg0: '#070708',
-  bg1: '#101218',
-  tunnelDark: '#1a1d24',
-  tunnelMid: '#262a33',
-  tunnelLight: '#363b47',
-  brick: '#2e2620',
-  brickGrout: '#1a1612',
-  brickHi: '#3d342c',
-  rail: '#5a5a64',
-  railShine: '#8a8a96',
-  pillar: '#3a3a44',
-  pillarShade: '#22222a',
-  train: '#e8b53b',
-  trainShade: '#a8801f',
-  trainWindow: '#9be3ff',
-  trainBlack: '#161616',
-  cable: '#1a1a22',
-  cableHi: '#33333d',
-  neonPink: '#ff4ea0',
-  neonCyan: '#36e7ff',
-  neonYellow: '#ffd84a',
-  pigeonBody: '#7c8fa8',
-  pigeonBelly: '#cfd8e3',
-  pigeonHead: '#5d7090',
-  pigeonBeak: '#f0a040',
-  pigeonFoot: '#e08838',
-  pigeonEye: '#101010',
-  bread: '#e8c476',
-  breadShade: '#a07a3a',
-  coin: '#ffd84a',
-  coinShade: '#a07a14',
-  pizzaCrust: '#c08040',
-  pizzaCheese: '#ffe080',
-  pizzaPep: '#c8302a',
-  passenger1: '#3a4a6a',
-  passenger2: '#6a3a4a',
-  passengerSkin: '#e8b890',
-  hudBg: '#000000',
-  hudText: '#f5e0a0',
-  danger: '#ff3030',
+export const PAL = {
+  bg: '#0d0d1a',           // fondo oscuro del túnel
+  brick: '#1a1a2e',        // ladrillos de las paredes
+  grout: '#111',           // mortero entre ladrillos
+  concrete: '#2a2a3a',     // techo y suelo
+  light: '#ffffaa',        // tubos fluorescentes
+  trainYellow: '#f5c518',  // cuerpo del metro
+  trainDark: '#222',       // ventanas del metro
+  pipeGray: '#888',        // tuberías
+  pigeonBody: '#9B9B9B',
+  pigeonWing: '#555',
+  pigeonTail: '#EEE',
+  pigeonEye: '#cc2200',
+  hud: '#ffffff',
+  particle: '#ffdd55',
 };
 
-const FONT = {
-  '0': ['111','101','101','101','111'],
-  '1': ['010','110','010','010','111'],
-  '2': ['111','001','111','100','111'],
-  '3': ['111','001','111','001','111'],
-  '4': ['101','101','111','001','001'],
-  '5': ['111','100','111','001','111'],
-  '6': ['111','100','111','101','111'],
-  '7': ['111','001','010','100','100'],
-  '8': ['111','101','111','101','111'],
-  '9': ['111','101','111','001','111'],
-  ':': ['000','010','000','010','000'],
-  ' ': ['000','000','000','000','000'],
-  'A': ['111','101','111','101','101'],
-  'B': ['110','101','110','101','110'],
-  'C': ['111','100','100','100','111'],
-  'D': ['110','101','101','101','110'],
-  'E': ['111','100','110','100','111'],
-  'F': ['111','100','110','100','100'],
-  'G': ['111','100','101','101','111'],
-  'H': ['101','101','111','101','101'],
-  'I': ['111','010','010','010','111'],
-  'J': ['001','001','001','101','111'],
-  'K': ['101','110','100','110','101'],
-  'L': ['100','100','100','100','111'],
-  'M': ['101','111','111','101','101'],
-  'N': ['101','111','111','111','101'],
-  'O': ['111','101','101','101','111'],
-  'P': ['111','101','111','100','100'],
-  'Q': ['111','101','101','111','011'],
-  'R': ['111','101','110','101','101'],
-  'S': ['111','100','111','001','111'],
-  'T': ['111','010','010','010','010'],
-  'U': ['101','101','101','101','111'],
-  'V': ['101','101','101','111','010'],
-  'W': ['101','101','111','111','101'],
-  'X': ['101','101','010','101','101'],
-  'Y': ['101','101','111','010','010'],
-  'Z': ['111','001','010','100','111'],
-  '!': ['010','010','010','000','010'],
-  '-': ['000','000','111','000','000'],
+export const FONT = '8px monospace';
+
+export const STATE = {
+  // 'START' | 'ARCADE' | 'HISTORY' | 'CHARACTER' | 'ACHIEVEMENTS' | 'SETTINGS'
+  // 'PLAYING' | 'PAUSED' | 'GAMEOVER'
+  phase: 'START',
+  score: 0,
+  lives: 3,
+  speed: 2,                 // velocidad de scroll (sube con el tiempo)
+  frame: 0,                 // contador global de frames
+  worldZ: 0,                // Z acumulado para perspectiva
+  menuCursor: 0,            // botón resaltado en el menú principal (0–3)
+  selectedCharacter: 0,     // índice del personaje elegido
+  selectedScenario: 'metro',// id del escenario elegido en arcade
+  selectedStartStationIndex: null, // índice de estación inicial (null ⇒ startStation por defecto)
+  totalPlaySeconds: 0,      // segundos jugados acumulados (para logros)
+  flightHistory: [],        // [{seconds, date}] ordenado desc, máx 10 entradas
+  editorOpen: false,        // true mientras el panel de edición está visible
 };
 
-const STATE = { START: 0, PLAYING: 1, GAME_OVER: 2, PAUSED: 3 };
-
-let state = STATE.START;
-let score = 0;
-let lives = 3;
-let timeAlive = 0;
-let invuln = 0;
-let hitFlash = 0;
-let scrollSpeed = 60;
-
-const camera = { x: 0, y: 0 };
-
-const pigeon = {
-  x: 0,
-  y: VIEW_H / 2,
-  vx: 0,
-  vy: 0,
-  w: 16,
-  h: 12,
-  flapFrame: 0,
-  flapTimer: 0,
-  facing: 1,
+export const pigeon = {
+  x: 0, y: 0,      // posición en mundo (centrada por la cámara)
+  vx: 0, vy: 0,    // velocidad con easing
+  wingFrame: 0,    // 0 | 1 | 2
+  invincible: 0,   // frames de invulnerabilidad restantes
+  tilt: 0,         // inclinación visual (-1 a 1)
 };
 
-let obstacles = [];
-let collectibles = [];
-let particles = [];
-let spawnTimer = 0;
-let collectTimer = 0;
-let bgFar = 0, bgMid = 0, bgNear = 0;
+export const obstacles = [];
+export const collectibles = [];
+export const particles = [];
 
-const keys = {};
+// Catálogo de personajes seleccionables.
+// Las funciones update/draw se registran en main.js para evitar dependencias circulares
+// (paloma.js y pidgey.js importan desde este mismo módulo).
+export const CHARACTERS = [
+  {
+    id: 0,
+    name: 'PALOMA',
+    unlocked: true,
+    description: 'La veterana del metro madrileño',
+    hint: '',
+    // update/draw se inyectan desde main.js
+    update: null,
+    draw:   null,
+    drawPreview(ctx, cx, cy) {
+      // Sprite 32×32, escala 2× → 64×64 en espacio actual (personaje.js añade 1.5×)
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(2, 2);
+      // Inline del sprite paloma, frame 0 (nivel), sin tilt
+      const ox = -16, oy = -16;
+      const p = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox+x, oy+y, w, h); };
+      p(12, 0,  8, 7, '#8899AA'); p(14, 0,  4, 2, '#9AABBB'); p(19, 2, 2, 2, '#FFFFFF');
+      p(10, 7,  5, 2, '#4488AA'); p(15, 7,  5, 2, '#AA44AA');
+      p(10, 8,  5, 1, '#2255AA'); p(15, 8,  5, 1, '#882299');
+      p( 8, 9, 16,14, '#8899AA'); p(10,10, 12,10, '#DDDDEE');
+      p( 8, 9,  2, 6, '#667788'); p(22, 9,  2, 6, '#667788');
+      // alas frame 0 (nivel)
+      p( 0,10, 8, 4, '#556677'); p(24,10, 8, 4, '#556677');
+      p( 0,13, 8, 2, '#445566'); p(24,13, 8, 2, '#445566');
+      p(12,23, 8, 4, '#445566'); p(11,26,10, 2, '#334455'); p(10,27,12, 1, '#223344');
+      p(11,22, 2, 3, '#E8AA88'); p(19,22, 2, 3, '#E8AA88');
+      p( 9,24, 4, 1, '#D09977'); p(19,24, 4, 1, '#D09977');
+      ctx.restore();
+    },
+  },
+  {
+    id: 1,
+    name: 'PIDGEY',
+    unlocked: false,
+    description: 'Pokémon #016 · Experto en vuelo',
+    hint: 'Vuela 5 minutos para desbloquear',
+    unlockCondition: (state) => state.totalPlaySeconds >= 300,
+    update: null,
+    draw:   null,
+    drawPreview(ctx, cx, cy) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(2, 2);
+      const ox = -16, oy = -16;
+      const p = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox+x, oy+y, w, h); };
+      // cresta
+      p(13, 0, 2, 3, '#885522'); p(15, 0, 2, 4, '#885522'); p(17, 0, 2, 3, '#885522');
+      p(14, 1, 4, 1, '#C8A040');
+      // cabeza
+      p(11, 3,10, 8, '#C8A040'); p(13, 3, 6, 3, '#DDCC88');
+      // cuerpo
+      p( 8,11,16,12, '#C8A040'); p(10,12,12, 9, '#EEEECC');
+      p( 8,11, 2, 8, '#885522'); p(22,11, 2, 8, '#885522');
+      // alas frame 0 (nivel)
+      p( 0,12, 8, 5, '#885522'); p(24,12, 8, 5, '#885522');
+      p( 0,16, 8, 2, '#DDCC88'); p(24,16, 8, 2, '#DDCC88');
+      // cola
+      p(12,23, 8, 3, '#885522'); p(13,25, 6, 2, '#DDCC88');
+      p(12,26, 8, 1, '#885522'); p(11,27,10, 1, '#664411');
+      // patas
+      p(11,22, 2, 3, '#FF6633'); p(19,22, 2, 3, '#FF6633');
+      p( 8,24, 5, 1, '#FF6633'); p(19,24, 5, 1, '#FF6633');
+      p( 9,25, 1, 1, '#CC4411'); p(11,25, 1, 1, '#CC4411');
+      p(19,25, 1, 1, '#CC4411'); p(21,25, 1, 1, '#CC4411');
+      ctx.restore();
+    },
+  },
+];
 
-function px(x, y, w, h, color) {
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, w, h);
-}
-
-function drawText(text, x, y, color, scale = 1) {
-  text = text.toUpperCase();
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    const glyph = FONT[ch];
-    if (!glyph) continue;
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 3; c++) {
-        if (glyph[r][c] === '1') {
-          px(x + (i * 4 + c) * scale, y + r * scale, scale, scale, color);
-        }
-      }
+/** Comprueba si algún personaje bloqueado cumple su condición y lo desbloquea. */
+export function checkUnlocks() {
+  let changed = false;
+  for (const char of CHARACTERS) {
+    if (!char.unlocked && typeof char.unlockCondition === 'function' && char.unlockCondition(STATE)) {
+      char.unlocked = true;
+      changed = true;
     }
+  }
+  if (changed) {
+    try {
+      localStorage.setItem(
+        'viajepalomero_chars',
+        JSON.stringify(CHARACTERS.map(c => ({ id: c.id, unlocked: c.unlocked }))),
+      );
+    } catch (_) { /* localStorage no disponible */ }
   }
 }
 
-function startGame() {
-  state = STATE.PLAYING;
-  score = 0;
-  lives = 3;
-  timeAlive = 0;
-  invuln = 0;
-  hitFlash = 0;
-  scrollSpeed = 60;
-  pigeon.x = 0;
-  pigeon.y = VIEW_H / 2;
-  pigeon.vx = 0;
-  pigeon.vy = 0;
-  obstacles = [];
-  collectibles = [];
-  particles = [];
-  spawnTimer = 0;
-  collectTimer = 0;
-  camera.x = 0;
-  camera.y = 0;
+/** Carga el progreso de personajes guardado en localStorage. */
+export function loadCharacterProgress() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('viajepalomero_chars') || '[]');
+    for (const s of saved) {
+      const c = CHARACTERS.find(x => x.id === s.id);
+      if (c) c.unlocked = s.unlocked;
+    }
+  } catch (_) { /* JSON inválido — ignorar */ }
+}
+
+// Catálogo de logros
+export const ACHIEVEMENTS = [
+  {
+    id: 'FLYING_HIGH',
+    title: 'Proeza Voladora',
+    description: 'Vuela más de 10 minutos en total',
+    icon: '🕊',
+    unlocked: false,
+    check: (state) => state.totalPlaySeconds >= 600,
+  },
+];
+
+// ── Historial de vuelos ────────────────────────────────────────────────────
+
+/** Formatea segundos como "MM:SS". Ej: 125 → "02:05" */
+export function formatFlightTime(seconds) {
+  const total = Math.floor(seconds);
+  const mm = Math.floor(total / 60).toString().padStart(2, '0');
+  const ss = (total % 60).toString().padStart(2, '0');
+  return `${mm}:${ss}`;
+}
+
+/** Guarda un vuelo en el historial (máx 10, ordenados desc por segundos). */
+export function saveFlightRecord(seconds) {
+  STATE.flightHistory.push({ seconds, date: new Date().toLocaleDateString('es-ES') });
+  STATE.flightHistory.sort((a, b) => b.seconds - a.seconds);
+  if (STATE.flightHistory.length > 10) STATE.flightHistory.length = 10;
+  localStorage.setItem('viajepalomero_history', JSON.stringify(STATE.flightHistory));
+}
+
+/** Carga el historial persistido desde localStorage al arrancar. */
+export function loadFlightHistory() {
+  try {
+    const raw = localStorage.getItem('viajepalomero_history');
+    if (raw) STATE.flightHistory = JSON.parse(raw);
+  } catch (e) { /* JSON inválido — ignorar */ }
 }

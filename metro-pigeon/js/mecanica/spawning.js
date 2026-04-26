@@ -1,51 +1,49 @@
-'use strict';
 // Generación de obstáculos, coleccionables y partículas
 
-function spawnObstacle() {
-  const types = ['train', 'pillar', 'cable', 'passenger'];
+import { obstacles, collectibles, particles } from './estado.js';
+
+const SPAWN_Z = 800;
+const COLLECTIBLE_Z = 600;
+
+export function spawnObstacle() {
+  const types = ['trainLeft', 'trainRight', 'pipe'];
   const type = types[Math.floor(Math.random() * types.length)];
-  const wx = camera.x + VIEW_W / 2 + VIEW_W / 2 + 40 + Math.random() * 60;
-  let wy, w, h;
-  if (type === 'train') {
-    w = 90; h = 36;
-    wy = (Math.random() < 0.5 ? VIEW_H * 0.18 : VIEW_H * 0.62);
-  } else if (type === 'pillar') {
-    w = 14; h = 120;
-    wy = VIEW_H / 2 - h / 2 + (Math.random() * 40 - 20);
-  } else if (type === 'cable') {
-    w = 32; h = 22;
-    wy = 8 + Math.random() * 20;
-  } else { // passenger
-    w = 14; h = 22;
-    wy = VIEW_H - 28 - Math.random() * 4;
+
+  // No spawnear trenes opuestos a la vez (deja al jugador sin escapatoria)
+  if (type === 'trainLeft' || type === 'trainRight') {
+    const opposite = type === 'trainLeft' ? 'trainRight' : 'trainLeft';
+    const conflict = obstacles.some(
+      o => o.type === opposite && Math.abs(o.z - SPAWN_Z) < 200
+    );
+    if (conflict) return;
   }
-  obstacles.push({ type, x: wx, y: wy, w, h, vx: -scrollSpeed - (type === 'train' ? 80 : 0) });
+
+  if (type === 'trainLeft') {
+    obstacles.push({ type, z: SPAWN_Z, x: -120, y: 0, w: 90, h: 140 });
+  } else if (type === 'trainRight') {
+    obstacles.push({ type, z: SPAWN_Z, x: 120, y: 0, w: 90, h: 140 });
+  } else {
+    // Tubería: y aleatoria pero asegura ≥80px de hueco respecto al centro
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const yOffset = (80 + Math.random() * 60) * side;
+    obstacles.push({ type, z: SPAWN_Z, x: 0, y: yOffset, w: 400, h: 14 });
+  }
 }
 
-function spawnCollectible() {
-  const r = Math.random();
-  let type;
-  if (r < 0.6) type = 'bread';
-  else if (r < 0.9) type = 'coin';
-  else type = 'pizza';
-  const w = type === 'pizza' ? 12 : 8;
-  const h = type === 'pizza' ? 12 : 8;
-  const wx = camera.x + VIEW_W / 2 + VIEW_W / 2 + 20 + Math.random() * 80;
-  const wy = 30 + Math.random() * (VIEW_H - 60);
-  collectibles.push({
-    type, x: wx, y: wy, w, h, vx: -scrollSpeed,
-    bob: Math.random() * Math.PI * 2,
-    points: type === 'bread' ? 5 : type === 'coin' ? 10 : 25,
-  });
+export function spawnCollectible() {
+  const type = Math.random() < 0.7 ? 'breadcrumb' : 'coin';
+  const x = (Math.random() - 0.5) * 240;
+  const y = (Math.random() - 0.5) * 160;
+  collectibles.push({ type, z: COLLECTIBLE_Z, x, y, w: 8, h: 8 });
 }
 
-function emitParticles(x, y, color, count) {
+export function emitParticles(x, y, color, count) {
   for (let i = 0; i < count; i++) {
     particles.push({
       x, y,
-      vx: (Math.random() - 0.5) * 80,
-      vy: (Math.random() - 0.5) * 80 - 20,
-      life: 0.4 + Math.random() * 0.3,
+      vx: (Math.random() - 0.5) * 4,
+      vy: (Math.random() - 0.5) * 4,
+      life: 30,
       color,
     });
   }

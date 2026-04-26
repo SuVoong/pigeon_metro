@@ -1,19 +1,22 @@
-'use strict';
-// Captura de teclado y dispatch a estados de juego
+// Captura de teclado con patrón de consumo para teclas de un solo disparo
 
-window.addEventListener('keydown', (e) => {
-  keys[e.key.toLowerCase()] = true;
-  if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(e.key.toLowerCase())) {
-    e.preventDefault();
-  }
-  if (state === STATE.START && (e.key === ' ' || e.key === 'Enter')) startGame();
-  if (state === STATE.PLAYING && e.key === 'Escape') state = STATE.PAUSED;
-  if (state === STATE.PAUSED && (e.key === ' ' || e.key === 'Enter')) state = STATE.PLAYING;
-  if (state === STATE.PAUSED && e.key === 'Escape') state = STATE.START;
-  if (state === STATE.GAME_OVER && (e.key === ' ' || e.key === 'Enter')) startGame();
-  if (state === STATE.GAME_OVER && e.key === 'Escape') state = STATE.START;
-});
+export const keys = {};
 
-window.addEventListener('keyup', (e) => {
-  keys[e.key.toLowerCase()] = false;
-});
+export function initInput() {
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    keys[e.key] = true;
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    keys[e.key] = false;
+  });
+}
+
+// Marca una tecla como leída para que un solo evento no dispare varias acciones
+export function consumeKey(k) {
+  keys[k] = false;
+}

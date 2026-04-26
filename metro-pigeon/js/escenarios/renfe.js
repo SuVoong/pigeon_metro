@@ -1,8 +1,11 @@
-'use strict';
-// Escenario: Renfe — pendiente de implementar
+// Escenario Renfe — pendiente de implementar
 //
 // Ideas:
-// - Vagones de color rojo/gris con logo Renfe
+// - Vagones rojos/grises con logo Renfe
 // - Vías al aire libre con árboles y postes de catenaria
-// - Diferente paleta de colores (cielo diurno en lugar de túnel oscuro)
-// - Obstáculos específicos: puertas automáticas, andamios de obras
+// - Paleta diurna (cielo en lugar de túnel oscuro)
+// - Obstáculos: puertas automáticas, andamios de obras
+//
+// Cuando se implemente, exportar funciones equivalentes a metro.js
+// (drawTunnel, updateObstacles, drawObstacles, etc.) y elegir entre
+// escenarios desde main.js según una variable STATE.escenario.

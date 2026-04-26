@@ -1,94 +1,143 @@
-'use strict';
-// Personaje: Paloma — física de movimiento y sprite
+// Paloma urbana — vista de espaldas, físíca con easing y sprite 32×32 (4 frames de aleteo)
 
-function updatePigeon(dt) {
-  const accel = 380;
-  const maxSpeed = 130;
-  const friction = 6;
+import { pigeon, STATE, canvas } from '../mecanica/estado.js';
+import { keys } from '../mecanica/input.js';
+import { w2sx, w2sy } from '../mecanica/camara.js';
 
-  let ax = 0, ay = 0;
-  if (keys['arrowleft'] || keys['a']) ax -= 1;
-  if (keys['arrowright'] || keys['d']) ax += 1;
-  if (keys['arrowup'] || keys['w']) ay -= 1;
-  if (keys['arrowdown'] || keys['s']) ay += 1;
-  if (ax !== 0 || ay !== 0) {
-    const m = Math.hypot(ax, ay);
-    ax /= m; ay /= m;
-  }
+const MAX_VELOCITY = 6;
+const EASING       = 0.15;
+const SPRITE_SCALE = 3;   // 32px diseño × 3 = 96px en pantalla
 
-  pigeon.vx += ax * accel * dt;
-  pigeon.vy += ay * accel * dt;
-  pigeon.vx -= pigeon.vx * friction * dt;
-  pigeon.vy -= pigeon.vy * friction * dt;
+// Paleta
+const PAL_PALOMA = {
+  head:        '#8899AA',
+  headLight:   '#9AABBB',
+  eye:         '#FFFFFF',
+  collarTeal:  '#4488AA',
+  collarPurp:  '#AA44AA',
+  collarShad1: '#2255AA',
+  collarShad2: '#882299',
+  body:        '#8899AA',
+  belly:       '#DDDDEE',
+  bodyShadow:  '#667788',
+  wing:        '#556677',
+  wingTip:     '#445566',
+  tail:        '#445566',
+  tailMid:     '#334455',
+  tailTip:     '#223344',
+  leg:         '#E8AA88',
+  foot:        '#D09977',
+};
 
-  const sp = Math.hypot(pigeon.vx, pigeon.vy);
-  if (sp > maxSpeed) {
-    pigeon.vx = (pigeon.vx / sp) * maxSpeed;
-    pigeon.vy = (pigeon.vy / sp) * maxSpeed;
-  }
+// Ciclo de aleteo: 4 frames visuales, 6 pasos de ciclo, avanza cada 7 frames de juego.
+// Frames: 0=nivel  1=arriba  2=medio-arriba  3=abajo
+const WING_CYCLE = [0, 1, 2, 0, 3, 2];
+let _wingCyclePos = 0;
 
-  if (Math.abs(pigeon.vx) > 5) pigeon.facing = pigeon.vx > 0 ? 1 : -1;
+export function updatePigeon(dt) {
+  // Teclas → velocidad objetivo
+  let targetVx = 0, targetVy = 0;
+  if (keys['ArrowLeft']  || keys['a']) targetVx -= MAX_VELOCITY;
+  if (keys['ArrowRight'] || keys['d']) targetVx += MAX_VELOCITY;
+  if (keys['ArrowUp']    || keys['w']) targetVy -= MAX_VELOCITY;
+  if (keys['ArrowDown']  || keys['s']) targetVy += MAX_VELOCITY;
 
+  // Lerp hacia la velocidad objetivo
+  pigeon.vx += (targetVx - pigeon.vx) * EASING;
+  pigeon.vy += (targetVy - pigeon.vy) * EASING;
+
+  // Aplicar velocidad escalada por dt
   pigeon.x += pigeon.vx * dt;
   pigeon.y += pigeon.vy * dt;
 
-  // Límites verticales del túnel
-  const topLimit = camera.y - VIEW_H / 2 + 14;
-  const botLimit = camera.y + VIEW_H / 2 - 18;
-  if (pigeon.y < topLimit) { pigeon.y = topLimit; pigeon.vy = 0; }
-  if (pigeon.y > botLimit) { pigeon.y = botLimit; pigeon.vy = 0; }
+  // Clampear a la zona central del canvas
+  const maxX = canvas.width  * 0.28;
+  const maxY = canvas.height * 0.28;
+  pigeon.x = Math.max(-maxX, Math.min(maxX, pigeon.x));
+  pigeon.y = Math.max(-maxY, Math.min(maxY, pigeon.y));
 
-  // Animación de aleteo (más rápido con más velocidad)
-  pigeon.flapTimer += dt * (4 + Math.abs(pigeon.vx) * 0.05 + Math.abs(pigeon.vy) * 0.05);
-  if (pigeon.flapTimer >= 1) {
-    pigeon.flapTimer = 0;
-    pigeon.flapFrame = (pigeon.flapFrame + 1) % 3;
+  // Inclinación visual
+  pigeon.tilt = Math.max(-1, Math.min(1, pigeon.vx / MAX_VELOCITY));
+
+  // Ciclo de alas: avanzar cada 7 frames
+  if (STATE.frame % 7 === 0) {
+    _wingCyclePos = (_wingCyclePos + 1) % WING_CYCLE.length;
+    pigeon.wingFrame = WING_CYCLE[_wingCyclePos];
   }
+
+  if (pigeon.invincible > 0) pigeon.invincible--;
 }
 
-function drawPigeon() {
-  const sx = w2sx(pigeon.x) - 8;
-  const sy = w2sy(pigeon.y) - 6;
-  if (invuln > 0 && Math.floor(timeAlive * 20) % 2 === 0) return; // parpadeo de invulnerabilidad
+export function drawPigeon(ctx) {
+  // Parpadeo durante invulnerabilidad
+  if (pigeon.invincible > 0 && STATE.frame % 2 === 0) return;
 
-  const f = pigeon.flapFrame; // 0=arriba, 1=medio, 2=abajo
-  const flip = pigeon.facing < 0;
+  const sx = w2sx(pigeon.x);
+  const sy = w2sy(pigeon.y);
 
-  const sprite = [];
-  function p(x, y, c) { sprite.push([x, y, c]); }
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(pigeon.tilt * 0.3);
+  ctx.scale(SPRITE_SCALE, SPRITE_SCALE);
+  _drawPalomaSprite(ctx, 0, 0, pigeon.wingFrame);
+  ctx.restore();
+}
 
-  // Cuerpo
-  p(4, 5, PAL.pigeonBody); p(5, 5, PAL.pigeonBody); p(6, 5, PAL.pigeonBody); p(7, 5, PAL.pigeonBody); p(8, 5, PAL.pigeonBody);
-  p(3, 6, PAL.pigeonBody); p(4, 6, PAL.pigeonBelly); p(5, 6, PAL.pigeonBelly); p(6, 6, PAL.pigeonBelly); p(7, 6, PAL.pigeonBelly); p(8, 6, PAL.pigeonBody);
-  p(3, 7, PAL.pigeonBody); p(4, 7, PAL.pigeonBelly); p(5, 7, PAL.pigeonBelly); p(6, 7, PAL.pigeonBelly); p(7, 7, PAL.pigeonBelly); p(8, 7, PAL.pigeonBody);
-  p(4, 8, PAL.pigeonBody); p(5, 8, PAL.pigeonBody); p(6, 8, PAL.pigeonBody); p(7, 8, PAL.pigeonBody);
+/**
+ * Dibuja el sprite 32×32 de la paloma centrado en (cx, cy).
+ * Se puede llamar con escala 1 (el contexto ya está escalado desde fuera)
+ * o con escala diferente para previews.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} cx  X centro del sprite en el espacio actual
+ * @param {number} cy  Y centro del sprite en el espacio actual
+ * @param {number} wingFrame  0-3
+ */
+export function _drawPalomaSprite(ctx, cx, cy, wingFrame = 0) {
+  const ox = cx - 16;  // esquina superior-izquierda del box 32×32
+  const oy = cy - 16;
+  const p  = (x, y, w, h, col) => {
+    ctx.fillStyle = col;
+    ctx.fillRect(ox + x, oy + y, w, h);
+  };
 
-  // Cabeza
-  p(9, 4, PAL.pigeonHead); p(10, 4, PAL.pigeonHead); p(11, 4, PAL.pigeonHead);
-  p(9, 5, PAL.pigeonHead); p(10, 5, PAL.pigeonHead); p(11, 5, PAL.pigeonHead);
-  p(11, 5, PAL.pigeonEye);
-  p(12, 5, PAL.pigeonBeak); p(13, 5, PAL.pigeonBeak);
-  p(12, 6, PAL.pigeonBeak);
+  // ── Cabeza ─────────────────────────────────────────────────────────────────
+  p(12,  0,  8, 7, PAL_PALOMA.head);
+  p(14,  0,  4, 2, PAL_PALOMA.headLight);
+  p(19,  2,  2, 2, PAL_PALOMA.eye);
 
-  // Patas (recogidas en vuelo)
-  p(6, 9, PAL.pigeonFoot); p(8, 9, PAL.pigeonFoot);
+  // ── Collar iridiscente ─────────────────────────────────────────────────────
+  p(10,  7,  5, 2, PAL_PALOMA.collarTeal);
+  p(15,  7,  5, 2, PAL_PALOMA.collarPurp);
+  p(10,  8,  5, 1, PAL_PALOMA.collarShad1);
+  p(15,  8,  5, 1, PAL_PALOMA.collarShad2);
 
-  // Ala — 3 frames
-  if (f === 0) { // arriba
-    p(4, 2, PAL.pigeonHead); p(5, 2, PAL.pigeonHead); p(6, 2, PAL.pigeonHead);
-    p(4, 3, PAL.pigeonBody); p(5, 3, PAL.pigeonBody); p(6, 3, PAL.pigeonBody); p(7, 3, PAL.pigeonBody);
-    p(5, 4, PAL.pigeonBody); p(6, 4, PAL.pigeonBody);
-  } else if (f === 1) { // medio
-    p(3, 4, PAL.pigeonHead); p(4, 4, PAL.pigeonHead); p(5, 4, PAL.pigeonHead); p(6, 4, PAL.pigeonHead); p(7, 4, PAL.pigeonHead);
-    p(3, 5, PAL.pigeonBody);
-  } else { // abajo
-    p(3, 8, PAL.pigeonHead); p(4, 9, PAL.pigeonHead); p(5, 9, PAL.pigeonHead); p(6, 9, PAL.pigeonHead);
-    p(4, 10, PAL.pigeonBody); p(5, 10, PAL.pigeonBody); p(6, 10, PAL.pigeonBody);
+  // ── Cuerpo ─────────────────────────────────────────────────────────────────
+  p( 8,  9, 16, 14, PAL_PALOMA.body);
+  p(10, 10, 12, 10, PAL_PALOMA.belly);
+  p( 8,  9,  2,  6, PAL_PALOMA.bodyShadow);  // sombra izq
+  p(22,  9,  2,  6, PAL_PALOMA.bodyShadow);  // sombra der
+
+  // ── Alas (4 frames) ────────────────────────────────────────────────────────
+  let wingY, tipY;
+  switch (wingFrame) {
+    case 1:  wingY = 4;  tipY = 3;  break;  // arriba
+    case 2:  wingY = 7;  tipY = 6;  break;  // medio-arriba
+    case 3:  wingY = 14; tipY = 17; break;  // abajo
+    default: wingY = 10; tipY = 13; break;  // nivel (0)
   }
+  p( 0, wingY,  8, 4, PAL_PALOMA.wing);    // ala izq cuerpo
+  p(24, wingY,  8, 4, PAL_PALOMA.wing);    // ala der cuerpo
+  p( 0, tipY,   8, 2, PAL_PALOMA.wingTip); // punta izq
+  p(24, tipY,   8, 2, PAL_PALOMA.wingTip); // punta der
 
-  for (const [px_, py_, c] of sprite) {
-    const dx = flip ? (15 - px_) : px_;
-    ctx.fillStyle = c;
-    ctx.fillRect(sx + dx, sy + py_, 1, 1);
-  }
+  // ── Cola ───────────────────────────────────────────────────────────────────
+  p(12, 23,  8, 4, PAL_PALOMA.tail);
+  p(11, 26, 10, 2, PAL_PALOMA.tailMid);
+  p(10, 27, 12, 1, PAL_PALOMA.tailTip);
+
+  // ── Patas ──────────────────────────────────────────────────────────────────
+  p(11, 22,  2, 3, PAL_PALOMA.leg);   // pierna izq
+  p(19, 22,  2, 3, PAL_PALOMA.leg);   // pierna der
+  p( 9, 24,  4, 1, PAL_PALOMA.foot);  // pie izq
+  p(19, 24,  4, 1, PAL_PALOMA.foot);  // pie der
 }
