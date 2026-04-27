@@ -13,6 +13,7 @@
 
 import * as auth from './auth.js';
 import * as PM   from './preset_manager.js';
+import * as DD   from './widgets/dropdown.js';
 import { drawToolbar,    handleToolbarInput    } from './panels/panel_toolbar.js';
 import { drawCategories, handleCategoriesInput } from './panels/panel_categories.js';
 import { drawCanvas,     handleCanvasInput     } from './panels/panel_canvas.js';
@@ -47,7 +48,10 @@ export function open() {
   return true;
 }
 
-export function close()  { _open = false; }
+export function close() {
+  _open = false;
+  DD.closeAllDropdowns();
+}
 export function isOpen() { return _open; }
 
 export function getLayout() { return LAYOUT; }
@@ -101,6 +105,9 @@ export function draw(ctx, canvas) {
   const W = canvas.width, H = canvas.height;
   const R = _regions(W, H);
 
+  // Clear dropdown registry at the start of each frame
+  DD.clearDropdownRegistry();
+
   // Backdrop (covers everything underneath)
   ctx.fillStyle = '#050508';
   ctx.fillRect(0, 0, W, H);
@@ -119,6 +126,9 @@ export function draw(ctx, canvas) {
 
   // Toast (centered top)
   _drawToast(ctx, W, H);
+
+  // Draw open dropdown list LAST (on top of everything)
+  DD.drawOpenDropdownList(ctx);
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
