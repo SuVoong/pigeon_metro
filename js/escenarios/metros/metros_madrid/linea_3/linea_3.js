@@ -2,9 +2,10 @@
 // Envuelve MetroBase con su configuración de gameplay y la lista de
 // estaciones jugables del modo arcade.
 
-import { MADRID_LINES, ZONES } from '../mapa_metro_madrid.js';
-import { MetroBase } from '../../metro_base/metro_base.js';
-import { STATE } from '../../../../mecanica/estado.js';
+import { MADRID_LINES, ZONES }       from '../mapa_metro_madrid.js';
+import { MetroBase }                  from '../../metro_base/metro_base.js';
+import { STATE }                      from '../../../../mecanica/estado.js';
+import { drawEstacionDelicias }       from './estacion_delicias_render.js';
 
 const data = MADRID_LINES.find(l => l.id === 3);
 
@@ -108,6 +109,17 @@ export const Linea3 = {
     MetroBase.config.spawnInterval = overrides?.spawnInterval ?? baseSpawnInterval;
   },
 
+  /**
+   * Asigna el sceneRenderer correcto según la estación actual.
+   * Delicias usa el andén fotorrealista; el resto usa el túnel genérico.
+   */
+  _updateSceneRenderer() {
+    const name = this.getCurrentStationName() ?? '';
+    MetroBase.config.sceneRenderer = name === 'Delicias'
+      ? drawEstacionDelicias
+      : null;
+  },
+
   /** Avanza a la siguiente estación, sube velocidad, lanza toast. */
   advanceStation() {
     if (this.currentStationIndex >= this.arcadeProgression.length - 1) return;
@@ -122,6 +134,7 @@ export const Linea3 = {
     MetroBase.setStationSign(sName, this.data.color, { y: this._getStationSignY() });
     this.toast = { text: `Siguiente estación: ${sName}`, framesLeft: 150 };
     this._applyDifficulty();
+    this._updateSceneRenderer();
   },
 
   init() {
@@ -153,6 +166,7 @@ export const Linea3 = {
     );
     this.toast = null;
     this._applyDifficulty();
+    this._updateSceneRenderer();
   },
 
   reset() {
@@ -162,6 +176,7 @@ export const Linea3 = {
     this.stationElapsed      = 0;
     this.activeStation       = this._buildGenericStation(this.arcadeProgression[startIdx]);
     this.toast               = null;
+    this._updateSceneRenderer();
   },
 
   update(dt) {
