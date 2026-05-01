@@ -23,9 +23,13 @@ export const cat_fisica = {
     y = _row(hits, drawSlider(ctx, region, y, 'Gravedad',      'fisica.pigeonGravity',      -1,   1));
 
     y = drawSection(ctx, region, y, 'COLISIONES');
-    y = _row(hits, drawSlider(ctx, region, y, 'Frames inv.',   'fisica.invincibleFrames',   30, 240, 0));
-    y = _row(hits, drawSlider(ctx, region, y, 'Hitbox (px)',   'fisica.pigeonHitboxSize',    8,  40, 0));
-    y = _row(hits, drawSlider(ctx, region, y, 'Sacudida cám.', 'fisica.cameraShakeIntensity', 0, 30, 0));
+    y = _row(hits, drawSlider(ctx, region, y, 'Hitbox paloma', 'fisica.pigeonHitboxSize',     8,  64, 0));
+    y = _row(hits, drawSlider(ctx, region, y, 'Frames inv.',   'fisica.invincibleFrames',    20, 240, 0));
+    y = _row(hits, drawSlider(ctx, region, y, 'Stun (frames)', 'fisica.stunFrames',          10,  90, 0));
+    y = _row(hits, drawSlider(ctx, region, y, 'Sacudida cám.', 'fisica.cameraShakeIntensity', 0,  30, 0));
+    y = _row(hits, drawSlider(ctx, region, y, 'Zona colisión', 'fisica.arcadeCollisionZ',   100, 900, 0));
+    y = _row(hits, drawSlider(ctx, region, y, 'Margen tren',   'fisica.trainHitboxMargin',  -0.3, 0.3, 2));
+    y = _row(hits, drawSlider(ctx, region, y, 'Pos. vert. tren','fisica.trainVerticalPos',  0.30, 0.70, 2));
 
     y = drawSection(ctx, region, y, 'CURVA DIFICULTAD');
     y = _row(hits, drawToggle(ctx, region, y, 'Activa',        'fisica.difficultyRamp.enabled'));

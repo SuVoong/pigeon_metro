@@ -1,8 +1,17 @@
 // Motor reutilizable de túnel de metro: dos vías paralelas, spawn de
 // trenes, scroll Z, rótulo de estación. Cada línea concreta lo configura.
 
-import { STATE } from '../../../mecanica/estado.js';
-import { drawTunnel, drawTrack, drawStationSign, setLEDStation } from './metro_base_render.js';
+import { STATE, canvas } from '../../../mecanica/estado.js';
+import { drawTrack, drawStationSign, setLEDStation } from './metro_base_render.js';
+import { TRAIN_CFG } from '../../../editor/train_config.js';
+import { drawTunel }  from './tunel.js';
+import * as PM from '../../../editor/preset_manager.js';
+
+// Mismas constantes que metro_base_render.js para hitbox sin acoplamiento circular
+const FOCAL = 400;
+const _perspective = (z) => FOCAL / (FOCAL + z);
+const _w2sx = (wx) => canvas.width  / 2 + wx;
+const _w2sy = (wy) => canvas.height / 2 + wy;
 
 const DEFAULT_CONFIG = {
   trainColor:     '#F39200',     // naranja Línea 3 por defecto
@@ -97,7 +106,7 @@ export const MetroBase = {
   },
 
   render(ctx) {
-    drawTunnel(ctx, this.config);
+    drawTunel(ctx, this.config, STATE.worldZ);
     drawTrack(ctx, this.tracks.left,  this.config);
     drawTrack(ctx, this.tracks.right, this.config);
     if (this.currentSign) {
@@ -105,5 +114,43 @@ export const MetroBase = {
         y: this.currentSign.signY,
       });
     }
+  },
+
+  /**
+   * Devuelve las hitboxes en coordenadas de pantalla de todos los trenes
+   * actualmente visibles. Replica exactamente los cálculos de drawTrack()
+   * para que la caja coincida con el sprite renderizado.
+   * @returns {{ x, y, w, h }[]}
+   */
+  getTrainHitboxes() {
+    // Leer parámetros de colisión del preset activo
+    const _f      = PM.getActive()?.fisica ?? {};
+    const margin  = _f.trainHitboxMargin ?? 0;       // >0 encoge, <0 expande
+    const vertPos = _f.trainVerticalPos  ?? TRAIN_CFG.verticalPos;
+    const yShift  = (vertPos - 0.5) * canvas.height;
+
+    const boxes  = [];
+
+    for (const track of [this.tracks.left, this.tracks.right]) {
+      for (const train of track) {
+        // Solo trenes que ya se renderizan (mismo rango que drawTrack)
+        if (train.z < -50 || train.z > 900) continue;
+
+        const s         = _perspective(train.z);
+        const sx        = _w2sx(train.x * s);
+        const sy        = _w2sy(train.y * s) + yShift;
+        const drawScale = s * TRAIN_CFG.scaleMultiplier;
+
+        // Dimensiones reales del sprite en pantalla, ajustadas por margen
+        const renderW = TRAIN_CFG.baseWidth  * drawScale;
+        const renderH = TRAIN_CFG.baseHeight * drawScale;
+        const hw = renderW * (0.5 - margin);
+        const hh = renderH * (0.5 - margin);
+
+        boxes.push({ x: sx - hw, y: sy - hh, w: hw * 2, h: hh * 2 });
+      }
+    }
+
+    return boxes;
   },
 };

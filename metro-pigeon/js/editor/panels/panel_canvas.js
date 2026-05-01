@@ -18,6 +18,7 @@ let _drag = null;   // { itemId, axis, startX, startY, startVal }
 // ── Public draw ───────────────────────────────────────────────────────────────
 export function drawCanvas(ctx, x, y, w, h) {
   _hits = [];
+  _selectionRect = null;
   _frame++;
 
   // Background

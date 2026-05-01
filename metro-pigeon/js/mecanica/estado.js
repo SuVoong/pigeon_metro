@@ -38,6 +38,11 @@ export const STATE = {
   totalPlaySeconds: 0,      // segundos jugados acumulados (para logros)
   flightHistory: [],        // [{seconds, date}] ordenado desc, máx 10 entradas
   editorOpen: false,        // true mientras el panel de edición está visible
+  cameraShake: 0,           // frames de camera shake restantes
+};
+
+export const DEBUG = {
+  showHitboxes: false,      // visualizar hitboxes de colisión
 };
 
 export const pigeon = {
@@ -45,6 +50,8 @@ export const pigeon = {
   vx: 0, vy: 0,    // velocidad con easing
   wingFrame: 0,    // 0 | 1 | 2
   invincible: 0,   // frames de invulnerabilidad restantes
+  stunned: 0,      // frames de aturdimiento (bloquea input)
+  stunStars: [],   // array de estrellitas girando
   tilt: 0,         // inclinación visual (-1 a 1)
 };
 

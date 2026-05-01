@@ -194,9 +194,14 @@ export const PRESET_SCHEMA = {
     pigeonAcceleration:  0.15,
     pigeonMaxVelocity:   8,
     pigeonGravity:       0,
-    invincibleFrames:    90,
-    pigeonHitboxSize:    20,
-    cameraShakeIntensity: 12,
+    // ── Colisiones ─────────────────────────────────────────────────────────────
+    invincibleFrames:    50,    // frames de invulnerabilidad tras un golpe
+    stunFrames:          30,    // frames de animación de aturdimiento
+    pigeonHitboxSize:    36,    // tamaño (px) de la hitbox cuadrada de la paloma
+    cameraShakeIntensity: 12,   // magnitud del shake de cámara al impactar
+    arcadeCollisionZ:    600,   // distancia Z a partir de la cual se detectan colisiones (arcade)
+    trainHitboxMargin:   0,     // fracción de reducción de la hitbox del tren (0=exacta, -0.1=mayor)
+    trainVerticalPos:    0.50,  // posición vertical del centro del tren en pantalla (0=arriba, 1=abajo)
     difficultyRamp: {
       enabled:        true,
       ratePerSecond:  0.05,

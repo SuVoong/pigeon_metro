@@ -5,7 +5,7 @@ export const DEFAULT_TRAIN_CONFIG = {
   // Size & position
   baseWidth:          48,
   baseHeight:         40,
-  verticalPos:        0.60,
+  verticalPos:        0.50,   // 0.50 = centrado en pantalla (mismo nivel que la paloma)
   scaleMultiplier:    2.5,
   // Colors
   bodyColor:          '#F0F0F0',

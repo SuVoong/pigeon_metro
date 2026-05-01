@@ -24,6 +24,8 @@
 
 import { canvas, STATE, PAL, formatFlightTime } from '../mecanica/estado.js';
 import { MapaMetroMadrid, drawTooltip, clearTooltip } from '../escenarios/metros/metros_madrid/mapa_metro_madrid.js';
+import * as PM from '../editor/preset_manager.js';
+import { DIFFICULTY_COLORS } from '../editor/config_schema.js';
 
 // ── Mouse tracking ─────────────────────────────────────────────
 let mouseX = -999, mouseY = -999;
@@ -50,6 +52,10 @@ let shiftDown = false;
 let stationPopup   = null;
 let _popupRowRects = [];   // calculados en drawStationPopup → usados en input
 
+// difficultyPopup: { lineId, stationIndex, stationName }
+let difficultyPopup = null;
+let _diffPopupRects = [];  // calculados en drawDifficultyPopup → usados en input
+
 // ── Helpers de geometría para el popup ───────────────────────────────────
 function _roundRect(ctx, x, y, w, h, r) {
   if (ctx.roundRect) {
@@ -63,6 +69,24 @@ function _roundRect(ctx, x, y, w, h, r) {
     ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
     ctx.closePath();
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+/** Abre el popup de selección de dificultad antes de lanzar la partida. */
+function _showDifficultyPicker(lineId, stationIndex, stationName) {
+  clearTooltip();
+  stationPopup    = null;
+  _popupRowRects  = [];
+  difficultyPopup = { lineId, stationIndex, stationName: stationName || '' };
+  _diffPopupRects = [];
+}
+
+/** Activa un preset y lanza la partida inmediatamente. */
+function _launchWithPreset(presetId, lineId, stationIndex) {
+  PM.setActive(presetId);
+  difficultyPopup = null;
+  _diffPopupRects = [];
+  launchScenario(lineId, stationIndex);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -224,7 +248,7 @@ function launchScenario(lineId, stationIndex) {
   STATE.phase = 'PLAYING';
 }
 
-// ── Selecciona opción del popup y lanza (o cierra si bloqueada) ──────────
+// ── Selecciona opción del popup y muestra selector de dificultad ─────────
 function _selectPopupOption(index) {
   if (!stationPopup) return;
   const opt = stationPopup.options[index];
@@ -235,7 +259,10 @@ function _selectPopupOption(index) {
     _popupRowRects = [];
     return;
   }
-  launchScenario(opt.lineId, opt.stationIndex);
+  const sName    = stationPopup.stationName;
+  stationPopup   = null;
+  _popupRowRects = [];
+  _showDifficultyPicker(opt.lineId, opt.stationIndex, sName);
 }
 
 // Helper: comprueba si alguna de las variantes (minúscula/mayúscula) de
@@ -332,6 +359,61 @@ export function handleArcadeInput(keys, consumeKey) {
     return; // bloquear resto del input mientras el popup está abierto
   }
 
+  // ── Selector de dificultad ────────────────────────────────────────────
+  if (difficultyPopup) {
+    const allPresets = PM.getAll();
+    const presets    = [
+      ...allPresets.filter(p => PM.isBuiltin(p.id)),
+      ...allPresets.filter(p => !PM.isBuiltin(p.id)),
+    ];
+
+    // Q / ESC → cancelar
+    if (keys['q'] || keys['Q']) {
+      consumeKey('q'); consumeKey('Q');
+      difficultyPopup = null; _diffPopupRects = [];
+      return;
+    }
+    if (keys['Escape']) {
+      consumeKey('Escape');
+      difficultyPopup = null; _diffPopupRects = [];
+      return;
+    }
+
+    // Enter / Espacio → jugar con el preset activo
+    if (keys['Enter'] || keys[' ']) {
+      consumeKey('Enter'); consumeKey(' ');
+      _launchWithPreset(PM.getActiveId(), difficultyPopup.lineId, difficultyPopup.stationIndex);
+      return;
+    }
+
+    // Atajos numéricos 1–9
+    for (let i = 0; i < presets.length && i < 9; i++) {
+      const key = String(i + 1);
+      if (keys[key]) {
+        consumeKey(key);
+        _launchWithPreset(presets[i].id, difficultyPopup.lineId, difficultyPopup.stationIndex);
+        return;
+      }
+    }
+
+    // Clic sobre una fila del popup
+    if (pendingClick) {
+      pendingClick = false;
+      for (const rc of _diffPopupRects) {
+        if (mouseX >= rc.x && mouseX <= rc.x + rc.w &&
+            mouseY >= rc.y && mouseY <= rc.y + rc.h) {
+          _launchWithPreset(rc.presetId, difficultyPopup.lineId, difficultyPopup.stationIndex);
+          return;
+        }
+      }
+      // Clic fuera → cerrar
+      difficultyPopup = null; _diffPopupRects = [];
+      return;
+    }
+
+    return; // bloquear resto del input mientras el popup está abierto
+  }
+
   // ── Clic en el mapa ───────────────────────────────────────
   if (pendingClick) {
     pendingClick = false;
@@ -353,7 +435,7 @@ export function handleArcadeInput(keys, consumeKey) {
         if (line.locked) {
           MapaMetroMadrid.showLockedToast();
         } else {
-          launchScenario(stationAction.lineId, stationAction.stationIndex);
+          _showDifficultyPicker(stationAction.lineId, stationAction.stationIndex, station.name);
         }
       }
       return;
@@ -361,14 +443,14 @@ export function handleArcadeInput(keys, consumeKey) {
 
     // 2) Trazo de línea
     const action = MapaMetroMadrid.handleMapClick(mouseX, mouseY);
-    if (action === 'PLAY_LINE_3') { launchScenario(3, null); return; }
+    if (action === 'PLAY_LINE_3') { _showDifficultyPicker(3, null, 'Línea 3'); return; }
     // 'LOCKED' → toast gestionado internamente
   }
 
   // Enter / Espacio: jugar L3 directamente
   if (keys['Enter'] || keys[' ']) {
     consumeKey('Enter'); consumeKey(' ');
-    if (MapaMetroMadrid.isUnlocked(3)) { launchScenario(3, null); return; }
+    if (MapaMetroMadrid.isUnlocked(3)) { _showDifficultyPicker(3, null, 'Línea 3'); return; }
   }
 
   // R: reset de zoom/pan
@@ -476,8 +558,10 @@ export function drawArcadeScreen(ctx) {
     hint = MapaMetroMadrid.isPendingLockConfirm()
       ? 'BLOQUEAR EDICIÓN: [Y] CONFIRMAR · [N/ESC] CANCELAR'
       : 'EDICIÓN · ARRASTRA ESTACIONES · [S] GUARDAR · [L] BLOQUEAR · [R] DESCARTAR · [E/ESC] SALIR';
+  } else if (difficultyPopup) {
+    hint = 'ELIGE DIFICULTAD · 1-4 ATAJOS · ENTER CONFIRMAR · Q CANCELAR';
   } else if (stationPopup) {
-    hint = 'CLIC EN LÍNEA PARA JUGAR · 1-9 ATAJOS · Q CANCELAR';
+    hint = 'CLIC EN LÍNEA PARA CONTINUAR · 1-9 ATAJOS · Q CANCELAR';
   } else {
     const lockedSuffix = MapaMetroMadrid.isEditLocked() ? '' : ' · [E] EDITAR MAPA';
     hint = `CLIC LÍNEA/ESTACIÓN · ARRASTRAR PAN · RUEDA ZOOM · R RESET${lockedSuffix} · ESC VOLVER`;
@@ -486,11 +570,14 @@ export function drawArcadeScreen(ctx) {
 
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 
-  // Tooltip — encima del mapa, debajo del popup
-  if (!stationPopup) drawTooltip(ctx);
+  // Tooltip — encima del mapa, debajo de los popups
+  if (!stationPopup && !difficultyPopup) drawTooltip(ctx);
 
-  // Popup de selección de línea — capa superior
+  // Popup de selección de línea (transbordos)
   if (stationPopup) drawStationPopup(ctx);
+
+  // Popup de selección de dificultad — capa superior
+  if (difficultyPopup) drawDifficultyPopup(ctx);
 }
 
 // ── Popup de selección de línea ───────────────────────────────────────────
@@ -594,6 +681,127 @@ function drawStationPopup(ctx) {
   ctx.fillText('Q · Cancelar  ·  ESC · Cancelar', tx + W / 2, ty + H - 9);
 
   // Restaurar estado del contexto
+  ctx.textAlign    = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.globalAlpha  = 1;
+  ctx.shadowBlur   = 0;
+}
+
+// ── Popup selector de dificultad / preset ────────────────────────────────────
+function drawDifficultyPopup(ctx) {
+  if (!difficultyPopup) return;
+  _diffPopupRects = [];
+
+  // Presets: primero los builtin (Fácil/Normal/Difícil/Pesadilla), luego los custom.
+  const allPresets = PM.getAll();
+  const presets    = [
+    ...allPresets.filter(p => PM.isBuiltin(p.id)),
+    ...allPresets.filter(p => !PM.isBuiltin(p.id)),
+  ];
+
+  const PAD      = 18;
+  const ROW_H    = 48;
+  const W        = 340;
+  const HEADER_H = 64;
+  const FOOTER_H = 30;
+  const H        = HEADER_H + presets.length * ROW_H + FOOTER_H;
+  const tx       = Math.round(canvas.width  / 2 - W / 2);
+  const ty       = Math.round(canvas.height / 2 - H / 2);
+
+  // Telón oscuro
+  ctx.fillStyle = 'rgba(0,0,0,0.68)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Caja principal
+  ctx.fillStyle = '#0d0d22';
+  _roundRect(ctx, tx, ty, W, H, 10); ctx.fill();
+  ctx.strokeStyle = '#5a4a90'; ctx.lineWidth = 1.5;
+  _roundRect(ctx, tx, ty, W, H, 10); ctx.stroke();
+
+  // Cabecera
+  ctx.fillStyle    = '#ffffff';
+  ctx.font         = 'bold 14px monospace';
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('ELIGE DIFICULTAD', tx + W / 2, ty + 22);
+
+  ctx.fillStyle = '#8888bb';
+  ctx.font      = '11px monospace';
+  ctx.fillText((difficultyPopup.stationName || '').toUpperCase(), tx + W / 2, ty + 42);
+
+  // Separador
+  ctx.fillStyle = '#28285a';
+  ctx.fillRect(tx + PAD, ty + HEADER_H - 6, W - PAD * 2, 1);
+
+  // Filas de preset
+  for (let i = 0; i < presets.length; i++) {
+    const preset   = presets[i];
+    const ry       = ty + HEADER_H + i * ROW_H;
+    const rx       = tx + 6;
+    const rw       = W - 12;
+    const rh       = ROW_H - 4;
+    const isActive = preset.id === PM.getActiveId();
+    const hovered  = mouseX >= rx && mouseX <= rx + rw &&
+                     mouseY >= ry && mouseY <= ry + rh;
+
+    // Fondo de fila
+    if (isActive) {
+      ctx.fillStyle = 'rgba(93,202,165,0.12)';
+      ctx.fillRect(rx, ry, rw, rh);
+    } else if (hovered) {
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.fillRect(rx, ry, rw, rh);
+    }
+
+    _diffPopupRects.push({ x: rx, y: ry, w: rw, h: rh, presetId: preset.id });
+
+    // Círculo de color de dificultad
+    const diffColor = DIFFICULTY_COLORS[preset.difficulty] || '#888888';
+    ctx.fillStyle   = diffColor;
+    ctx.beginPath();
+    ctx.arc(tx + PAD + 13, ry + ROW_H / 2 - 2, 9, 0, Math.PI * 2);
+    ctx.fill();
+    if (isActive) {
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // Número de atajo (encima del círculo)
+    ctx.fillStyle    = '#000000';
+    ctx.font         = 'bold 10px monospace';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(i + 1), tx + PAD + 13, ry + ROW_H / 2 - 2);
+
+    // Nombre del preset
+    ctx.fillStyle    = isActive ? '#ffffff' : '#ccccee';
+    ctx.font         = isActive ? 'bold 13px monospace' : '12px monospace';
+    ctx.textAlign    = 'left';
+    ctx.fillText(preset.name, tx + PAD + 30, ry + ROW_H / 2 - 4);
+
+    // Dificultad (derecha)
+    ctx.fillStyle = diffColor;
+    ctx.font      = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText((preset.difficulty || '').toUpperCase(), tx + W - PAD, ry + ROW_H / 2 - 4);
+
+    // "ENTER para jugar" o "ACTIVO" bajo el nombre cuando está seleccionado
+    if (isActive) {
+      ctx.fillStyle = '#5dcaa5';
+      ctx.font      = '9px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('▶ ENTER para jugar', tx + PAD + 30, ry + ROW_H / 2 + 11);
+    }
+  }
+
+  // Pie
+  ctx.fillStyle    = '#444466';
+  ctx.font         = '10px monospace';
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('1-9 seleccionar  ·  ENTER confirmar  ·  Q cancelar', tx + W / 2, ty + H - 10);
+
+  // Restaurar estado
   ctx.textAlign    = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.globalAlpha  = 1;
