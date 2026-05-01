@@ -1,9 +1,13 @@
 // dropdown.js — Reusable dropdown widget for the editor.
 // Renders dropdowns directly on the canvas, avoiding z-index issues with HTML selects.
 
+const MAX_VISIBLE_OPTIONS = 8;
+const SCROLL_BTN_H = 16;
+
 let _openDropdownId = null;
 let _dropdowns = new Map();  // id → { x, y, w, h, options, selectedIndex, onChange }
 let _hoveredIndex = -1;
+const _scrollOffsets = new Map();   // id → first visible option index (persists across frames)
 
 // ══════════════════════════════════════════
 // API
@@ -21,34 +25,47 @@ export function registerDropdown(id, x, y, w, h, options, selectedValue, onChang
 export function handleDropdownClick(mx, my) {
   if (_openDropdownId) {
     const dd = _dropdowns.get(_openDropdownId);
-    if (!dd) {
-      _openDropdownId = null;
-      return false;
-    }
+    if (!dd) { _openDropdownId = null; return false; }
 
     const optionH = 26;
-    const listH = dd.options.length * optionH;
+    const needsScroll = dd.options.length > MAX_VISIBLE_OPTIONS;
+    const visibleCount = needsScroll ? MAX_VISIBLE_OPTIONS : dd.options.length;
+    const scrollBtnH = needsScroll ? SCROLL_BTN_H : 0;
+    const totalH = scrollBtnH * 2 + visibleCount * optionH;
     const listX = dd.x;
     const listY = dd.y + dd.h;
     const listW = dd.w;
+    const scrollOffset = _scrollOffsets.get(_openDropdownId) || 0;
+    const maxOffset = Math.max(0, dd.options.length - visibleCount);
 
-    // Click in the open list?
-    if (mx >= listX && mx < listX + listW &&
-        my >= listY && my < listY + listH) {
-      const idx = Math.floor((my - listY) / optionH);
+    // Click anywhere inside the visible list area?
+    if (mx >= listX && mx < listX + listW && my >= listY && my < listY + totalH) {
+      // Scroll UP button
+      if (needsScroll && my < listY + scrollBtnH) {
+        if (scrollOffset > 0) _scrollOffsets.set(_openDropdownId, scrollOffset - 1);
+        return true;
+      }
+      // Scroll DOWN button
+      const downBtnY = listY + scrollBtnH + visibleCount * optionH;
+      if (needsScroll && my >= downBtnY) {
+        if (scrollOffset < maxOffset) _scrollOffsets.set(_openDropdownId, scrollOffset + 1);
+        return true;
+      }
+      // Option click (adjusted for scroll offset)
+      const optionsAreaY = listY + scrollBtnH;
+      const localIdx = Math.floor((my - optionsAreaY) / optionH);
+      const idx = localIdx + scrollOffset;
       const opt = dd.options[idx];
       if (opt && !opt.disabled) {
         dd.selectedIndex = idx;
         dd.onChange?.(opt.value);
         _openDropdownId = null;
-        return true;
       }
       return true;
     }
 
-    // Click on trigger? Toggle
-    if (mx >= dd.x && mx < dd.x + dd.w &&
-        my >= dd.y && my < dd.y + dd.h) {
+    // Click on trigger? → close
+    if (mx >= dd.x && mx < dd.x + dd.w && my >= dd.y && my < dd.y + dd.h) {
       _openDropdownId = null;
       return true;
     }
@@ -60,9 +77,17 @@ export function handleDropdownClick(mx, my) {
 
   // No dropdown open: check if any trigger was clicked
   for (const [id, dd] of _dropdowns) {
-    if (mx >= dd.x && mx < dd.x + dd.w &&
-        my >= dd.y && my < dd.y + dd.h) {
+    if (mx >= dd.x && mx < dd.x + dd.w && my >= dd.y && my < dd.y + dd.h) {
       _openDropdownId = id;
+      // Scroll to show selected item when opening
+      const visibleCount = Math.min(MAX_VISIBLE_OPTIONS, dd.options.length);
+      const selIdx = dd.selectedIndex;
+      if (selIdx >= visibleCount) {
+        const offset = Math.max(0, selIdx - Math.floor(visibleCount / 2));
+        _scrollOffsets.set(id, Math.min(offset, dd.options.length - visibleCount));
+      } else {
+        _scrollOffsets.set(id, 0);
+      }
       return true;
     }
   }
@@ -72,39 +97,40 @@ export function handleDropdownClick(mx, my) {
 
 // Handle hover. Updates the hovered index in the open list.
 export function handleDropdownMouseMove(mx, my) {
-  if (!_openDropdownId) {
-    _hoveredIndex = -1;
-    return;
-  }
+  if (!_openDropdownId) { _hoveredIndex = -1; return; }
   const dd = _dropdowns.get(_openDropdownId);
   if (!dd) return;
 
   const optionH = 26;
+  const needsScroll = dd.options.length > MAX_VISIBLE_OPTIONS;
+  const visibleCount = needsScroll ? MAX_VISIBLE_OPTIONS : dd.options.length;
+  const scrollBtnH = needsScroll ? SCROLL_BTN_H : 0;
   const listX = dd.x;
-  const listY = dd.y + dd.h;
-  const listW = dd.w;
+  const optionsY = dd.y + dd.h + scrollBtnH;
+  const scrollOffset = _scrollOffsets.get(_openDropdownId) || 0;
 
-  if (mx >= listX && mx < listX + listW &&
-      my >= listY && my < listY + dd.options.length * optionH) {
-    _hoveredIndex = Math.floor((my - listY) / optionH);
+  if (mx >= listX && mx < listX + dd.w &&
+      my >= optionsY && my < optionsY + visibleCount * optionH) {
+    _hoveredIndex = Math.floor((my - optionsY) / optionH) + scrollOffset;
   } else {
     _hoveredIndex = -1;
   }
 }
 
-// Is the cursor hovering over a dropdown?
+// Is the cursor hovering over any dropdown trigger or open list?
 export function isHoveringDropdown(mx, my) {
-  // Check all triggers
   for (const [id, dd] of _dropdowns) {
     if (mx >= dd.x && mx < dd.x + dd.w && my >= dd.y && my < dd.y + dd.h) return true;
   }
-  // Check open list
   if (_openDropdownId) {
     const dd = _dropdowns.get(_openDropdownId);
     if (dd) {
-      const optionH = 26;
+      const needsScroll = dd.options.length > MAX_VISIBLE_OPTIONS;
+      const visibleCount = needsScroll ? MAX_VISIBLE_OPTIONS : dd.options.length;
+      const scrollBtnH = needsScroll ? SCROLL_BTN_H : 0;
+      const totalH = scrollBtnH * 2 + visibleCount * 26;
       if (mx >= dd.x && mx < dd.x + dd.w &&
-          my >= dd.y + dd.h && my < dd.y + dd.h + dd.options.length * optionH) return true;
+          my >= dd.y + dd.h && my < dd.y + dd.h + totalH) return true;
     }
   }
   return false;
@@ -140,7 +166,7 @@ export function drawDropdownTrigger(ctx, id) {
   ctx.textBaseline = 'middle';
 
   let textX = dd.x + 10;
-  if (selected.icon) {
+  if (selected.icon && selected.icon.trim()) {
     ctx.fillText(selected.icon, textX, dd.y + dd.h / 2);
     textX += 16;
   }
@@ -156,42 +182,79 @@ export function drawDropdownTrigger(ctx, id) {
   ctx.fillText(isOpen ? '▴' : '▾', dd.x + dd.w - 8, dd.y + dd.h / 2);
 }
 
-// Draw the open dropdown list (call at the END of all drawing)
+// Draw the open dropdown list (call at the END of all drawing so it's on top)
 export function drawOpenDropdownList(ctx) {
   if (!_openDropdownId) return;
   const dd = _dropdowns.get(_openDropdownId);
   if (!dd) return;
 
   const optionH = 26;
-  const listH = dd.options.length * optionH;
+  const needsScroll = dd.options.length > MAX_VISIBLE_OPTIONS;
+  const visibleCount = needsScroll ? MAX_VISIBLE_OPTIONS : dd.options.length;
+  const scrollBtnH = needsScroll ? SCROLL_BTN_H : 0;
+  const totalH = scrollBtnH * 2 + visibleCount * optionH;
   const listX = dd.x;
   const listY = dd.y + dd.h;
   const listW = dd.w;
+  const scrollOffset = _scrollOffsets.get(_openDropdownId) || 0;
+  const maxOffset = Math.max(0, dd.options.length - visibleCount);
 
   // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.fillRect(listX + 2, listY + 2, listW, listH);
+  ctx.fillRect(listX + 2, listY + 2, listW, totalH);
 
   // Background
   ctx.fillStyle = '#0d0d18';
-  _roundRect(ctx, listX, listY, listW, listH, 4);
+  _roundRect(ctx, listX, listY, listW, totalH, 4);
   ctx.fill();
 
   // Border
   ctx.strokeStyle = '#f5c518';
   ctx.lineWidth = 1;
-  _roundRect(ctx, listX, listY, listW, listH, 4);
+  _roundRect(ctx, listX, listY, listW, totalH, 4);
   ctx.stroke();
 
-  // Options
-  dd.options.forEach((opt, i) => {
-    const oy = listY + i * optionH;
-    const isSelected = i === dd.selectedIndex;
-    const isHovered = i === _hoveredIndex;
+  // ── Scroll UP button ──
+  if (needsScroll) {
+    const canUp = scrollOffset > 0;
+    if (canUp) {
+      ctx.fillStyle = 'rgba(245,197,24,0.12)';
+      ctx.fillRect(listX + 1, listY + 1, listW - 2, scrollBtnH - 1);
+    }
+    ctx.fillStyle = canUp ? '#f5c518' : '#333';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('▴', listX + listW / 2, listY + scrollBtnH / 2);
+    ctx.strokeStyle = '#1a1a2e';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(listX + 6, listY + scrollBtnH);
+    ctx.lineTo(listX + listW - 6, listY + scrollBtnH);
+    ctx.stroke();
+  }
+
+  // ── Options (clipped to options area) ──
+  const optionsY = listY + scrollBtnH;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(listX, optionsY, listW, visibleCount * optionH);
+  ctx.clip();
+
+  for (let i = 0; i < visibleCount; i++) {
+    const optIdx = scrollOffset + i;
+    if (optIdx >= dd.options.length) break;
+    const opt = dd.options[optIdx];
+    const oy = optionsY + i * optionH;
+    const isSelected = optIdx === dd.selectedIndex;
+    const isHovered  = optIdx === _hoveredIndex;
     const isDisabled = !!opt.disabled;
 
     // Row background
-    if (isHovered && !isDisabled) {
+    if (isDisabled) {
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+      ctx.fillRect(listX, oy, listW, optionH);
+    } else if (isHovered) {
       ctx.fillStyle = 'rgba(245,197,24,0.12)';
       ctx.fillRect(listX, oy, listW, optionH);
     } else if (isSelected) {
@@ -199,31 +262,31 @@ export function drawOpenDropdownList(ctx) {
       ctx.fillRect(listX, oy, listW, optionH);
     }
 
-    // Selected indicator
-    if (isSelected) {
+    // Selected indicator bar
+    if (isSelected && !isDisabled) {
       ctx.fillStyle = '#f5c518';
       ctx.fillRect(listX, oy, 2, optionH);
     }
 
     // Option text
-    ctx.fillStyle = isDisabled ? '#444'
-                  : isHovered ? '#f5c518'
+    ctx.fillStyle = isDisabled ? '#555'
+                  : isHovered  ? '#f5c518'
                   : isSelected ? '#f5c518'
                   : '#ccc';
-    ctx.font = '11px monospace';
+    ctx.font = isDisabled ? 'bold 9px monospace' : '11px monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
-    let tx = listX + 12;
-    if (opt.icon) {
+    let tx = listX + (isDisabled ? 8 : 12);
+    if (opt.icon && opt.icon.trim() && !isDisabled) {
       ctx.fillText(opt.icon, tx, oy + optionH / 2);
       tx += 16;
     }
-    const labelMaxW = listW - (tx - listX) - 12;
+    const labelMaxW = listW - (tx - listX) - 8;
     ctx.fillText(_truncate(ctx, opt.label, labelMaxW), tx, oy + optionH / 2);
 
     // Separator
-    if (i < dd.options.length - 1) {
+    if (i < visibleCount - 1) {
       ctx.strokeStyle = '#1a1a2e';
       ctx.lineWidth = 0.5;
       ctx.beginPath();
@@ -231,10 +294,33 @@ export function drawOpenDropdownList(ctx) {
       ctx.lineTo(listX + listW - 6, oy + optionH);
       ctx.stroke();
     }
-  });
+  }
+
+  ctx.restore();
+
+  // ── Scroll DOWN button ──
+  if (needsScroll) {
+    const canDown = scrollOffset < maxOffset;
+    const btnY = optionsY + visibleCount * optionH;
+    ctx.strokeStyle = '#1a1a2e';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(listX + 6, btnY);
+    ctx.lineTo(listX + listW - 6, btnY);
+    ctx.stroke();
+    if (canDown) {
+      ctx.fillStyle = 'rgba(245,197,24,0.12)';
+      ctx.fillRect(listX + 1, btnY, listW - 2, scrollBtnH - 1);
+    }
+    ctx.fillStyle = canDown ? '#f5c518' : '#333';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('▾', listX + listW / 2, btnY + scrollBtnH / 2);
+  }
 }
 
-// Clear registry at the start of each frame
+// Clear dropdown registry at the start of each frame (scroll offsets are preserved)
 export function clearDropdownRegistry() {
   _dropdowns.clear();
 }

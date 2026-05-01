@@ -7,10 +7,33 @@ import * as Modal from '../editor_modal.js';
 import * as DD from '../widgets/dropdown.js';
 import { DIFFICULTY_COLORS } from '../config_schema.js';
 import { exportPresetToFile, importPresetFromFile } from '../widgets/file_io.js';
+import { MADRID_LINES } from '../../escenarios/metros/metros_madrid/datos_madrid.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _hits = [];   // hit-test rects built each draw
-let _selectedStation = 'Delicias';
+let _selectedStation = (() => {
+  try { return localStorage.getItem('vp_selected_station') || 'Delicias'; } catch (_) { return 'Delicias'; }
+})();
+
+// ── Station options builder ───────────────────────────────────────────────────
+function _buildStationOptions() {
+  const seen = new Set();
+  const options = [];
+  for (const line of MADRID_LINES) {
+    let addedHeader = false;
+    for (const s of line.stations) {
+      if (seen.has(s.name)) continue;
+      seen.add(s.name);
+      if (!addedHeader) {
+        options.push({ value: `__hdr_${line.id}`, label: `── L${line.id} · ${line.name} ──`, disabled: true });
+        addedHeader = true;
+      }
+      const assigned = PM.getStationPreset(s.name);
+      options.push({ value: s.name, label: s.name, icon: assigned !== 'normal' ? '★' : ' ' });
+    }
+  }
+  return options;
+}
 
 // ── Public draw ───────────────────────────────────────────────────────────────
 export function drawToolbar(ctx, x, y, w, h) {
@@ -61,36 +84,25 @@ export function drawToolbar(ctx, x, y, w, h) {
   cx += presetW + 8;
 
   // ── Station selector dropdown ───────────────────────────────────────────────
-  // Lazy-load station list to avoid circular dependency
-  let stations = [];
-  try {
-    const mod = window.__VP_MAP_DATA__;
-    stations = (mod && mod.stations) || [];
-  } catch (_) { /* */ }
-  if (stations.length === 0) {
-    stations = ['Sol', 'Lavapiés', 'Atocha', 'Delicias', 'Embajadores'];
-  }
-
-  const stationOptions = stations.map(name => ({
-    value: name,
-    label: name,
-    icon: PM.getStationPreset(name) === PM.getActiveId() ? '✓' : '·',
-  }));
+  const stationOptions = _buildStationOptions();
 
   const stationX = cx;
   const stationY = y + 12;
-  const stationW = 150;
+  const stationW = 170;
   const stationH = h - 24;
 
   DD.registerDropdown(
     'station_selector',
     stationX, stationY, stationW, stationH,
     stationOptions,
-    _selectedStation ?? 'Delicias',
+    _selectedStation,
     (newStation) => {
+      if (newStation.startsWith('__hdr_')) return;
       _selectedStation = newStation;
-      PM.setStationPreset(newStation, PM.getActiveId());
-      Modal.showToast(`${newStation} → ${PM.getActive().name}`, '#5DCAA5');
+      try { localStorage.setItem('vp_selected_station', newStation); } catch (_) {}
+      const presetId = PM.getStationPreset(newStation);
+      PM.setActive(presetId);
+      Modal.showToast(`${newStation} · ${PM.getActive()?.name || 'normal'}`, '#5DCAA5');
     }
   );
   DD.drawDropdownTrigger(ctx, 'station_selector');
