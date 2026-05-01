@@ -2,10 +2,10 @@
 // Envuelve MetroBase con su configuración de gameplay y la lista de
 // estaciones jugables del modo arcade.
 
-import { MADRID_LINES, ZONES }       from '../mapa_metro_madrid.js';
-import { MetroBase }                  from '../../metro_base/metro_base.js';
-import { STATE }                      from '../../../../mecanica/estado.js';
-import { drawEstacionDelicias }       from './estacion_delicias_render.js';
+import { MADRID_LINES, ZONES } from '../mapa_metro_madrid.js';
+import { MetroBase }           from '../../metro_base/metro_base.js';
+import { STATE }               from '../../../../mecanica/estado.js';
+import { drawEstacion }        from '../../metro_base/estacion_render.js';
 
 const data = MADRID_LINES.find(l => l.id === 3);
 
@@ -28,8 +28,11 @@ export const Linea3 = {
   gameplayConfig: {
     trainColor:     '#F39200',
     trainColorDark: '#C27300',
-    bgColor:        '#1a0e00',     // túnel cálido para la línea naranja
+    bgColor:        '#1a0e00',
     lightColor:     '#ffeebb',
+    // Colores del andén (usados por drawEstacion)
+    wallColor:      '#F5C800',   // amarillo institucional Línea 3 / Madrid
+    stripeColor:    '#003DA5',   // franja azul de identificación
     speed:          2,
     spawnInterval:  90,
     obstacleTypes:    ['trainLeft', 'trainRight', 'pipe'],
@@ -110,14 +113,17 @@ export const Linea3 = {
   },
 
   /**
-   * Asigna el sceneRenderer correcto según la estación actual.
-   * Delicias usa el andén fotorrealista; el resto usa el túnel genérico.
+   * Inyecta en MetroBase el renderer de andén para la estación activa.
+   * Se llama al iniciar, avanzar o reiniciar: el nombre del rótulo y los
+   * colores se pasan como config para que la escena sea genérica.
    */
   _updateSceneRenderer() {
-    const name = this.getCurrentStationName() ?? '';
-    MetroBase.config.sceneRenderer = name === 'Delicias'
-      ? drawEstacionDelicias
-      : null;
+    const name        = this.getCurrentStationName() ?? '';
+    const lineColor   = this.data?.color ?? this.gameplayConfig.trainColor;
+    const wallColor   = this.gameplayConfig.wallColor;
+    const stripeColor = this.gameplayConfig.stripeColor;
+    MetroBase.config.sceneRenderer = (ctx, worldZ) =>
+      drawEstacion(ctx, worldZ, { name, lineColor, wallColor, stripeColor });
   },
 
   /** Avanza a la siguiente estación, sube velocidad, lanza toast. */
