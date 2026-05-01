@@ -123,12 +123,10 @@ export const MetroBase = {
    * @returns {{ x, y, w, h }[]}
    */
   getTrainHitboxes() {
-    // Leer parámetros de colisión del preset activo
-    const _f      = PM.getActive()?.fisica ?? {};
-    const margin  = _f.trainHitboxMargin ?? 0;       // >0 encoge, <0 expande
-    const vertPos = _f.trainVerticalPos  ?? TRAIN_CFG.verticalPos;
-    const yShift  = (vertPos - 0.5) * canvas.height;
-
+    const preset = PM.getActive();
+    const _f     = preset?.fisica ?? {};
+    const trenes = preset?.trenes;
+    const margin = _f.trainHitboxMargin ?? 0;   // >0 encoge, <0 expande
     const boxes  = [];
 
     for (const track of [this.tracks.left, this.tracks.right]) {
@@ -136,14 +134,25 @@ export const MetroBase = {
         // Solo trenes que ya se renderizan (mismo rango que drawTrack)
         if (train.z < -50 || train.z > 900) continue;
 
+        // Misma selección de sprite que drawTrack() para este lado
+        const spriteId = train.side === 'left'
+          ? trenes?.leftLaneSprite : trenes?.rightLaneSprite;
+        const sprite = trenes?.sprites?.find(s => s.id === spriteId)
+          ?? trenes?.sprites?.[0] ?? null;
+
+        const scaleMul = sprite?.scaleMultiplier          ?? TRAIN_CFG.scaleMultiplier;
+        const vPos     = sprite?.verticalPos              ?? TRAIN_CFG.verticalPos;
+        const bW       = sprite?.pixelData?.width         ?? TRAIN_CFG.baseWidth;
+        const bH       = sprite?.pixelData?.height        ?? TRAIN_CFG.baseHeight;
+        const yShift   = (vPos - 0.5) * canvas.height;
+
         const s         = _perspective(train.z);
         const sx        = _w2sx(train.x * s);
         const sy        = _w2sy(train.y * s) + yShift;
-        const drawScale = s * TRAIN_CFG.scaleMultiplier;
+        const drawScale = s * scaleMul;
 
-        // Dimensiones reales del sprite en pantalla, ajustadas por margen
-        const renderW = TRAIN_CFG.baseWidth  * drawScale;
-        const renderH = TRAIN_CFG.baseHeight * drawScale;
+        const renderW = bW * drawScale;
+        const renderH = bH * drawScale;
         const hw = renderW * (0.5 - margin);
         const hh = renderH * (0.5 - margin);
 

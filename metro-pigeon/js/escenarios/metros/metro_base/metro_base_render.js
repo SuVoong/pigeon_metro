@@ -3,6 +3,7 @@
 
 import { canvas, STATE } from '../../../mecanica/estado.js';
 import { TRAIN_CFG } from '../../../editor/train_config.js';
+import * as PM from '../../../editor/preset_manager.js';
 
 const FOCAL       = 400;
 const W2SX = (wx) => canvas.width  / 2 + wx;
@@ -80,7 +81,7 @@ export function setLEDStation(name) {
 }
 
 // ── Dibujo interno del panel LED ──────────────────────────────────────────────
-function _drawLED(ctx, scale) {
+function _drawLED(ctx, scale, textColor = TRAIN_CFG.ledTextColor) {
   if (STATE.frame !== _ledLastFrame) {
     _ledLastFrame = STATE.frame;
     _ledOffset += 0.5;
@@ -96,7 +97,7 @@ function _drawLED(ctx, scale) {
   const ledW     = 38;
   const ledH     = 5;
 
-  ctx.fillStyle = TRAIN_CFG.ledTextColor;
+  ctx.fillStyle = textColor;
 
   for (let ci = 0; ci < text.length; ci++) {
     const glyph  = PIXEL_FONT[text[ci]] ?? PIXEL_FONT[' '];
@@ -270,15 +271,61 @@ export function drawTrainPerspective(ctx, cx, cy, scale, lineColor) {
   ctx.fillRect(seamX, top, 2, totalH);
 }
 
+// ── Helpers de sprite de preset ───────────────────────────────────────────────
+
+/** Devuelve el sprite del preset activo para la vía indicada, o null si no hay. */
+function _getSpriteForSide(side) {
+  const trenes = PM.getActive()?.trenes;
+  if (!trenes?.sprites?.length) return null;
+  const id = side === 'left' ? trenes.leftLaneSprite : trenes.rightLaneSprite;
+  return trenes.sprites.find(s => s.id === id) ?? trenes.sprites[0] ?? null;
+}
+
+/**
+ * Dibuja el tren usando el pixelData del sprite del preset.
+ * El ctx ya está trasladado al centro del tren y escalado por drawScale.
+ * El espacio de arte es sprite.pixelData.width × sprite.pixelData.height.
+ */
+function _drawFromPixelData(ctx, sprite) {
+  const { pixels, width, height } = sprite.pixelData;
+  const c = sprite.colors;
+  const PALETTE = [ null, c.body, c.window, c.cab, c.stripe, c.ledBg ];
+  const ox = -(width  / 2);
+  const oy = -(height / 2);
+
+  // Renderizar píxel a píxel agrupando runs del mismo color por fila
+  for (let y = 0; y < height; y++) {
+    const row = pixels[y];
+    let x = 0;
+    while (x < width) {
+      const v = row[x];
+      if (!v) { x++; continue; }
+      const col = PALETTE[v];
+      if (!col) { x++; continue; }
+      // Extender el run horizontal del mismo color
+      let run = 1;
+      while (x + run < width && row[x + run] === v) run++;
+      ctx.fillStyle = col;
+      ctx.fillRect(ox + x, oy + y, run, 1);
+      x += run;
+    }
+  }
+
+  // Texto LED scrolling sobre el área ledBg
+  _drawLED(ctx, 1, c.ledText);
+}
+
 // ── drawTrack ─────────────────────────────────────────────────────────────────
 export function drawTrack(ctx, track, config) {
   const sorted = track.slice().sort((a, b) => b.z - a.z);
 
-  // Vertical offset: shift train center to TRAIN_CFG.verticalPos fraction of canvas height
-  const yShift = (TRAIN_CFG.verticalPos - 0.5) * canvas.height;
-
   for (const train of sorted) {
     if (train.z < -50 || train.z > 900) continue;
+
+    const sprite   = _getSpriteForSide(train.side);
+    const vPos     = sprite?.verticalPos     ?? TRAIN_CFG.verticalPos;
+    const scaleMul = sprite?.scaleMultiplier ?? TRAIN_CFG.scaleMultiplier;
+    const yShift   = (vPos - 0.5) * canvas.height;
 
     const s  = perspective(train.z);
     const sx = W2SX(train.x * s);
@@ -286,12 +333,13 @@ export function drawTrack(ctx, track, config) {
 
     ctx.save();
     ctx.translate(sx, sy);
-    // Apply per-perspective scale × editor scale multiplier
-    const drawScale = s * TRAIN_CFG.scaleMultiplier;
-    ctx.scale(drawScale, drawScale);
+    ctx.scale(s * scaleMul, s * scaleMul);
 
     if (train.z < 100) {
+      // Vista 3/4 (tren muy cercano): sigue usando vectores
       drawTrainPerspective(ctx, 0, 0, 1, config.trainColor ?? TRAIN_CFG.stripeColor);
+    } else if (sprite?.pixelData?.pixels) {
+      _drawFromPixelData(ctx, sprite);
     } else {
       drawTrainFront(ctx, 0, 0, 1, config.trainColor ?? TRAIN_CFG.stripeColor);
     }
