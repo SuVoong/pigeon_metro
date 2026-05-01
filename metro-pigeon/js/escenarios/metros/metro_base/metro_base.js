@@ -2,16 +2,11 @@
 // trenes, scroll Z, rótulo de estación. Cada línea concreta lo configura.
 
 import { STATE, canvas } from '../../../mecanica/estado.js';
+import { w2sx as _w2sx, w2sy as _w2sy, perspective as _perspective } from '../../../mecanica/camara.js';
 import { drawTrack, drawStationSign, setLEDStation } from './metro_base_render.js';
 import { TRAIN_CFG } from '../../../editor/train_config.js';
 import { drawTunel }  from './tunel.js';
 import * as PM from '../../../editor/preset_manager.js';
-
-// Mismas constantes que metro_base_render.js para hitbox sin acoplamiento circular
-const FOCAL = 400;
-const _perspective = (z) => FOCAL / (FOCAL + z);
-const _w2sx = (wx) => canvas.width  / 2 + wx;
-const _w2sy = (wy) => canvas.height / 2 + wy;
 
 const DEFAULT_CONFIG = {
   trainColor:     '#F39200',     // naranja Línea 3 por defecto

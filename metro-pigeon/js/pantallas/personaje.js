@@ -1,9 +1,7 @@
 // Selector de personaje — muestra preview, estado de desbloqueo y progreso
 
-import {
-  canvas, STATE, PAL, CHARACTERS,
-  formatFlightTime, checkUnlocks, loadCharacterProgress,
-} from '../mecanica/estado.js';
+import { canvas, STATE, PAL, CHARACTERS } from '../mecanica/estado.js';
+import { formatFlightTime, checkUnlocks, loadCharacterProgress } from '../mecanica/progreso.js';
 
 let charCursor = STATE.selectedCharacter;
 let _denyFlash = 0;   // frames de parpadeo rojo al intentar seleccionar bloqueado

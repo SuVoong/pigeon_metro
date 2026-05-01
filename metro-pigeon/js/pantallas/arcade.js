@@ -22,7 +22,8 @@
 //   · R       → descarta el draft (en edición) | reset zoom (fuera).
 //   · ESC     → sale del modo edición.
 
-import { canvas, STATE, PAL, formatFlightTime } from '../mecanica/estado.js';
+import { canvas, STATE, PAL } from '../mecanica/estado.js';
+import { formatFlightTime } from '../mecanica/progreso.js';
 import { MapaMetroMadrid, drawTooltip, clearTooltip } from '../escenarios/metros/metros_madrid/mapa_metro_madrid.js';
 import * as PM from '../editor/preset_manager.js';
 import { DIFFICULTY_COLORS } from '../editor/config_schema.js';

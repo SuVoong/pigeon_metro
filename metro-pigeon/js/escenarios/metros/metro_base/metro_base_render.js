@@ -2,13 +2,9 @@
 // Coordenadas de mundo: x,y en píxeles relativos al centro del canvas; z = profundidad.
 
 import { canvas, STATE } from '../../../mecanica/estado.js';
+import { w2sx, w2sy, perspective } from '../../../mecanica/camara.js';
 import { TRAIN_CFG } from '../../../editor/train_config.js';
 import * as PM from '../../../editor/preset_manager.js';
-
-const FOCAL       = 400;
-const W2SX = (wx) => canvas.width  / 2 + wx;
-const W2SY = (wy) => canvas.height / 2 + wy;
-const perspective = (z) => FOCAL / (FOCAL + z);
 
 // ── Paleta del tren (valores fijos — estética, no configurables por editor) ───
 const TRAIN_PAL = {
@@ -328,8 +324,8 @@ export function drawTrack(ctx, track, config) {
     const yShift   = (vPos - 0.5) * canvas.height;
 
     const s  = perspective(train.z);
-    const sx = W2SX(train.x * s);
-    const sy = W2SY(train.y * s) + yShift;
+    const sx = w2sx(train.x * s);
+    const sy = w2sy(train.y * s) + yShift;
 
     ctx.save();
     ctx.translate(sx, sy);

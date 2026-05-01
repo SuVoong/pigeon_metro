@@ -1,6 +1,7 @@
 // Pantalla de logros — lista con estado bloqueado/desbloqueado
 
-import { canvas, STATE, PAL, ACHIEVEMENTS } from '../mecanica/estado.js';
+import { canvas, STATE, PAL } from '../mecanica/estado.js';
+import { ACHIEVEMENTS } from '../mecanica/progreso.js';
 
 export function handleAchievementsInput(keys, consumeKey) {
   if (keys['Escape']) {
