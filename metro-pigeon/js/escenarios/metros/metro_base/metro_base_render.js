@@ -3,7 +3,6 @@
 
 import { canvas, STATE } from '../../../mecanica/estado.js';
 import { TRAIN_CFG } from '../../../editor/train_config.js';
-import { ENV_CFG }   from '../../../editor/env_config.js';
 
 const FOCAL       = 400;
 const W2SX = (wx) => canvas.width  / 2 + wx;
@@ -298,53 +297,6 @@ export function drawTrack(ctx, track, config) {
     }
 
     ctx.restore();
-  }
-}
-
-// ── drawTunnel ────────────────────────────────────────────────────────────────
-export function drawTunnel(ctx, config = {}) {
-  const cw = canvas.width, ch = canvas.height;
-  const cx = cw / 2;
-  const cy = ch * ENV_CFG.vanishingPointY;  // vanishing point Y from config
-
-  // Background
-  ctx.fillStyle = config.bgColor || ENV_CFG.bgColor;
-  ctx.fillRect(0, 0, cw, ch);
-
-  // Perspective rings
-  const ringGap = 100;
-  const offset  = (STATE.worldZ % ringGap);
-  ctx.strokeStyle = ENV_CFG.concreteColor;
-  ctx.lineWidth   = 1;
-  for (let z = 800 - offset; z > 0; z -= ringGap) {
-    const s     = perspective(z);
-    const halfW = (cw / 2) * s * (config.tunnelWidth ?? 0.7);
-    const halfH = (ch / 2) * s * 0.85;
-    ctx.strokeRect(cx - halfW, cy - halfH, halfW * 2, halfH * 2);
-  }
-
-  // Diagonal vanishing lines
-  ctx.strokeStyle = ENV_CFG.concreteLightColor;
-  ctx.lineWidth   = 1;
-  ctx.beginPath();
-  ctx.moveTo(0,  0);  ctx.lineTo(cx, cy);
-  ctx.moveTo(cw, 0);  ctx.lineTo(cx, cy);
-  ctx.moveTo(0,  ch); ctx.lineTo(cx, cy);
-  ctx.moveTo(cw, ch); ctx.lineTo(cx, cy);
-  ctx.stroke();
-
-  // Ceiling and floor bars
-  ctx.fillStyle = ENV_CFG.concreteColor;
-  ctx.fillRect(0, 0, cw, 12);
-  ctx.fillRect(0, ch - 12, cw, 12);
-
-  // Fluorescent lights
-  const flickerEnabled = ENV_CFG.flickerEnabled;
-  const flickerInt     = ENV_CFG.flickerInterval || 180;
-  const flicker = !flickerEnabled || Math.floor(STATE.frame / flickerInt) % 5 !== 0;
-  ctx.fillStyle = flicker ? (config.lightColor || ENV_CFG.lightGlowColor) : '#665522';
-  for (let i = 0; i < ENV_CFG.numRings; i++) {
-    ctx.fillRect((i + 1) * cw / (ENV_CFG.numRings + 1) - 12, 4, 24, 3);
   }
 }
 
