@@ -101,7 +101,14 @@ export const MetroBase = {
   },
 
   render(ctx) {
-    drawTunel(ctx, this.config, STATE.worldZ);
+    // Si la config tiene un sceneRenderer propio (p.ej. escena de andén),
+    // se usa en lugar del túnel genérico. Los trenes y el rótulo se siguen
+    // pintando encima para mantener el gameplay.
+    if (typeof this.config.sceneRenderer === 'function') {
+      this.config.sceneRenderer(ctx, STATE.worldZ);
+    } else {
+      drawTunel(ctx, this.config, STATE.worldZ);
+    }
     drawTrack(ctx, this.tracks.left,  this.config);
     drawTrack(ctx, this.tracks.right, this.config);
     if (this.currentSign) {
