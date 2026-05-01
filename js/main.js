@@ -5,8 +5,9 @@ import { loadFlightHistory, checkUnlocks } from './mecanica/progreso.js';
 import { initInput, keys, consumeKey } from './mecanica/input.js';
 import { initCamera } from './mecanica/camara.js';
 import { checkCollisions, drawDebugHitboxes } from './mecanica/colisiones.js';
-import { updatePigeon, drawPigeon } from './personajes/paloma.js';
-import { updatePidgey, drawPidgey } from './personajes/pidgey.js';
+import { updatePigeon,     drawPigeon     } from './personajes/paloma.js';
+import { updatePidgey,     drawPidgey     } from './personajes/pidgey.js';
+import { updateAngryBird,  drawAngryBird  } from './personajes/angry_bird.js';
 import {
   drawTunnel,
   updateObstacles, drawObstacles,
@@ -49,6 +50,8 @@ CHARACTERS[0].update = updatePigeon;
 CHARACTERS[0].draw   = drawPigeon;
 CHARACTERS[1].update = updatePidgey;
 CHARACTERS[1].draw   = drawPidgey;
+CHARACTERS[2].update = updateAngryBird;
+CHARACTERS[2].draw   = drawAngryBird;
 
 let lastTime = 0;
 let prevPhase = 'START';

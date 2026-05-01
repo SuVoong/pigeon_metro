@@ -131,5 +131,44 @@ export const CHARACTERS = [
       ctx.restore();
     },
   },
+  {
+    id: 2,
+    name: 'RED',
+    unlocked: true,
+    description: 'El Angry Bird más famoso',
+    hint: '',
+    update: null,
+    draw:   null,
+    drawPreview(ctx, cx, cy) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(2, 2);
+      const ox = -16, oy = -16;
+      const p = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox+x, oy+y, w, h); };
+      // cresta
+      p(11, 0, 2, 5, '#991010'); p(15, 0, 2, 7, '#991010'); p(19, 0, 2, 5, '#991010');
+      p(13, 2, 2, 2, '#CC1818'); p(17, 2, 2, 2, '#CC1818'); p(14, 3, 4, 2, '#CC1818');
+      p(15, 1, 2, 2, '#EE3030');
+      // cabeza
+      p(10, 4,12, 4, '#E02020'); p( 8, 6,16, 5, '#E02020');
+      p(11, 5, 9, 2, '#FF3A3A');
+      p( 8, 8, 3, 1, '#3A1A0A'); p(21, 8, 3, 1, '#3A1A0A');
+      // cuerpo
+      p( 7,10,18, 2, '#E02020'); p( 5,12,22,10, '#E02020'); p( 7,22,18, 2, '#E02020');
+      p( 5,12, 3,10, '#B80E0E'); p(24,12, 3,10, '#B80E0E');
+      p(11,11,10,10, '#FF3A3A'); p(13,11, 6, 7, '#FF5540');
+      // alas frame 0 (nivel)
+      p( 0,13, 7, 4, '#CC1818'); p(25,13, 7, 4, '#CC1818');
+      p( 0,16, 7, 2, '#8B0E0E'); p(25,16, 7, 2, '#8B0E0E');
+      // cola
+      p(11,23,10, 3, '#BB1414'); p(12,25, 8, 2, '#991010'); p(13,26, 6, 1, '#771010');
+      // patas y pies
+      p(12,24, 2, 4, '#FFAA00'); p(18,24, 2, 4, '#FFAA00');
+      p( 9,27, 5, 1, '#FFAA00'); p(18,27, 5, 1, '#FFAA00');
+      p( 9,28, 1, 1, '#CC7700'); p(13,28, 1, 1, '#CC7700');
+      p(18,28, 1, 1, '#CC7700'); p(22,28, 1, 1, '#CC7700');
+      ctx.restore();
+    },
+  },
 ];
 
