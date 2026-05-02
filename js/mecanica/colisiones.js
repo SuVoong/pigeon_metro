@@ -3,7 +3,7 @@
 import { canvas, STATE, pigeon, obstacles, collectibles, particles, PAL, DEBUG } from './estado.js';
 import { w2sx, w2sy, perspective } from './camara.js';
 import { emitParticles } from './spawning.js';
-import { MetroBase } from '../escenarios/metros/metro_base/metro_base.js';
+import { Linea3 } from '../escenarios/metro_madrid/linea_3.js';
 import * as PM from '../editor/preset_manager.js';
 import { TRAIN_CFG } from '../editor/train_config.js';
 import { saveFlightRecord } from './progreso.js';
@@ -36,7 +36,7 @@ export function checkCollisions() {
       // para que ambos coincidan en el mismo sistema de coordenadas.
       const yShift = (VERT_POS - 0.5) * canvas.height;
       const pBoxL3 = { x: pBox.x, y: pBox.y + yShift, w: HITBOX, h: HITBOX };
-      const trainBoxes = MetroBase.getTrainHitboxes();
+      const trainBoxes = Linea3.getTrainHitboxes();
       for (const tBox of trainBoxes) {
         if (aabb(pBoxL3, tBox)) { _triggerHit(); break; }
       }
@@ -157,7 +157,7 @@ export function drawDebugHitboxes(ctx) {
 
   const colZ = _f.arcadeCollisionZ ?? 600;
   const trainBoxes = STATE.selectedScenario === 'linea_3'
-    ? MetroBase.getTrainHitboxes()
+    ? Linea3.getTrainHitboxes()
     : obstacles
         .filter(o => o.z <= colZ && o.z >= -50)
         .map(o => {

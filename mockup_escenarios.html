@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Pigeon Metro – Mockup Escenarios</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; font-family: 'Segoe UI', sans-serif; color: #ddd; }
+  h1 { text-align: center; padding: 18px 0 6px; font-size: 1.2rem; color: #f5c800; letter-spacing: 2px; text-transform: uppercase; }
+  .subtitle { text-align: center; font-size: 0.75rem; color: #888; margin-bottom: 18px; }
+  .escenarios { display: flex; flex-wrap: wrap; justify-content: center; gap: 32px; padding: 10px 20px 40px; }
+  .escenario-card { display: flex; flex-direction: column; align-items: center; }
+  .escenario-card h2 { margin-bottom: 8px; font-size: 0.85rem; letter-spacing: 1px; color: #f39200; text-transform: uppercase; }
+  canvas { border: 1px solid #333; display: block; }
+  .label { margin-top: 6px; font-size: 0.7rem; color: #666; }
+</style>
+</head>
+<body>
+<h1>Pigeon Metro · Estado actual de escenarios</h1>
+<p class="subtitle">Renderizado fiel al código fuente · estacion_base.js + tunel.js</p>
+<div class="escenarios">
+  <div class="escenario-card">
+    <h2>Andén / Estación (EstacionBase)</h2>
+    <canvas id="cEstacion" width="640" height="360"></canvas>
+    <div class="label">26 capas · Punto de fuga centrado · VP y=42%</div>
+  </div>
+  <div class="escenario-card">
+    <h2>Túnel (TunelBase · tunel.js)</h2>
+    <canvas id="cTunel" width="640" height="360"></canvas>
+    <div class="label">9 capas · Arcos en perspectiva · VP y=47%</div>
+  </div>
+  <div class="escenario-card">
+    <h2>HUD de progreso (MetroBase)</h2>
+    <canvas id="cHUD" width="640" height="80"></canvas>
+    <div class="label">Barra de ruta L3 · Estaciones · Fase actual</div>
+  </div>
+</div>
+
+<script>
+// ─── UTILIDADES DE PERSPECTIVA ────────────────────────────────────────────────
+const FOCAL = 400;
+function persp(z) { return FOCAL / (FOCAL + z); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ESCENA 1: ANDÉN (EstacionBase)
+// ═══════════════════════════════════════════════════════════════════════════════
+(function renderEstacion() {
+  const canvas = document.getElementById('cEstacion');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const VPX = W / 2, VPY = H * 0.42;
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  // ── Fondo
+  ctx.fillStyle = '#050508';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Techo (trapezoid)
+  ctx.fillStyle = '#222230';
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(W, 0);
+  ctx.lineTo(lerp(W, VPX, 0.55), lerp(0, VPY, 0.55));
+  ctx.lineTo(lerp(0, VPX, 0.55), lerp(0, VPY, 0.55));
+  ctx.closePath(); ctx.fill();
+  // Banda oscura inferior del techo
+  ctx.fillStyle = '#0d1535';
+  ctx.fillRect(0, H * 0.16, W, 6);
+
+  // ── Fluorescentes (5 tubos)
+  for (let i = 0; i < 5; i++) {
+    const t = (i + 1) / 6;
+    const fx = lerp(0, W, t);
+    const fy = lerp(0, VPY, 0.5) + 8;
+    const fw = lerp(80, 20, t);
+    const fh = lerp(8, 3, t);
+    // Halo
+    const grad = ctx.createRadialGradient(fx, fy, 0, fx, fy, fw * 2);
+    grad.addColorStop(0, 'rgba(255,251,230,0.18)');
+    grad.addColorStop(1, 'rgba(255,251,230,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(fx - fw * 2, fy - fw * 2, fw * 4, fw * 4);
+    // Tubo
+    ctx.fillStyle = '#FFFBE6';
+    ctx.fillRect(fx - fw / 2, fy - fh / 2, fw, fh);
+  }
+
+  // ── Paredes laterales izquierda + derecha
+  // Izquierda
+  ctx.fillStyle = '#F0F0F0';
+  ctx.beginPath();
+  ctx.moveTo(0, H * 0.16); ctx.lineTo(0, H);
+  ctx.lineTo(lerp(0, VPX, 0.55), lerp(H, VPY, 0.45));
+  ctx.lineTo(lerp(0, VPX, 0.55), lerp(H * 0.16, VPY, 0.45));
+  ctx.closePath(); ctx.fill();
+  // Banda azul izquierda
+  const wallTop_l = lerp(H * 0.16, VPY, 0.3);
+  const bandH_l = lerp(H * 0.12, 0, 0.3);
+  ctx.fillStyle = '#1A3A8A';
+  ctx.fillRect(0, wallTop_l, lerp(0, VPX, 0.55), bandH_l);
+
+  // Derecha
+  ctx.fillStyle = '#F0F0F0';
+  ctx.beginPath();
+  ctx.moveTo(W, H * 0.16); ctx.lineTo(W, H);
+  ctx.lineTo(lerp(W, VPX, 0.55), lerp(H, VPY, 0.45));
+  ctx.lineTo(lerp(W, VPX, 0.55), lerp(H * 0.16, VPY, 0.45));
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#1A3A8A';
+  ctx.fillRect(lerp(W, VPX, 0.55), wallTop_l, W - lerp(W, VPX, 0.55), bandH_l);
+
+  // ── Carteles (2 carteles en cada pared)
+  function drawCartel(cx, cy, w, h, text, fontSize) {
+    ctx.fillStyle = '#1A3A8A';
+    ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
+    ctx.strokeStyle = '#4060CC';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cx - w / 2, cy - h / 2, w, h);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, cx, cy);
+  }
+  drawCartel(80, H * 0.28, 120, 28, 'DELICIAS', 10);
+  drawCartel(W - 80, H * 0.28, 120, 28, 'DELICIAS', 10);
+
+  // ── LED Screen (cartel colgante central)
+  const ledW = 180, ledH = 36;
+  const ledX = VPX - ledW / 2, ledY = VPY - ledH * 0.5;
+  ctx.fillStyle = '#0a0f1a';
+  ctx.fillRect(ledX - 4, ledY - 4, ledW + 8, ledH + 8);
+  ctx.fillStyle = '#1A3A8A';
+  ctx.fillRect(ledX, ledY, ledW, ledH);
+  // "Cable" de soporte
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(VPX, ledY); ctx.lineTo(VPX, ledY - 20);
+  ctx.stroke();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = 'bold 9px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('DIRECCIÓN LEGAZPI', VPX, ledY + 12);
+  ctx.fillStyle = '#aad0ff';
+  ctx.font = '7px Arial';
+  ctx.fillText('Metro de Madrid', VPX, ledY + 24);
+
+  // ── Andenes (plataformas izquierda y derecha)
+  const andY = H * 0.68;
+  const andH = H - andY;
+  // Izquierda
+  const alX = 0, alW = W * 0.28;
+  ctx.fillStyle = '#5A5A6A';
+  ctx.fillRect(alX, andY, alW, andH);
+  // Highlight superior
+  const grad_al = ctx.createLinearGradient(0, andY, 0, andY + 8);
+  grad_al.addColorStop(0, 'rgba(200,200,210,0.3)'); grad_al.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad_al;
+  ctx.fillRect(alX, andY, alW, 8);
+  // Derecha
+  const arX = W * 0.72, arW = W - arX;
+  ctx.fillStyle = '#5A5A6A';
+  ctx.fillRect(arX, andY, arW, andH);
+  const grad_ar = ctx.createLinearGradient(0, andY, 0, andY + 8);
+  grad_ar.addColorStop(0, 'rgba(200,200,210,0.3)'); grad_ar.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad_ar;
+  ctx.fillRect(arX, andY, arW, 8);
+
+  // ── Banda táctil amarilla
+  ctx.fillStyle = '#F5C800';
+  ctx.fillRect(alX + alW - 16, andY, 16, andH);
+  ctx.fillStyle = '#F5C800';
+  ctx.fillRect(arX, andY, 16, andH);
+  // Puntos táctiles
+  ctx.fillStyle = '#C8A000';
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 3; col++) {
+      ctx.beginPath();
+      ctx.arc(alX + alW - 12 + col * 4, andY + 8 + row * 12, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(arX + 4 + col * 4, andY + 8 + row * 12, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ── Vía (fosa + rieles + traviesas)
+  const trackX = alX + alW, trackW = arX - alX - alW;
+  const fosY = andY + 12;
+  ctx.fillStyle = '#1a1a18';
+  ctx.fillRect(trackX, fosY, trackW, H - fosY);
+  // Sombra
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(trackX, fosY, trackW, 14);
+
+  // Traviesas (16)
+  const traviesas = 10;
+  for (let i = 0; i < traviesas; i++) {
+    const tz = i * 40;
+    const s = persp(tz);
+    const tY = lerp(H, fosY + 4, s);
+    const tH = Math.max(2, 6 * s);
+    const tW_half = trackW * 0.45 * s;
+    ctx.fillStyle = '#3A2A18';
+    ctx.fillRect(VPX - tW_half, tY - tH / 2, tW_half * 2, tH);
+    ctx.fillStyle = '#5A4028';
+    ctx.fillRect(VPX - tW_half, tY - tH / 2, tW_half * 2, tH * 0.3);
+  }
+
+  // 4 Rieles en perspectiva
+  const railOffsets = [-0.28, -0.10, 0.10, 0.28];
+  railOffsets.forEach(off => {
+    const rxN = VPX + off * trackW * 0.15; // near VP
+    const rxF = VPX + off * trackW * 0.48; // far (pantalla bottom)
+    ctx.beginPath();
+    ctx.moveTo(rxN, fosY + 2);
+    ctx.lineTo(rxF, H);
+    // Sombra
+    ctx.strokeStyle = '#5A6878';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    // Brillo
+    ctx.beginPath();
+    ctx.moveTo(rxN - 1, fosY + 2);
+    ctx.lineTo(rxF - 1, H);
+    ctx.strokeStyle = 'rgba(200,205,215,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  // ── Línea de seguridad (borde andén)
+  ctx.strokeStyle = '#FFCC00';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(alX + alW, andY); ctx.lineTo(alX + alW, H);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(arX, andY); ctx.lineTo(arX, H);
+  ctx.stroke();
+
+  // ── Logo Metro (diamante rojo en VP)
+  const logoSize = 18;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(VPX - logoSize, VPY - logoSize * 0.6, logoSize * 2, logoSize * 1.2);
+  ctx.fillStyle = '#CC1111';
+  ctx.save();
+  ctx.translate(VPX, VPY);
+  ctx.rotate(Math.PI / 4);
+  ctx.fillRect(-logoSize * 0.5, -logoSize * 0.5, logoSize, logoSize);
+  ctx.restore();
+
+  // ── Pasajeros (pixel-art simplificado)
+  function drawPassenger(px, py, scale, shirtColor) {
+    const s = scale;
+    // Cabeza
+    ctx.fillStyle = '#e8c090';
+    ctx.fillRect(px - 4 * s, py - 16 * s, 8 * s, 8 * s);
+    // Cuerpo
+    ctx.fillStyle = shirtColor;
+    ctx.fillRect(px - 5 * s, py - 8 * s, 10 * s, 10 * s);
+    // Piernas
+    ctx.fillStyle = '#222244';
+    ctx.fillRect(px - 4 * s, py + 2 * s, 3 * s, 7 * s);
+    ctx.fillRect(px + 1 * s, py + 2 * s, 3 * s, 7 * s);
+  }
+  const shirts = ['#3A5FAA', '#AA3A3A', '#3AAA5F', '#8833AA', '#888833'];
+  drawPassenger(60, andY + 2, 0.9, shirts[0]);
+  drawPassenger(90, andY + 2, 0.9, shirts[1]);
+  drawPassenger(130, andY + 2, 0.85, shirts[2]);
+  drawPassenger(W - 60, andY + 2, 0.9, shirts[3]);
+  drawPassenger(W - 95, andY + 2, 0.85, shirts[4]);
+
+  // ── Tren llegando (izquierda, escala ~0.4 desde VP)
+  function drawTren(tx, ty, scale) {
+    const bW = 120 * scale, bH = 80 * scale;
+    const bX = tx - bW / 2, bY = ty - bH;
+    // Chasis inferior
+    ctx.fillStyle = '#1a1a28';
+    ctx.fillRect(bX, bY + bH * 0.75, bW, bH * 0.25);
+    // Cuerpo principal
+    ctx.fillStyle = '#F39200';
+    ctx.fillRect(bX, bY, bW, bH * 0.78);
+    // Franja inferior
+    ctx.fillStyle = '#E87000';
+    ctx.fillRect(bX, bY + bH * 0.6, bW, bH * 0.15);
+    // Ventanas
+    const wW = bW * 0.22, wH = bH * 0.25;
+    ctx.fillStyle = '#1A2E3A';
+    ctx.fillRect(bX + bW * 0.1, bY + bH * 0.12, wW, wH);
+    ctx.fillRect(bX + bW * 0.42, bY + bH * 0.12, wW, wH);
+    // Piloto
+    ctx.fillStyle = '#111';
+    ctx.fillRect(bX + bW * 0.1, bY + bH * 0.42, bW * 0.8, bH * 0.15);
+    // Luces delanteras
+    if (scale > 0.3) {
+      const lGrad = ctx.createRadialGradient(bX + bW * 0.2, bY + bH * 0.38, 0, bX + bW * 0.2, bY + bH * 0.38, 18 * scale);
+      lGrad.addColorStop(0, 'rgba(255,255,180,0.35)'); lGrad.addColorStop(1, 'rgba(255,255,180,0)');
+      ctx.fillStyle = lGrad;
+      ctx.beginPath(); ctx.arc(bX + bW * 0.2, bY + bH * 0.38, 18 * scale, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFFFCC';
+      ctx.fillRect(bX + bW * 0.14, bY + bH * 0.34, bW * 0.12, bH * 0.08);
+    }
+    // Ruedas
+    ctx.fillStyle = '#333344';
+    ctx.beginPath(); ctx.arc(bX + bW * 0.2, bY + bH, 8 * scale, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bX + bW * 0.8, bY + bH, 8 * scale, 0, Math.PI * 2); ctx.fill();
+  }
+  drawTren(W * 0.16, andY - 2, 0.55);
+
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ESCENA 2: TÚNEL (TunelBase · tunel.js)
+// ═══════════════════════════════════════════════════════════════════════════════
+(function renderTunel() {
+  const canvas = document.getElementById('cTunel');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const VPX = W / 2, VPY = H * 0.47;
+  const worldZ = 420; // simular scroll
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function persp(z) { return FOCAL / (FOCAL + z); }
+
+  const maxR = H * 0.70;
+
+  // CAPA 1: Fondo
+  ctx.fillStyle = '#08080d';
+  ctx.fillRect(0, 0, W, H);
+  // Glow central
+  const bgGrad = ctx.createRadialGradient(VPX, VPY, 0, VPX, VPY, maxR * 1.2);
+  bgGrad.addColorStop(0, 'rgba(42,44,52,0.7)'); bgGrad.addColorStop(1, 'rgba(8,8,13,0)');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // CAPA 2: Rellenos de pared (gradiente de 3 colores)
+  // Pared derecha
+  const wallGradR = ctx.createLinearGradient(W, 0, VPX, 0);
+  wallGradR.addColorStop(0, '#18191d');
+  wallGradR.addColorStop(0.5, '#22242a');
+  wallGradR.addColorStop(1, '#2e3038');
+  ctx.fillStyle = wallGradR;
+  ctx.fillRect(VPX, 0, W / 2, H);
+  // Pared izquierda
+  const wallGradL = ctx.createLinearGradient(0, 0, VPX, 0);
+  wallGradL.addColorStop(0, '#18191d');
+  wallGradL.addColorStop(0.5, '#22242a');
+  wallGradL.addColorStop(1, '#2e3038');
+  ctx.fillStyle = wallGradL;
+  ctx.fillRect(0, 0, W / 2, H);
+
+  // CAPA 3: Arcos de túnel en perspectiva
+  const archSpacing = 100;
+  const numArches = Math.ceil(H / archSpacing) + 3;
+  for (let i = 0; i < numArches; i++) {
+    const rawZ = ((worldZ + i * archSpacing) % (numArches * archSpacing));
+    const s = persp(rawZ);
+    const r = maxR * s;
+    const archCY = VPY + r * 0.05;
+    const t = i / numArches;
+    const lum = Math.round(lerp(28, 50, 1 - t));
+    const alpha = lerp(0.55, 0.9, 1 - t);
+    // Arco completo (semicírculo)
+    ctx.beginPath();
+    ctx.arc(VPX, archCY, r, Math.PI, 0);
+    ctx.strokeStyle = `rgba(${lum},${lum + 2},${lum + 8},${alpha})`;
+    ctx.lineWidth = Math.max(1, 3 * s);
+    ctx.stroke();
+    // Extensión vertical del arco a los lados
+    ctx.beginPath();
+    ctx.moveTo(VPX - r, archCY); ctx.lineTo(VPX - r, H);
+    ctx.moveTo(VPX + r, archCY); ctx.lineTo(VPX + r, H);
+    ctx.strokeStyle = `rgba(${lum},${lum},${lum + 6},${alpha * 0.7})`;
+    ctx.lineWidth = Math.max(0.5, 2 * s);
+    ctx.stroke();
+  }
+
+  // CAPA 4: Juntas de panel horizontales
+  const seamSpacing = 80;
+  const numSeams = Math.ceil(H / seamSpacing) + 3;
+  for (let i = 0; i < numSeams; i++) {
+    const rawZ = ((worldZ * 0.8 + i * seamSpacing) % (numSeams * seamSpacing));
+    const s = persp(rawZ);
+    const r = maxR * s;
+    const sy = VPY + r * 0.1 + (H - VPY) * (1 - s) * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(0, sy); ctx.lineTo(W, sy);
+    ctx.strokeStyle = 'rgba(8,9,11,0.7)';
+    ctx.lineWidth = Math.max(0.5, 1.5 * s);
+    ctx.stroke();
+  }
+
+  // CAPA 5: Suelo
+  const floorY = VPY + maxR * 0.15;
+  const floorGrad = ctx.createLinearGradient(0, floorY, 0, H);
+  floorGrad.addColorStop(0, '#18181c'); floorGrad.addColorStop(0.5, '#101012'); floorGrad.addColorStop(1, '#07070a');
+  ctx.fillStyle = floorGrad;
+  ctx.fillRect(0, floorY, W, H - floorY);
+  // Balasto (puntos aleatorios deterministicos)
+  ctx.fillStyle = 'rgba(60,62,70,0.6)';
+  for (let i = 0; i < 180; i++) {
+    const px = ((i * 137 + worldZ * 0.3) % W);
+    const py = floorY + ((i * 97) % (H - floorY));
+    ctx.fillRect(px, py, 1 + (i % 3), 1);
+  }
+
+  // CAPA 6: Rieles (4 líneas en perspectiva)
+  const railPairs = [
+    { off: -0.22, w: 3 }, { off: -0.08, w: 3 },
+    { off: 0.08, w: 3 }, { off: 0.22, w: 3 }
+  ];
+  railPairs.forEach(({ off, w }) => {
+    const xNear = VPX + off * W * 0.05;
+    const xFar = VPX + off * W * 0.46;
+    // Sombra
+    ctx.beginPath();
+    ctx.moveTo(xNear, VPY + 6); ctx.lineTo(xFar, H);
+    ctx.strokeStyle = '#2a3040'; ctx.lineWidth = w + 2; ctx.stroke();
+    // Cuerpo
+    ctx.beginPath();
+    ctx.moveTo(xNear, VPY + 6); ctx.lineTo(xFar, H);
+    ctx.strokeStyle = '#8a8c94'; ctx.lineWidth = w; ctx.stroke();
+    // Brillo
+    ctx.beginPath();
+    ctx.moveTo(xNear - 0.5, VPY + 6); ctx.lineTo(xFar - 0.5, H);
+    ctx.strokeStyle = 'rgba(200,205,215,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+  });
+
+  // CAPA 7: Conductos/cables en paredes
+  const conduitY = VPY - maxR * 0.55;
+  const conduitOffsets = [-0.88, 0.88];
+  conduitOffsets.forEach(off => {
+    const xNear = VPX + off * maxR * 0.18;
+    const xFar = VPX + off * maxR * 0.88;
+    // Bandeja principal
+    ctx.beginPath();
+    ctx.moveTo(xNear, conduitY + 10); ctx.lineTo(xFar, H * 0.25);
+    ctx.strokeStyle = 'rgba(48,52,58,0.9)'; ctx.lineWidth = 5; ctx.stroke();
+    // Cables paralelos
+    ctx.beginPath();
+    ctx.moveTo(xNear - 3, conduitY + 10); ctx.lineTo(xFar - 3, H * 0.25);
+    ctx.strokeStyle = 'rgba(60,65,72,0.6)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(xNear + 3, conduitY + 10); ctx.lineTo(xFar + 3, H * 0.25);
+    ctx.strokeStyle = 'rgba(60,65,72,0.6)'; ctx.lineWidth = 2; ctx.stroke();
+    // Clips de sujeción (5)
+    for (let c = 0; c < 5; c++) {
+      const ct = (c + 1) / 6;
+      const cx = lerp(xNear, xFar, ct);
+      const cy = lerp(conduitY + 10, H * 0.25, ct);
+      ctx.fillStyle = '#606068';
+      ctx.fillRect(cx - 4, cy - 3, 8, 6);
+      ctx.fillStyle = '#888890';
+      ctx.fillRect(cx - 3, cy - 2, 6, 2);
+    }
+  });
+
+  // CAPA 8: Luces de pared
+  const lightSpacing = 190;
+  const numLights = Math.ceil(W / lightSpacing) + 2;
+  const lightOffsets = [-0.75, -0.25, 0.25, 0.75];
+  lightOffsets.forEach(off => {
+    for (let i = 0; i < 4; i++) {
+      const rawZ = ((worldZ * 0.6 + i * lightSpacing) % (numLights * lightSpacing));
+      if (rawZ > 1000) continue;
+      const s = persp(rawZ);
+      const lx = VPX + off * maxR * s * 0.9;
+      const ly = VPY - maxR * s * 0.4;
+      const lw = 30 * s, lh = 12 * s;
+      if (lw < 2) continue;
+      // Halo
+      const lGrad = ctx.createRadialGradient(lx, ly, 0, lx, ly, lw * 2.5);
+      lGrad.addColorStop(0, 'rgba(255,232,160,0.25)'); lGrad.addColorStop(1, 'rgba(255,232,160,0)');
+      ctx.fillStyle = lGrad;
+      ctx.fillRect(lx - lw * 2.5, ly - lh * 2, lw * 5, lh * 4);
+      // Caja de luz
+      ctx.fillStyle = '#ffffaa';
+      ctx.fillRect(lx - lw / 2, ly - lh / 2, lw, lh);
+    }
+  });
+
+  // CAPA 9: Niebla de profundidad
+  const fogGrad = ctx.createRadialGradient(VPX, VPY, 0, VPX, VPY, maxR * 1.3);
+  fogGrad.addColorStop(0, 'rgba(12,12,18,0.72)'); fogGrad.addColorStop(0.4, 'rgba(12,12,18,0.18)');
+  fogGrad.addColorStop(1, 'rgba(12,12,18,0)');
+  ctx.fillStyle = fogGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Tren de obstáculo (escala media, track derecho)
+  function drawTrenTunel(tx, ty, scale) {
+    const bW = 110 * scale, bH = 72 * scale;
+    const bX = tx - bW / 2, bY = ty - bH;
+    ctx.fillStyle = '#1a1a28';
+    ctx.fillRect(bX, bY + bH * 0.72, bW, bH * 0.28);
+    ctx.fillStyle = '#F39200';
+    ctx.fillRect(bX, bY, bW, bH * 0.72);
+    ctx.fillStyle = '#E87000';
+    ctx.fillRect(bX, bY + bH * 0.55, bW, bH * 0.17);
+    const wW = bW * 0.23, wH = bH * 0.23;
+    ctx.fillStyle = '#1A2E3A';
+    ctx.fillRect(bX + bW * 0.08, bY + bH * 0.1, wW, wH);
+    ctx.fillRect(bX + bW * 0.42, bY + bH * 0.1, wW, wH);
+    ctx.fillStyle = '#111';
+    ctx.fillRect(bX + bW * 0.08, bY + bH * 0.38, bW * 0.84, bH * 0.15);
+    if (scale > 0.3) {
+      const lGrad = ctx.createRadialGradient(bX + bW * 0.18, bY + bH * 0.34, 0, bX + bW * 0.18, bY + bH * 0.34, 16 * scale);
+      lGrad.addColorStop(0, 'rgba(255,255,180,0.4)'); lGrad.addColorStop(1, 'rgba(255,255,180,0)');
+      ctx.fillStyle = lGrad;
+      ctx.beginPath(); ctx.arc(bX + bW * 0.18, bY + bH * 0.34, 16 * scale, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#FFFFCC';
+      ctx.fillRect(bX + bW * 0.1, bY + bH * 0.30, bW * 0.16, bH * 0.09);
+    }
+    ctx.fillStyle = '#333344';
+    ctx.beginPath(); ctx.arc(bX + bW * 0.18, bY + bH + 2 * scale, 7 * scale, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bX + bW * 0.82, bY + bH + 2 * scale, 7 * scale, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#555566'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(bX + bW * 0.18, bY + bH + 2 * scale, 7 * scale, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(bX + bW * 0.82, bY + bH + 2 * scale, 7 * scale, 0, Math.PI * 2); ctx.stroke();
+  }
+  const trainFloorY = floorY + (H - floorY) * 0.55;
+  drawTrenTunel(VPX + 110, trainFloorY, 0.48);
+
+  // ── Obstacle (tubería)
+  function drawPipe(px, py, scale) {
+    const pw = 28 * scale, ph = 90 * scale;
+    const pX = px - pw / 2, pY = py - ph;
+    ctx.fillStyle = '#787880';
+    ctx.fillRect(pX, pY, pw, ph);
+    ctx.fillStyle = '#a0a0aa';
+    ctx.fillRect(pX, pY, pw, ph * 0.3);
+    ctx.fillStyle = 'rgba(200,200,210,0.5)';
+    ctx.fillRect(pX + pw * 0.25, pY + 2, 3, ph - 4);
+    ctx.fillStyle = '#3a3a45';
+    ctx.fillRect(pX, pY + ph * 0.8, pw, ph * 0.2);
+    if (scale > 0.3) {
+      ctx.fillStyle = '#606068';
+      ctx.fillRect(pX - 4, pY + ph * 0.25, pw + 8, 6);
+      ctx.fillStyle = '#888890';
+      ctx.fillRect(pX - 3, pY + ph * 0.25, pw + 6, 2);
+    }
+  }
+  drawPipe(VPX - 80, floorY + (H - floorY) * 0.45, 0.4);
+
+  // ── Moneda (coleccionable)
+  function drawCoin(px, py, scale) {
+    const r = 14 * scale;
+    if (r < 3) return;
+    const cGrad = ctx.createRadialGradient(px, py, 0, px, py, r * 2.5);
+    cGrad.addColorStop(0, 'rgba(255,220,60,0.3)'); cGrad.addColorStop(1, 'rgba(255,180,0,0)');
+    ctx.fillStyle = cGrad;
+    ctx.beginPath(); ctx.arc(px, py, r * 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c8880a';
+    ctx.beginPath(); ctx.arc(px, py, r + 1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffdd44';
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,200,0.7)';
+    ctx.beginPath(); ctx.arc(px - r * 0.3, py - r * 0.3, r * 0.5, 0, Math.PI * 2); ctx.fill();
+    if (r >= 5) {
+      ctx.fillStyle = '#a06010';
+      ctx.font = `bold ${Math.round(r * 1.1)}px Arial`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('€', px, py + 1);
+    }
+  }
+  drawCoin(VPX + 15, VPY + 22, 0.55);
+
+  // ── Paloma (pigeon) simplificada
+  function drawPigeon(px, py) {
+    // Cuerpo
+    ctx.fillStyle = '#e8e8f0';
+    ctx.beginPath(); ctx.ellipse(px, py, 14, 10, 0, 0, Math.PI * 2); ctx.fill();
+    // Cabeza
+    ctx.fillStyle = '#d8d8e8';
+    ctx.beginPath(); ctx.arc(px + 10, py - 6, 7, 0, Math.PI * 2); ctx.fill();
+    // Ojo
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(px + 13, py - 7, 1.5, 0, Math.PI * 2); ctx.fill();
+    // Pico
+    ctx.fillStyle = '#c8a060';
+    ctx.beginPath();
+    ctx.moveTo(px + 17, py - 6); ctx.lineTo(px + 22, py - 4); ctx.lineTo(px + 17, py - 3);
+    ctx.closePath(); ctx.fill();
+    // Ala
+    ctx.fillStyle = '#b8b8cc';
+    ctx.beginPath(); ctx.ellipse(px - 2, py, 10, 6, -0.3, 0, Math.PI * 2); ctx.fill();
+  }
+  drawPigeon(VPX - 25, H * 0.55);
+
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HUD DE PROGRESO (MetroBase · _drawProgressHUD)
+// ═══════════════════════════════════════════════════════════════════════════════
+(function renderHUD() {
+  const canvas = document.getElementById('cHUD');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  ctx.fillStyle = '#0d0d12';
+  ctx.fillRect(0, 0, W, H);
+
+  const stations = ['El Casar','Villaverde A.','Villaverde B.','Pradolongo','Legazpi','Delicias','Embajadores','Lavapiés','Sol','Callao','Ventura R.','Argüelles','Moncloa'];
+  const nStops = stations.length;
+  const lineColor = '#F39200'; // Naranja L3
+  const barY = H * 0.72;
+  const barPad = 40;
+  const barW = W - barPad * 2;
+
+  // Fondo barra
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.fillRect(barPad, barY - 2, barW, 4);
+
+  // Progreso (Delicias = idx 5 de 12 = ~38%)
+  const progressPct = 5 / (nStops - 1);
+  ctx.fillStyle = lineColor;
+  ctx.fillRect(barPad, barY - 2, barW * progressPct, 4);
+
+  // Marcas de estaciones
+  for (let i = 0; i < nStops; i++) {
+    const sx = barPad + (i / (nStops - 1)) * barW;
+    const isCurrent = i === 5; // Delicias
+    const isPassed = i < 5;
+    ctx.beginPath();
+    ctx.arc(sx, barY, isCurrent ? 6 : 4, 0, Math.PI * 2);
+    ctx.fillStyle = isCurrent ? '#FFFFFF' : isPassed ? lineColor : '#444';
+    ctx.fill();
+    if (isCurrent) {
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    // Nombre girado
+    ctx.save();
+    ctx.translate(sx, barY - 12);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillStyle = isCurrent ? '#FFFFFF' : isPassed ? '#aaa' : '#555';
+    ctx.font = isCurrent ? 'bold 8px Arial' : '7px Arial';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(stations[i], 0, 0);
+    ctx.restore();
+  }
+
+  // Indicador ANDÉN / TÚNEL
+  const currentX = barPad + progressPct * barW;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = 'bold 9px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('▼', currentX, barY - 8);
+
+  // Etiqueta de fase
+  ctx.fillStyle = lineColor;
+  ctx.font = 'bold 9px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('[ ANDÉN ]', currentX, H * 0.9);
+
+  // Nombre estación actual
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = 'bold 10px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('DELICIAS', barPad, H * 0.9);
+
+  // Porcentaje
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#888';
+  ctx.font = '9px Arial';
+  ctx.fillText(Math.round(progressPct * 100) + '%', W - barPad, H * 0.9);
+
+  // Línea decorativa de línea
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.moveTo(barPad, H - 6); ctx.lineTo(W - barPad, H - 6);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Leyenda L3
+  ctx.fillStyle = lineColor;
+  ctx.beginPath(); ctx.arc(W - 18, 14, 8, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 9px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('L3', W - 18, 14);
+})();
+</script>
+</body>
+</html>

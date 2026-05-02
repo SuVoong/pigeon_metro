@@ -11,13 +11,13 @@ import { ENV_CFG }       from '../../../editor/env_config.js';
 const FOCAL       = 400;
 const _persp      = z  => FOCAL / (FOCAL + Math.max(z, 1));
 const _vpX        = () => canvas.width  / 2;
-const _vpY        = () => canvas.height * (ENV_CFG?.vanishingPointY ?? 0.47);
-
-// Centro del arco (ligeramente por debajo del punto de fuga para que
-// el suelo quede visible). El arco es semicircular por encima de este punto.
-const _archCY     = () => _vpY() + canvas.height * 0.20;
-// Radio máximo del arco: ocupa casi toda la pantalla en el primer plano
-const _maxR       = () => canvas.height * 0.70;
+// Defaults heredados (fallback cuando no llega override por config).
+// vanishingPointY = 0.42 por coherencia con EstacionBase: así la transición
+// túnel ↔ estación mantiene el punto de fuga (y por tanto las vías) en la
+// misma posición vertical de la pantalla.
+const _defaultVpY        = () => canvas.height * (ENV_CFG?.vanishingPointY ?? 0.42);
+const _defaultArchOffset = () => canvas.height * 0.20;
+const _defaultMaxR       = () => canvas.height * 0.70;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRY POINT
@@ -33,9 +33,20 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   const cw    = canvas.width;
   const ch    = canvas.height;
   const vpX   = _vpX();
-  const vpY   = _vpY();
-  const archCY = _archCY();
-  const maxR  = _maxR();
+  // Geometría con overrides desde config (editor de escenario):
+  //   · vanishingPointY      → fracción 0–1 (Y del punto de fuga).
+  //   · archRadiusRatio      → fracción 0–1 (radio del arco / canvas.height).
+  //   · archCenterOffsetRatio→ fracción del canvas.height entre VP y centro
+  //                            del arco (controla cuánto suelo es visible).
+  const vpY    = config.vanishingPointY != null
+    ? ch * config.vanishingPointY
+    : _defaultVpY();
+  const maxR   = config.archRadiusRatio != null
+    ? ch * config.archRadiusRatio
+    : _defaultMaxR();
+  const archCY = vpY + (config.archCenterOffsetRatio != null
+    ? ch * config.archCenterOffsetRatio
+    : _defaultArchOffset());
 
   // 1 ── Fondo negro profundo ────────────────────────────────────────────────
   _drawBackground(ctx, vpX, vpY, cw, ch, config);
@@ -53,7 +64,9 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   _drawFloor(ctx, vpX, archCY, cw, ch);
 
   // 6 ── Raíles con durmientes ───────────────────────────────────────────────
-  _drawRails(ctx, vpX, archCY, cw, ch, worldZ);
+  // Pasamos vpY explícito para que los raíles arranquen a la MISMA Y que en
+  // EstacionBase (vpY + 8) y la transición túnel ↔ estación sea continua.
+  _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ);
 
   // 7 ── Conductos/cables en las paredes ────────────────────────────────────
   _drawConduits(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ);
@@ -290,83 +303,113 @@ function _drawFloor(ctx, vpX, archCY, cw, ch) {
 }
 
 // ── Raíles con durmientes ─────────────────────────────────────────────────
-function _drawRails(ctx, vpX, archCY, cw, ch, worldZ) {
-  const floorY   = archCY;
-  // Separación de los raíles en el primer plano (píxeles)
-  const railHalf = cw * 0.12;
+// Geometría DOS-VÍAS coincidente con EstacionBase para que la transición
+// túnel → estación sea visualmente continua. Los offsets son los MISMOS
+// porcentajes del ancho del canvas que usa estacion_base.js (mantén ambos
+// sincronizados si tocas estos números).
+//
+//   - Vía exterior  ±32% W   (BASE)   → ±1.8% W   (VP)
+//   - Vía interior  ± 3% W   (BASE)   → ±1.5% W   (VP)
+const TRACK_OUTER_RATIO_BASE = 0.32;
+const TRACK_INNER_RATIO_BASE = 0.03;
+const TRACK_OUTER_RATIO_VP   = 0.018;
+const TRACK_INNER_RATIO_VP   = 0.015;
 
-  // ── Durmientes (traviesas de hormigón) ──────────────────────────────────
-  const sleeperGap = 55;
-  const slOff      = ((worldZ * 3) % sleeperGap + sleeperGap) % sleeperGap;
+function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ) {
+  // Las vías arrancan a vpY + 8 (igual que en EstacionBase) para que la
+  // transición túnel ↔ estación sea visualmente continua. Antes usábamos
+  // floorY = archCY que dejaba las vías sólo en el tercio inferior.
+  const railTopY = vpY + 8;
+  const railBotY = ch;
+
+  // Coordenadas X de las 8 esquinas (4 carriles × 2 puntos: VP/base).
+  const tOBL = vpX - cw * TRACK_OUTER_RATIO_BASE;
+  const tIBL = vpX - cw * TRACK_INNER_RATIO_BASE;
+  const tIBR = vpX + cw * TRACK_INNER_RATIO_BASE;
+  const tOBR = vpX + cw * TRACK_OUTER_RATIO_BASE;
+  const tOVL = vpX - cw * TRACK_OUTER_RATIO_VP;
+  const tIVL = vpX - cw * TRACK_INNER_RATIO_VP;
+  const tIVR = vpX + cw * TRACK_INNER_RATIO_VP;
+  const tOVR = vpX + cw * TRACK_OUTER_RATIO_VP;
+
+  // ── Durmientes (traviesas de hormigón) — UNA fila para cada vía ─────────
+  // Avanzamos por un parámetro lineal t (0 = VP, 1 = base) animado con worldZ
+  // para que las traviesas "vengan hacia la cámara" como antes.
+  const numSleepers = 22;
+  const slOffT      = ((worldZ * 0.0035) % (1 / numSleepers) + (1 / numSleepers)) % (1 / numSleepers);
 
   ctx.save();
-  for (let z = 800; z >= 0; z -= sleeperGap) {
-    const zOff = z - slOff;
-    if (zOff < 0) continue;
-    const s  = _persp(zOff);
-    const sy = floorY + (ch - floorY) * (1 - s) * 1.05;
-    if (sy > ch + 4) continue;
+  for (let i = 0; i < numSleepers; i++) {
+    // Reparto cuadrático para que las traviesas se concentren al fondo
+    // (efecto realista de perspectiva — las cercanas se separan, las lejanas
+    // se apilan cerca del VP).
+    const baseT = i / (numSleepers - 1);
+    const t = Math.pow(baseT + slOffT, 2);
+    if (t <= 0 || t >= 1) continue;
 
-    const sw        = railHalf * 2 * s * 1.25;
-    const thickness = Math.max(1, s * 6);
-    const alpha     = Math.min(1, s * 1.5);
+    const sy = (1 - t) * railTopY + t * railBotY;
+
+    // Interpolación de las posiciones X (t=0 → VP, t=1 → base).
+    const tL1 = (1 - t) * tOVL + t * tOBL;
+    const tL2 = (1 - t) * tIVL + t * tIBL;
+    const tR1 = (1 - t) * tIVR + t * tIBR;
+    const tR2 = (1 - t) * tOVR + t * tOBR;
+
+    const thickness = Math.max(1, t * 6);
+    const alpha     = Math.min(1, t * 1.5 + 0.1);
 
     ctx.strokeStyle = `rgba(34,30,22,${alpha})`;
     ctx.lineWidth   = thickness;
-    ctx.beginPath();
-    ctx.moveTo(vpX - sw / 2, sy);
-    ctx.lineTo(vpX + sw / 2, sy);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tL1, sy); ctx.lineTo(tL2, sy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tR1, sy); ctx.lineTo(tR2, sy); ctx.stroke();
 
     // Highlight superior del durmiente
     ctx.strokeStyle = `rgba(55,50,38,${alpha * 0.6})`;
     ctx.lineWidth   = Math.max(1, thickness * 0.3);
-    ctx.beginPath();
-    ctx.moveTo(vpX - sw / 2, sy - thickness * 0.35);
-    ctx.lineTo(vpX + sw / 2, sy - thickness * 0.35);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tL1, sy - thickness * 0.35); ctx.lineTo(tL2, sy - thickness * 0.35); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tR1, sy - thickness * 0.35); ctx.lineTo(tR2, sy - thickness * 0.35); ctx.stroke();
   }
   ctx.restore();
 
-  // ── Raíles (dos pares: vía principal y reflejo) ───────────────────────
-  _drawRailPair(ctx, vpX, floorY, ch, railHalf, '#8a8c94', 2.8);
+  // ── Carriles metálicos (4 carriles: 2 por vía) ──────────────────────────
+  const railColor = '#8a8c94';
+  const baseW     = 2.8;
+  const rails = [
+    { near: tOBL, far: tOVL },   // izq exterior
+    { near: tIBL, far: tIVL },   // izq interior
+    { near: tIBR, far: tIVR },   // der interior
+    { near: tOBR, far: tOVR },   // der exterior
+  ];
+  _drawRailLines(ctx, rails, railTopY, railBotY, railColor, baseW);
 }
 
-function _drawRailPair(ctx, vpX, floorY, ch, halfSpread, color, baseW) {
+function _drawRailLines(ctx, rails, topY, botY, color, baseW) {
   ctx.save();
-
-  // Punto de fuga del raíl (pequeño offset desde el centro del VP)
-  const vanishOff = halfSpread * 0.12;
-
-  for (const side of [-1, 1]) {
-    const xFar  = vpX + side * vanishOff;
-    const xNear = vpX + side * halfSpread;
-
-    // Raíl principal
+  for (const rail of rails) {
+    // Cuerpo del raíl
     ctx.strokeStyle = color;
     ctx.lineWidth   = baseW;
     ctx.beginPath();
-    ctx.moveTo(xFar,  floorY + 2);
-    ctx.lineTo(xNear, ch);
+    ctx.moveTo(rail.far,  topY);
+    ctx.lineTo(rail.near, botY);
     ctx.stroke();
 
-    // Brillo superior del raíl (el tren lo pule)
+    // Brillo superior (efecto de pulido)
     ctx.strokeStyle = 'rgba(200,205,215,0.50)';
     ctx.lineWidth   = baseW * 0.35;
     ctx.beginPath();
-    ctx.moveTo(xFar,  floorY + 1);
-    ctx.lineTo(xNear, ch - 2);
+    ctx.moveTo(rail.far,  topY - 1);
+    ctx.lineTo(rail.near, botY - 2);
     ctx.stroke();
 
-    // Sombra inferior del raíl
+    // Sombra inferior
     ctx.strokeStyle = 'rgba(0,0,0,0.45)';
     ctx.lineWidth   = baseW * 0.45;
     ctx.beginPath();
-    ctx.moveTo(xFar  + side * baseW * 0.5, floorY + 3);
-    ctx.lineTo(xNear + side * baseW * 0.5, ch);
+    ctx.moveTo(rail.far  + baseW * 0.3, topY + 1);
+    ctx.lineTo(rail.near + baseW * 0.3, botY);
     ctx.stroke();
   }
-
   ctx.restore();
 }
 

@@ -1,7 +1,8 @@
 // Bucle principal: orquesta todos los módulos, gestiona estados y renderizado
 
 import { canvas, ctx, STATE, pigeon, obstacles, collectibles, particles, CHARACTERS, DEBUG } from './mecanica/estado.js';
-import { loadFlightHistory, checkUnlocks } from './mecanica/progreso.js';
+import { loadFlightHistory, checkUnlocks, loadAchievements, saveAchievements } from './mecanica/progreso.js';
+import { loadActiveProfile } from './mecanica/perfil.js';
 import { initInput, keys, consumeKey } from './mecanica/input.js';
 import { initCamera } from './mecanica/camara.js';
 import { checkCollisions, drawDebugHitboxes } from './mecanica/colisiones.js';
@@ -24,8 +25,15 @@ import { handleAchievementsInput, drawAchievementsScreen } from './pantallas/log
 import { handleSettingsInput,     drawSettingsScreen     } from './pantallas/ajustes.js';
 import { handlePauseInput, drawPauseScreen } from './pantallas/pausa.js';
 import { drawGameOverScreen } from './pantallas/fin.js';
+import { handleLevelCompleteInput, drawLevelCompleteScreen } from './pantallas/fin_nivel.js';
+import {
+  handleSceneEditorInput, updateSceneEditor, drawSceneEditorScreen,
+} from './pantallas/escena_editor.js';
 import { MapaMetroMadrid } from './escenarios/metros/metros_madrid/mapa_metro_madrid.js';
-import { Linea3 } from './escenarios/metros/metros_madrid/linea_3/linea_3.js';
+// Línea 3 — nueva arquitectura (orquestador estación↔túnel + HUD).
+// La versión legacy sigue en escenarios/metros/metros_madrid/linea_3/linea_3.js
+// por si hace falta volver a ella; el wiring está sólo aquí.
+import { Linea3 } from './escenarios/metro_madrid/linea_3.js';
 import {
   drawLoginScreen, handleLoginKey, handleLoginClick, isLoginModeActive,
   setLoginSuccessCallback,
@@ -60,7 +68,11 @@ function init() {
   initCamera();
   initInput();
   resetGame();
+  // Perfil de jugador ANTES de cualquier load* — los datos por jugador
+  // (logros, contadores, historial) viven bajo claves namespaced por perfil.
+  loadActiveProfile();
   loadFlightHistory();
+  loadAchievements();          // logros + contadores (linesCompleted, etc.)
   MapaMetroMadrid.loadProgress();
   // Warm up persisted configs (train_config / env_config load on import already)
   loadConfigs();
@@ -172,6 +184,11 @@ function update(dt) {
       handleSettingsInput(keys, consumeKey, mouse);
       break;
 
+    case 'SCENE_EDITOR':
+      handleSceneEditorInput(keys, consumeKey);
+      updateSceneEditor(dt);
+      break;
+
     case 'PLAYING':
       if (keys['Escape'] || keys['p']) {
         STATE.phase = 'PAUSED';
@@ -188,12 +205,30 @@ function update(dt) {
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.update(dt);
         updateCollectibles(dt);
+        // Fin de línea: la paloma ha llegado al terminal de la dirección
+        // elegida. Pasamos a LEVEL_COMPLETE para mostrar el popup de
+        // "Dar la vuelta" / "Terminar".
+        if (Linea3.isFinished) {
+          // Sólo contamos UNA vez (isFinished se mantiene true en frames
+          // sucesivos hasta que el jugador elige acción).
+          if (STATE.phase !== 'LEVEL_COMPLETE') {
+            STATE.linesCompleted = (STATE.linesCompleted ?? 0) + 1;
+            saveAchievements();   // persiste el contador y dispara logros
+            checkUnlocks();       // evalúa LINE_END y resto
+          }
+          STATE.phase = 'LEVEL_COMPLETE';
+          break;
+        }
       } else {
         updateObstacles(dt);
         updateCollectibles(dt);
       }
       updateParticles(dt);
       checkCollisions();
+      break;
+
+    case 'LEVEL_COMPLETE':
+      handleLevelCompleteInput(keys, consumeKey, mouse);
       break;
 
     case 'PAUSED':
@@ -256,6 +291,10 @@ function render() {
       drawSettingsScreen(ctx);
       break;
 
+    case 'SCENE_EDITOR':
+      drawSceneEditorScreen(ctx);
+      break;
+
     case 'PLAYING':
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.render(ctx);
@@ -285,6 +324,22 @@ function render() {
       drawPauseScreen(ctx);
       break;
 
+    case 'LEVEL_COMPLETE':
+      // Congelar el último frame del juego y superponer el popup.
+      if (STATE.selectedScenario === 'linea_3') {
+        Linea3.render(ctx);
+        drawCollectibles(ctx);
+      } else {
+        drawTunnel(ctx);
+        drawObstacles(ctx);
+        drawCollectibles(ctx);
+      }
+      drawParticles(ctx);
+      CHARACTERS[STATE.selectedCharacter].draw(ctx);
+      drawHUD(ctx);
+      drawLevelCompleteScreen(ctx, mouse);
+      break;
+
     case 'GAMEOVER':
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.render(ctx);
@@ -303,6 +358,62 @@ function render() {
   drawLoginScreen(ctx);
   EditorModal.draw(ctx, canvas);
   drawDebugHitboxes(ctx);
+  drawAchievementToast(ctx);
+}
+
+// ── Toast de logro desbloqueado ─────────────────────────────────────────────
+// Se muestra como overlay sobre cualquier pantalla durante ~4s. El framesLeft
+// se decrementa cada frame hasta llegar a 0 → desaparece. Curva alpha:
+// fade-in los primeros 12 frames, fade-out los últimos 24.
+function drawAchievementToast(ctx) {
+  const t = STATE.achievementToast;
+  if (!t) return;
+
+  t.framesLeft -= 1;
+  if (t.framesLeft <= 0) { STATE.achievementToast = null; return; }
+
+  const TOTAL = 240;
+  const elapsed = TOTAL - t.framesLeft;
+  let alpha = 1;
+  if (elapsed < 12)            alpha = elapsed / 12;
+  else if (t.framesLeft < 24)  alpha = t.framesLeft / 24;
+
+  const W  = 320;
+  const H  = 56;
+  const tx = canvas.width - W - 16;
+  const ty = 16;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  // Fondo
+  ctx.fillStyle = '#0d0d22';
+  ctx.fillRect(tx, ty, W, H);
+  // Borde dorado
+  ctx.strokeStyle = '#F5C518';
+  ctx.lineWidth   = 2;
+  ctx.strokeRect(tx + 1, ty + 1, W - 2, H - 2);
+
+  // Icono grande a la izquierda
+  ctx.fillStyle = '#F5C518';
+  ctx.font = '28px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t.icon ?? '★', tx + 28, ty + H / 2);
+
+  // Etiqueta + título
+  ctx.fillStyle = '#F5C518';
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('LOGRO DESBLOQUEADO', tx + 56, ty + 18);
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = 'bold 13px monospace';
+  ctx.fillText(t.title ?? '', tx + 56, ty + 38);
+
+  ctx.restore();
+  ctx.textAlign    = 'left';
+  ctx.textBaseline = 'alphabetic';
 }
 
 init();

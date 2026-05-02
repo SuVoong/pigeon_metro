@@ -24,7 +24,7 @@ export const FONT = '8px monospace';
 
 export const STATE = {
   // 'START' | 'ARCADE' | 'HISTORY' | 'CHARACTER' | 'ACHIEVEMENTS' | 'SETTINGS'
-  // 'PLAYING' | 'PAUSED' | 'GAMEOVER'
+  // 'SCENE_EDITOR' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'
   phase: 'START',
   score: 0,
   lives: 3,
@@ -37,8 +37,16 @@ export const STATE = {
   selectedStartStationIndex: null, // índice de estación inicial (null ⇒ startStation por defecto)
   totalPlaySeconds: 0,      // segundos jugados acumulados (para logros)
   flightHistory: [],        // [{seconds, date}] ordenado desc, máx 10 entradas
+  linesCompleted: 0,        // veces que se ha llegado a un terminal de línea
+  uTurnsCount: 0,           // veces que se ha pulsado "Dar la vuelta" en fin de nivel
+  achievementToast: null,   // { title, icon, framesLeft } — overlay temporal
   editorOpen: false,        // true mientras el panel de edición está visible
   cameraShake: 0,           // frames de camera shake restantes
+
+  // ── Editor de escenarios (modo arcade) ───────────────────────────────────
+  // sceneEditor: contexto activo cuando phase === 'SCENE_EDITOR'.
+  // { lineId, stationIndex, stationName, returnPhase } o null.
+  sceneEditor: null,
 };
 
 export const DEBUG = {

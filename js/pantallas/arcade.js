@@ -27,6 +27,8 @@ import { formatFlightTime } from '../mecanica/progreso.js';
 import { MapaMetroMadrid, drawTooltip, clearTooltip } from '../escenarios/metros/metros_madrid/mapa_metro_madrid.js';
 import * as PM from '../editor/preset_manager.js';
 import { DIFFICULTY_COLORS } from '../editor/config_schema.js';
+import { openSceneEditor } from './escena_editor.js';
+import { hasOverride }    from '../escenarios/escena_overrides.js';
 
 // ── Mouse tracking ─────────────────────────────────────────────
 let mouseX = -999, mouseY = -999;
@@ -56,6 +58,11 @@ let _popupRowRects = [];   // calculados en drawStationPopup → usados en input
 // difficultyPopup: { lineId, stationIndex, stationName }
 let difficultyPopup = null;
 let _diffPopupRects = [];  // calculados en drawDifficultyPopup → usados en input
+let _diffEditRect   = null; // rect del botón "Configurar escenario"
+
+// directionPopup: { lineId, stationIndex, stationName, terminalNorth, terminalSouth }
+let directionPopup  = null;
+let _dirPopupRects  = [];
 
 // ── Helpers de geometría para el popup ───────────────────────────────────
 function _roundRect(ctx, x, y, w, h, r) {
@@ -82,12 +89,99 @@ function _showDifficultyPicker(lineId, stationIndex, stationName) {
   _diffPopupRects = [];
 }
 
-/** Activa un preset y lanza la partida inmediatamente. */
+/**
+ * Activa el preset elegido y, si la estación no es terminal, abre el popup
+ * de dirección (Andén 1 / Andén 2). Si es terminal, fuerza la dirección
+ * obligatoria y lanza la partida directamente.
+ */
 function _launchWithPreset(presetId, lineId, stationIndex) {
   PM.setActive(presetId);
   difficultyPopup = null;
   _diffPopupRects = [];
+  _diffEditRect   = null;
+
+  const line = MapaMetroMadrid.getLine(lineId);
+  if (!line) {
+    launchScenario(lineId, null);
+    return;
+  }
+
+  // stationIndex null = click en el trazo o atajo de teclado sin estación
+  // concreta → resolver a la estación de inicio por defecto de la línea.
+  let effectiveIndex = stationIndex;
+  if (effectiveIndex == null) {
+    const defaultName = line.startStation || line.stations[0]?.name;
+    effectiveIndex = line.stations.findIndex(s => s.name === defaultName);
+    if (effectiveIndex < 0) effectiveIndex = 0;
+  }
+
+  const totalStations = line.stations.length;
+  const stationName   = line.stations[effectiveIndex]?.name ?? '';
+
+  // ── Estaciones terminales: dirección forzada, no hay nada que elegir ─────
+  if (effectiveIndex === 0) {
+    STATE.selectedDirection = 'north';   // sólo se puede ir hacia adelante
+    launchScenario(lineId, effectiveIndex);
+    return;
+  }
+  if (effectiveIndex === totalStations - 1) {
+    STATE.selectedDirection = 'south';   // sólo se puede dar la vuelta
+    launchScenario(lineId, effectiveIndex);
+    return;
+  }
+
+  // ── Estación intermedia: mostrar selector de dirección (Andén 1 / 2) ─────
+  _showDirectionPicker(lineId, effectiveIndex, stationName, line);
+}
+
+/** Abre el popup que permite elegir Andén 1 (norte) o Andén 2 (sur). */
+function _showDirectionPicker(lineId, stationIndex, stationName, line) {
+  clearTooltip();
+  const stations = line.stations;
+  directionPopup = {
+    lineId, stationIndex,
+    stationName:    stationName || '',
+    terminalNorth:  stations[stations.length - 1].name,
+    terminalSouth:  stations[0].name,
+  };
+  _dirPopupRects = [];
+}
+
+/** Lanza la partida con la dirección elegida. */
+function _launchWithDirection(direction) {
+  if (!directionPopup) return;
+  STATE.selectedDirection = direction;
+  const { lineId, stationIndex } = directionPopup;
+  directionPopup = null;
+  _dirPopupRects = [];
   launchScenario(lineId, stationIndex);
+}
+
+/** Abre el editor de escenario para la estación seleccionada en el popup.
+ *  Si el popup vino del trazo de línea (stationIndex=null), resolvemos la
+ *  estación de inicio efectiva para esa línea. Para L3 es "Delicias". */
+function _openSceneEditorFromPopup() {
+  if (!difficultyPopup) return;
+  let { lineId, stationIndex, stationName } = difficultyPopup;
+
+  // Si no hay índice → usar la estación inicial real de la línea.
+  if (stationIndex == null) {
+    const line = MapaMetroMadrid.getLine(lineId);
+    if (line) {
+      const startName = line.startStation || (line.stations?.[0]?.name);
+      const idx = line.stations.findIndex(s => s.name === startName);
+      if (idx >= 0) {
+        stationIndex = idx;
+        stationName  = startName;
+      }
+    }
+  }
+
+  const ctxObj = { lineId, stationIndex, stationName, returnPhase: 'ARCADE' };
+  difficultyPopup = null;
+  _diffPopupRects = [];
+  _diffEditRect   = null;
+  openSceneEditor(ctxObj);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -371,12 +465,18 @@ export function handleArcadeInput(keys, consumeKey) {
     // Q / ESC → cancelar
     if (keys['q'] || keys['Q']) {
       consumeKey('q'); consumeKey('Q');
-      difficultyPopup = null; _diffPopupRects = [];
+      difficultyPopup = null; _diffPopupRects = []; _diffEditRect = null;
       return;
     }
     if (keys['Escape']) {
       consumeKey('Escape');
-      difficultyPopup = null; _diffPopupRects = [];
+      difficultyPopup = null; _diffPopupRects = []; _diffEditRect = null;
+      return;
+    }
+
+    // C → abrir editor de escenario
+    if (_consumeAny(keys, consumeKey, 'c', 'C')) {
+      _openSceneEditorFromPopup();
       return;
     }
 
@@ -400,6 +500,13 @@ export function handleArcadeInput(keys, consumeKey) {
     // Clic sobre una fila del popup
     if (pendingClick) {
       pendingClick = false;
+      // Botón "Configurar escenario"
+      if (_diffEditRect &&
+          mouseX >= _diffEditRect.x && mouseX <= _diffEditRect.x + _diffEditRect.w &&
+          mouseY >= _diffEditRect.y && mouseY <= _diffEditRect.y + _diffEditRect.h) {
+        _openSceneEditorFromPopup();
+        return;
+      }
       for (const rc of _diffPopupRects) {
         if (mouseX >= rc.x && mouseX <= rc.x + rc.w &&
             mouseY >= rc.y && mouseY <= rc.y + rc.h) {
@@ -408,10 +515,49 @@ export function handleArcadeInput(keys, consumeKey) {
         }
       }
       // Clic fuera → cerrar
-      difficultyPopup = null; _diffPopupRects = [];
+      difficultyPopup = null; _diffPopupRects = []; _diffEditRect = null;
       return;
     }
 
+    return; // bloquear resto del input mientras el popup está abierto
+  }
+
+  // ── Selector de dirección (Andén 1 / Andén 2) ─────────────────────────
+  if (directionPopup) {
+    // Q / ESC → cancelar
+    if (keys['q'] || keys['Q']) {
+      consumeKey('q'); consumeKey('Q');
+      directionPopup = null; _dirPopupRects = [];
+      return;
+    }
+    if (keys['Escape']) {
+      consumeKey('Escape');
+      directionPopup = null; _dirPopupRects = [];
+      return;
+    }
+    // 1 = Andén 1 (norte → Moncloa); 2 = Andén 2 (sur → El Casar)
+    if (keys['1']) { consumeKey('1'); _launchWithDirection('north'); return; }
+    if (keys['2']) { consumeKey('2'); _launchWithDirection('south'); return; }
+    // Enter → confirmar la opción ya marcada (north por defecto)
+    if (keys['Enter'] || keys[' ']) {
+      consumeKey('Enter'); consumeKey(' ');
+      _launchWithDirection('north');
+      return;
+    }
+    // Clic sobre una de las dos opciones
+    if (pendingClick) {
+      pendingClick = false;
+      for (const rc of _dirPopupRects) {
+        if (mouseX >= rc.x && mouseX <= rc.x + rc.w &&
+            mouseY >= rc.y && mouseY <= rc.y + rc.h) {
+          _launchWithDirection(rc.direction);
+          return;
+        }
+      }
+      // Clic fuera → cerrar
+      directionPopup = null; _dirPopupRects = [];
+      return;
+    }
     return; // bloquear resto del input mientras el popup está abierto
   }
 
@@ -559,8 +705,10 @@ export function drawArcadeScreen(ctx) {
     hint = MapaMetroMadrid.isPendingLockConfirm()
       ? 'BLOQUEAR EDICIÓN: [Y] CONFIRMAR · [N/ESC] CANCELAR'
       : 'EDICIÓN · ARRASTRA ESTACIONES · [S] GUARDAR · [L] BLOQUEAR · [R] DESCARTAR · [E/ESC] SALIR';
+  } else if (directionPopup) {
+    hint = 'ELIGE DIRECCIÓN · [1] ANDÉN 1 · [2] ANDÉN 2 · ENTER ANDÉN 1 · Q CANCELAR';
   } else if (difficultyPopup) {
-    hint = 'ELIGE DIFICULTAD · 1-4 ATAJOS · ENTER CONFIRMAR · Q CANCELAR';
+    hint = 'ELIGE DIFICULTAD · 1-4 ATAJOS · ENTER JUGAR · C EDITAR ESCENARIO · Q CANCELAR';
   } else if (stationPopup) {
     hint = 'CLIC EN LÍNEA PARA CONTINUAR · 1-9 ATAJOS · Q CANCELAR';
   } else {
@@ -572,13 +720,16 @@ export function drawArcadeScreen(ctx) {
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 
   // Tooltip — encima del mapa, debajo de los popups
-  if (!stationPopup && !difficultyPopup) drawTooltip(ctx);
+  if (!stationPopup && !difficultyPopup && !directionPopup) drawTooltip(ctx);
 
   // Popup de selección de línea (transbordos)
   if (stationPopup) drawStationPopup(ctx);
 
-  // Popup de selección de dificultad — capa superior
+  // Popup de selección de dificultad
   if (difficultyPopup) drawDifficultyPopup(ctx);
+
+  // Popup de selección de dirección — capa superior
+  if (directionPopup) drawDirectionPopup(ctx);
 }
 
 // ── Popup de selección de línea ───────────────────────────────────────────
@@ -692,6 +843,7 @@ function drawStationPopup(ctx) {
 function drawDifficultyPopup(ctx) {
   if (!difficultyPopup) return;
   _diffPopupRects = [];
+  _diffEditRect   = null;
 
   // Presets: primero los builtin (Fácil/Normal/Difícil/Pesadilla), luego los custom.
   const allPresets = PM.getAll();
@@ -704,8 +856,9 @@ function drawDifficultyPopup(ctx) {
   const ROW_H    = 48;
   const W        = 340;
   const HEADER_H = 64;
+  const EDIT_H   = 36;       // bloque del botón "Configurar escenario"
   const FOOTER_H = 30;
-  const H        = HEADER_H + presets.length * ROW_H + FOOTER_H;
+  const H        = HEADER_H + presets.length * ROW_H + EDIT_H + FOOTER_H;
   const tx       = Math.round(canvas.width  / 2 - W / 2);
   const ty       = Math.round(canvas.height / 2 - H / 2);
 
@@ -795,12 +948,145 @@ function drawDifficultyPopup(ctx) {
     }
   }
 
+  // ── Botón "Configurar escenario" ────────────────────────────────────────
+  const editY = ty + HEADER_H + presets.length * ROW_H + 6;
+  const editX = tx + PAD;
+  const editW = W - PAD * 2;
+  const editH = EDIT_H - 12;
+  const editHover = mouseX >= editX && mouseX <= editX + editW &&
+                    mouseY >= editY && mouseY <= editY + editH;
+  const customized = hasOverride(difficultyPopup.stationName);
+
+  ctx.fillStyle = editHover
+    ? 'rgba(245,197,24,0.16)'
+    : (customized ? 'rgba(93,202,165,0.10)' : 'rgba(255,255,255,0.04)');
+  ctx.fillRect(editX, editY, editW, editH);
+  ctx.strokeStyle = editHover ? '#f5c518' : (customized ? '#5dcaa5' : '#5a4a90');
+  ctx.lineWidth = 1;
+  ctx.strokeRect(editX + 0.5, editY + 0.5, editW - 1, editH - 1);
+
+  ctx.fillStyle = editHover ? '#f5c518' : (customized ? '#5dcaa5' : '#aaaacc');
+  ctx.font      = 'bold 11px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const editLabel = customized
+    ? '⚙ EDITAR ESCENARIO  ·  [C]   (personalizado)'
+    : '⚙ CONFIGURAR ESCENARIO  ·  [C]';
+  ctx.fillText(editLabel, editX + editW / 2, editY + editH / 2);
+  _diffEditRect = { x: editX, y: editY, w: editW, h: editH };
+
   // Pie
   ctx.fillStyle    = '#444466';
   ctx.font         = '10px monospace';
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText('1-9 seleccionar  ·  ENTER confirmar  ·  Q cancelar', tx + W / 2, ty + H - 10);
+  ctx.fillText('1-9 elegir  ·  ENTER jugar  ·  C editar escenario  ·  Q cancelar', tx + W / 2, ty + H - 10);
+
+  // Restaurar estado
+  ctx.textAlign    = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.globalAlpha  = 1;
+  ctx.shadowBlur   = 0;
+}
+
+// ── Popup selector de dirección (Andén 1 / Andén 2) ──────────────────────────
+function drawDirectionPopup(ctx) {
+  if (!directionPopup) return;
+  _dirPopupRects = [];
+
+  const PAD       = 18;
+  const ROW_H     = 64;       // filas grandes — sólo hay 2 opciones
+  const W         = 360;
+  const HEADER_H  = 64;
+  const FOOTER_H  = 30;
+  const H         = HEADER_H + 2 * ROW_H + FOOTER_H;
+  const tx        = Math.round(canvas.width  / 2 - W / 2);
+  const ty        = Math.round(canvas.height / 2 - H / 2);
+
+  // Telón oscuro
+  ctx.fillStyle = 'rgba(0,0,0,0.68)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Caja
+  ctx.fillStyle = '#0d0d22';
+  _roundRect(ctx, tx, ty, W, H, 10); ctx.fill();
+  ctx.strokeStyle = '#5a4a90'; ctx.lineWidth = 1.5;
+  _roundRect(ctx, tx, ty, W, H, 10); ctx.stroke();
+
+  // Cabecera
+  ctx.fillStyle    = '#ffffff';
+  ctx.font         = 'bold 14px monospace';
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('ELIGE DIRECCIÓN', tx + W / 2, ty + 22);
+
+  ctx.fillStyle = '#8888bb';
+  ctx.font      = '11px monospace';
+  ctx.fillText((directionPopup.stationName || '').toUpperCase(), tx + W / 2, ty + 42);
+
+  // Separador
+  ctx.fillStyle = '#28285a';
+  ctx.fillRect(tx + PAD, ty + HEADER_H - 6, W - PAD * 2, 1);
+
+  // ── Dos opciones ─────────────────────────────────────────────────────────
+  const options = [
+    { andenLabel: 'ANDÉN 1', dir: 'north', destino: directionPopup.terminalNorth, arrow: '→' },
+    { andenLabel: 'ANDÉN 2', dir: 'south', destino: directionPopup.terminalSouth, arrow: '←' },
+  ];
+
+  for (let i = 0; i < options.length; i++) {
+    const opt = options[i];
+    const ry  = ty + HEADER_H + i * ROW_H;
+    const rx  = tx + 6;
+    const rw  = W - 12;
+    const rh  = ROW_H - 4;
+    const hovered = mouseX >= rx && mouseX <= rx + rw &&
+                    mouseY >= ry && mouseY <= ry + rh;
+
+    // Fondo de fila
+    if (hovered) {
+      ctx.fillStyle = 'rgba(255,255,255,0.07)';
+      ctx.fillRect(rx, ry, rw, rh);
+    }
+
+    _dirPopupRects.push({ x: rx, y: ry, w: rw, h: rh, direction: opt.dir });
+
+    // Badge "ANDÉN N" coloreado
+    const badgeColor = i === 0 ? '#5DCAA5' : '#F5C518';
+    ctx.fillStyle    = badgeColor;
+    ctx.fillRect(tx + PAD, ry + ROW_H / 2 - 14, 70, 28);
+    ctx.fillStyle    = '#0d0d22';
+    ctx.font         = 'bold 11px monospace';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(opt.andenLabel, tx + PAD + 35, ry + ROW_H / 2);
+
+    // Flecha de dirección + destino
+    ctx.fillStyle    = '#ffffff';
+    ctx.font         = 'bold 22px monospace';
+    ctx.textAlign    = 'left';
+    ctx.fillText(opt.arrow, tx + PAD + 88, ry + ROW_H / 2 - 5);
+
+    ctx.fillStyle = '#aaaabb';
+    ctx.font      = '9px monospace';
+    ctx.fillText('SENTIDO', tx + PAD + 116, ry + ROW_H / 2 - 8);
+    ctx.fillStyle = '#ffffff';
+    ctx.font      = 'bold 13px monospace';
+    ctx.fillText(opt.destino.toUpperCase(), tx + PAD + 116, ry + ROW_H / 2 + 8);
+
+    // Atajo numérico (esquina derecha)
+    ctx.fillStyle    = badgeColor;
+    ctx.font         = 'bold 18px monospace';
+    ctx.textAlign    = 'right';
+    ctx.fillText(`[${i + 1}]`, tx + W - PAD, ry + ROW_H / 2 + 4);
+  }
+
+  // Pie con atajos
+  ctx.fillStyle    = '#444466';
+  ctx.font         = '10px monospace';
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('1·Andén 1   2·Andén 2   ENTER·Andén 1   Q·Cancelar', tx + W / 2, ty + H - 10);
 
   // Restaurar estado
   ctx.textAlign    = 'left';

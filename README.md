@@ -1,6 +1,6 @@
 # Metro Pigeon
 
-Juego de pixel art en navegador con perspectiva tipo runner 3D. Controla una paloma volando dentro de un túnel de metro: la ves **de espaldas**, mientras los trenes y tuberías se acercan desde el fondo. Esquívalos moviéndote a izquierda, derecha, arriba o abajo.
+Juego de pixel art en navegador con perspectiva tipo runner 3D. Controla una paloma (o un Pidgey, o el pájaro rojo) volando dentro del metro de Madrid: la ves **de espaldas**, mientras los trenes y obstáculos vienen desde el fondo del túnel hacia ti. Recorre líneas completas estación a estación, elige dirección, desbloquea logros y guarda tu progreso por perfil de jugador.
 
 Hecho con **vanilla JavaScript** y **HTML5 Canvas** — sin librerías, sin imágenes. Todo el pixel art se dibuja con `fillRect`. Código organizado en módulos ES6.
 
@@ -11,7 +11,7 @@ Hecho con **vanilla JavaScript** y **HTML5 Canvas** — sin librerías, sin imá
 > ⚠️ Como usa **ES modules** (`import` / `export`), Chrome/Edge/Safari bloquean cargar `file://` directamente. Hace falta un servidor local sencillo.
 
 ```bash
-cd metro-pigeon
+cd pigeon_metro
 python -m http.server 8000
 # luego abre http://localhost:8000
 ```
@@ -28,81 +28,220 @@ php -S localhost:8000
 
 ## Controles
 
-| Acción              | Teclas                       |
-| ------------------- | ---------------------------- |
-| Volar               | `Flechas` o `W A S D`        |
-| Iniciar             | Cualquier tecla              |
-| Pausar              | `Escape` o `P`               |
-| Reanudar            | `Escape` o `P`               |
-| Reiniciar tras fin  | `R`                          |
+| Acción                       | Teclas                        |
+| ---------------------------- | ----------------------------- |
+| Mover la paloma              | `Flechas` o `W A S D`         |
+| Confirmar / avanzar          | `Enter` o `Espacio`           |
+| Pausar / Reanudar            | `Escape` o `P`                |
+| Reiniciar tras fin           | `R`                           |
+| Volver al menú               | `Escape`                      |
+| Cambiar perfil (en Logros)   | `P` — abre el gestor de perfiles |
+| Nuevo perfil rápido          | `N` (con popup de perfiles abierto) |
+| Elegir perfil 1-9            | Teclas numéricas (popup perfiles) |
+| Cerrar popup                 | `Q` / `Escape`                |
 
 ### Flujo de pantallas
 
 ```
-[ START ] --cualquier tecla--> [ PLAYING ] --ESC/P--> [ PAUSED ]
-                                    ^                     |
-                                    |---ESC/P (reanudar)--'
-                                    |
-                              (vidas = 0)
-                                    |
-                                    v
-                              [ GAMEOVER ] --R--> reinicio
+[ INICIO ]
+    │
+    ├─ ARCADE ──► selector de escenario ──► selector de dificultad
+    │                                              │
+    │                    ┌──────────────────────────┘
+    │                    ▼
+    │             selector de dirección
+    │             (Andén 1 ↑ / Andén 2 ↓)
+    │                    │
+    │                    ▼
+    │              [ PLAYING ]
+    │             /           \
+    │        (pausa)     (terminal)
+    │            │             │
+    │       [ PAUSED ]   [ LEVEL_COMPLETE ]
+    │            │          /         \
+    │       (reanudar)  (vuelta)   (terminar)
+    │                      │             │
+    │                 [ PLAYING ]  [ ARCADE ]
+    │
+    ├─ HISTORIA
+    ├─ PERSONAJE
+    ├─ LOGROS ──► gestor de perfiles (P)
+    ├─ AJUSTES
+    └─ SCENE_EDITOR
 ```
 
 ---
 
 ## Mecánica
 
+### Gameplay general
+
 - La paloma se ve **de espaldas** y siempre está cerca del centro de la pantalla.
-- El movimiento se aplica con **easing/lerp**: la paloma acelera y frena suavemente, no cambia de dirección instantáneamente. Se inclina visualmente al moverse en horizontal.
-- Los obstáculos vienen desde el fondo del túnel (Z=800) hacia la cámara (Z=0). Crecen al acercarse usando una proyección perspectiva con `FOCAL = 400`.
-- Tres tipos de obstáculos:
-  - 🚆 **Tren izquierdo** — viene por el lado izquierdo del túnel; muévete a la derecha.
-  - 🚆 **Tren derecho** — viene por el lado derecho; muévete a la izquierda.
-  - 🟫 **Tubería horizontal** — atraviesa el túnel a una altura aleatoria; muévete arriba o abajo.
-- Nunca se generan trenes opuestos al mismo tiempo (siempre tienes una salida).
-- Coleccionables que aumentan score:
-  - 🥖 **Migas de pan**: +10 puntos
-  - 🪙 **Moneda**: +50 puntos
-- 3 vidas. Al chocar: 90 frames de invulnerabilidad con parpadeo.
-- La velocidad sube gradualmente con el tiempo: `speed = 2 + frame * 0.0008`.
+- El movimiento usa **easing/lerp**: la paloma acelera y frena suavemente, se inclina visualmente al moverse horizontalmente.
+- Los obstáculos vienen desde el fondo del túnel (Z=800) hacia la cámara (Z=0). Crecen al acercarse usando proyección perspectiva con `FOCAL = 400`.
+- 3 vidas. Al chocar: 90 frames de invulnerabilidad con parpadeo y camera shake.
+- La velocidad sube gradualmente: `speed = 2 + frame * 0.0008`.
+
+### Modo Arcade — Línea 3 de Madrid
+
+El escenario principal recorre la **Línea 3 (Villaverde Alto–Moncloa)** con sus 20 estaciones reales:
+
+```
+El Casar → Villaverde Alto → Usera → Legazpi → Delicias → Palos de la Frontera
+→ Embajadores → Lavapiés → Tirso de Molina → Sol → Callao → Ventura Rodríguez
+→ Argüelles → Moncloa
+```
+*(y el resto del tramo norte)*
+
+**Antes de cada partida** el jugador elige:
+- **Dirección**: Andén 1 (norte) o Andén 2 (sur).
+- **Estación de inicio**: cualquier punto de la línea desde el mapa arcade.
+- **Dificultad**: Tranquilo / Normal / Rápido / Caos — ajusta velocidad y frecuencia de obstáculos.
+
+Si se elige una estación **terminal** (El Casar o Moncloa), la dirección se fuerza automáticamente y se comienza desde el extremo de la línea.
+
+### Escenas en estación
+
+Al llegar a cada estación el túnel da paso a una **vista trasera de andén**:
+- 4 vías con efecto metálico de 3 capas (oscuro / medio / reflejo).
+- 2 andenes con rodapié de color de línea y columnas de azulejo.
+- Tubos fluorescentes con parpadeo aleatorio y limpieza por frames.
+- Un **tren llegando** por la vía contraria, animado con aceleración suave.
+- Pantalla LED encima de las puertas mostrando la siguiente estación.
+
+### Fin de línea
+
+Al llegar al terminal de la dirección elegida aparece un **popup de fin de nivel**:
+- **↩ Dar la vuelta** — arranca nueva partida desde ese terminal en dirección contraria (conserva preset de dificultad).
+- **✕ Terminar** — vuelve al mapa arcade.
+
+### HUD de progreso
+
+Una barra con el nombre de todas las estaciones de la ruta actual se muestra en la parte superior. Los nombres aparecen **rotados -45°** (igual que en los diagramas oficiales del metro de Madrid). La estación actual se resalta; las visitadas quedan en blanco y las pendientes en gris.
+
+---
+
+## Personajes
+
+| Personaje | Desbloqueado desde | Descripción                     |
+| --------- | ------------------ | ------------------------------- |
+| 🐦 Paloma  | Siempre            | La veterana del metro madrileño |
+| 🟤 Pidgey  | 5 min jugados      | Pokémon #016 · Experto en vuelo |
+| 🔴 Red     | Siempre            | El Angry Bird más famoso        |
+
+Cada personaje tiene sprite único dibujado con `fillRect`, animación de alas en 3 frames y física de tilt propia.
+
+---
+
+## Logros
+
+Los logros están vinculados al **perfil activo** y se persisten en `localStorage`.
+
+| ID            | Título                  | Condición                                      |
+| ------------- | ----------------------- | ---------------------------------------------- |
+| FLYING_HIGH   | Proeza Voladora         | Vuela más de 10 minutos acumulados             |
+| FIRST_FLIGHT  | Primer Vuelo            | Completa tu primer trayecto en el metro        |
+| MARATHON_RUN  | Maratón Urbano          | Sobrevive 5 min seguidos en una sola partida   |
+| COMMUTER      | Habitual del Metro      | Completa 10 trayectos diferentes               |
+| LINE_END      | De Terminal a Terminal  | Llega al final de una línea entera             |
+| U_TURNER      | Cambio de Sentido       | Da la vuelta al llegar a un terminal           |
+
+Al desbloquear un logro, aparece un **toast animado** en la esquina superior derecha con fade-in/fade-out (~4 segundos).
+
+---
+
+## Sistema de perfiles
+
+Accede al gestor desde la pantalla de **Logros** pulsando `P`.
+
+- Cada perfil (identificado por un nick) mantiene logros, contadores e historial de vuelos completamente separados.
+- **Sin contraseñas** — es un selector de cuenta, no autenticación.
+- El perfil por defecto es `Invitado`.
+- Los nombres de perfil se persisten con sus claves **namespaced** en `localStorage`:
+  ```
+  vp_active_profile                       → nick activo
+  vp_profile_<hex>_achievements           → logros
+  vp_profile_<hex>_counters               → { linesCompleted, uTurnsCount, ... }
+  vp_profile_<hex>_history                → historial de vuelos
+  ```
+- Los datos de versiones anteriores (claves globales legacy) se **migran automáticamente** al perfil activo la primera vez.
+- Borrar un perfil elimina todas sus claves. Si era el activo, vuelve a `Invitado`. El perfil `Invitado` no se puede borrar (sólo reiniciar su progreso).
 
 ---
 
 ## Estructura del proyecto
 
 ```
-metro-pigeon/
-  index.html                  Entry point — carga sólo js/main.js como módulo
-  README.md                   Este archivo
+pigeon_metro/
+  index.html                    Entry point — carga sólo js/main.js como módulo
+  README.md                     Este archivo
   js/
     mecanica/
-      estado.js               Exporta canvas, ctx, PAL, FONT, STATE, pigeon,
-                              obstacles[], collectibles[], particles[]
-      input.js                keys, initInput(), consumeKey()
-      camara.js               initCamera(), w2sx(), w2sy(), perspective(z)
-      colisiones.js           aabb(a, b)
-      spawning.js             spawnObstacle(), spawnCollectible(), emitParticles()
+      estado.js                 Canvas, ctx, PAL, STATE, pigeon, obstacles[], ...
+      input.js                  keys, initInput(), consumeKey()
+      camara.js                 initCamera(), w2sx(), w2sy(), perspective(z)
+      colisiones.js             checkCollisions() — AABB con hitboxes de Linea3
+      spawning.js               spawnObstacle(), spawnCollectible(), emitParticles()
+      progreso.js               ACHIEVEMENTS[], logros, historial, evaluateAchievements(),
+                                checkUnlocks(), saveFlightRecord(), reloadProfileData()
+      perfil.js                 Gestión de perfiles: loadActiveProfile, setActiveProfile,
+                                getProfileKey, listProfiles, deleteProfile
     personajes/
-      paloma.js               updatePigeon(dt) — física con lerp + clamping
-                              drawPigeon(ctx) — sprite 24×24 vista trasera,
-                                                 3 frames de aleteo, tilt al moverse
+      paloma.js                 updatePigeon(dt), drawPigeon(ctx)
+      pidgey.js                 updatePidgey(dt), drawPidgey(ctx)
+      angry_bird.js             updateAngryBird(dt), drawAngryBird(ctx)
+    elementos/
+      tren.js                   drawTrenFrontal(ctx, cx, cy, scale, variante, ledText)
+      tren_config.js            TREN_CONFIG — 12 variantes de línea con colores y datos
+      obstaculos.js             Catálogo de obstáculos: tubería, barrera, andamio
+      coleccionables.js         Catálogo de coleccionables: moneda, miga de pan, powerup
     escenarios/
-      metro.js                drawTunnel(ctx) — perspectiva con anillos concéntricos,
-                                                 paredes brick, tubos fluorescentes
-                              updateObstacles/drawObstacles    — Z-scroll
-                              updateCollectibles/drawCollectibles
-                              updateParticles/drawParticles
-      renfe.js                Placeholder (pendiente)
+      metro.js                  Túnel genérico (obstáculos clásicos, modo libre)
+      metro_base/
+        metro_base.js           MetroBase — orquestador TunelBase + EstacionBase;
+                                _drawProgressHUD() con nombres a -45°
+        tunel_base.js           TunelBase — scroll de túnel con spawn de obstáculos
+        estacion_base.js        EstacionBase — vista trasera de andén: 4 vías, 2
+                                andenes, fluorescentes, tren llegando, pantalla LED
+      metro_madrid/
+        linea_3.js              Linea3Class — ruta bidireccional, init() con dirección,
+                                isFinished, getLastIndex(), getOppositeDir()
+        delicias/               Overrides específicos de la estación Delicias
+          delicias.js
+          delicias_estacion.js
+          delicias_tunel.js
+      metros/
+        metro_base/             Renderizadores base de túnel y tren compartidos
+          metro_base_render.js
+          metro_base.js
+          tunel.js
+          estacion_render.js
+        metros_madrid/
+          datos_madrid.js       MADRID_LINES — datos completos de todas las líneas
+          mapa_metro_madrid.js  MapaMetroMadrid — selector visual de líneas/estaciones
     pantallas/
-      inicio.js               drawStartScreen(ctx) con paloma animada y "PRESS ANY KEY"
-      pausa.js                drawPauseScreen(ctx)
-      fin.js                  drawGameOverScreen(ctx) con score final
-    main.js                   init(), loop(), update(), checkCollisions(), render(),
-                              drawHUD()
+      inicio.js                 drawStartScreen(ctx) — paloma animada, menú principal
+      arcade.js                 Mapa de arcade; selector de dificultad; selector de
+                                dirección (popup directionPopup)
+      historia.js               Historial de los últimos 10 vuelos
+      personaje.js              Selector de personaje con preview animado
+      logros.js                 Lista de logros + gestor de perfiles (_drawProfilePopup)
+      ajustes.js                Ajustes de sonido / visuales
+      pausa.js                  drawPauseScreen(ctx)
+      hud.js                    drawHUD(ctx) — vidas, score, velocidad
+      fin.js                    drawGameOverScreen(ctx) — score final
+      fin_nivel.js              handleLevelCompleteInput / drawLevelCompleteScreen
+                                "Dar la vuelta" y "Terminar"
+      escena_editor.js          Editor de escenas integrado
+    editor/
+      auth.js                   Login modal para el IDE integrado
+      editor_modal.js           Panel IDE completo
+      config_store.js           Persistencia de configuraciones del editor
+      preset_manager.js         Gestión de presets de dificultad
+      ...                       Categorías, pestañas, widgets del editor
+    main.js                     Bucle principal: init, loop, update, render,
+                                drawAchievementToast()
 ```
-
-`index.html` carga solo `main.js` como `<script type="module">`. Todas las demás dependencias se resuelven con `import` / `export`.
 
 ---
 
@@ -110,8 +249,8 @@ metro-pigeon/
 
 ### Sistema de coordenadas
 
-- **Mundo**: `pigeon.x`, `pigeon.y` y `obj.x`, `obj.y` están en píxeles relativos al centro de la pantalla.
-- **Profundidad**: `obj.z` es la distancia desde la cámara. Z grande = lejos. Z pequeño = cerca. Cuando `z < -50` el obstáculo se elimina.
+- **Mundo**: `pigeon.x`, `pigeon.y` en píxeles relativos al centro de la pantalla.
+- **Profundidad**: `obj.z` es la distancia desde la cámara. Z grande = lejos. Cuando `z < -50` se elimina.
 - **Pantalla**: `w2sx(wx) = canvas.width/2 + wx`, `w2sy(wy) = canvas.height/2 + wy`.
 
 ### Proyección perspectiva
@@ -120,67 +259,116 @@ metro-pigeon/
 perspective(z) = FOCAL / (FOCAL + z)    // FOCAL = 400
 ```
 
-Devuelve un factor de escala. A z=0 vale 1 (tamaño real); a z=800 vale ≈0.33 (un tercio); a z=∞ tiende a 0 (punto de fuga). Se aplica tanto a posición como a tamaño:
+A z=0 vale 1 (tamaño real); a z=800 vale ≈0.33; a z=∞ tiende a 0 (punto de fuga). Se aplica a posición y tamaño de cada objeto.
 
-```js
-const scale = perspective(obj.z);
-const sx = w2sx(obj.x * scale);   // posición se acerca al centro al alejarse
-const sw = obj.w * scale;          // tamaño se reduce al alejarse
+### Arquitectura de escenarios — MetroBase
+
+`MetroBase` es el orquestador principal que alterna entre dos tipos de escena:
+
+```
+MetroBase
+  ├─ TunelBase   — scroll continuo de túnel entre estaciones
+  │    └─ spawnea obstáculos del catálogo elementos/obstaculos.js
+  └─ EstacionBase — composición de andén en vista trasera
+       ├─ 4 vías con efecto metálico de 3 capas
+       ├─ 2 andenes con pilares y rodapié de línea
+       ├─ Fluorescentes con flicker + cleanup
+       ├─ Tren llegando (animación de freno)
+       └─ Pantalla LED con nombre de estación
 ```
 
-### Túnel
+`Linea3` extiende `MetroBase` con la ruta real de la Línea 3, soportando:
+- Dirección norte (`STATE.selectedDirection = 'north'`) o sur (`'south'`).
+- Inicio desde cualquier estación (`STATE.selectedStartStationIndex`).
+- Exposición de `isFinished`, `currentStation`, `getLastIndex()`, `getOppositeDir()` para la pantalla de fin de nivel.
 
-`drawTunnel(ctx)` dibuja **anillos concéntricos** a profundidades cada 100 unidades. El offset se calcula con `STATE.worldZ % 100` para que parezca que avanzas. Se añaden 4 líneas de fuga desde las esquinas al centro y tubos fluorescentes con parpadeo aleatorio cada ~120 frames.
+### Sistema de perfiles y logros
 
-### Paloma
+```
+loadActiveProfile()   ← al arrancar, antes de cualquier load*
+     │
+     ▼
+loadFlightHistory()   ─── getProfileKey('history')
+loadAchievements()    ─── getProfileKey('achievements') + getProfileKey('counters')
+     │
+     ▼ (durante la partida)
+checkUnlocks()        ─── evaluateAchievements() ──► STATE.achievementToast
+saveAchievements()    ─── persiste en localStorage namespaced por perfil
+     │
+     ▼ (al cambiar de perfil)
+setActiveProfile(name)
+reloadProfileData()   ─── reset STATE + recarga logros del nuevo perfil
+```
 
-- Sprite **24×24** dibujado con `fillRect`. Cada píxel se renderiza como bloque 4×4 usando `ctx.scale(4, 4)`.
-- Vista trasera: cuerpo 6×8 centrado, alas 10×3 a cada lado (3 frames: nivel/arriba/abajo), cola 4×3 abajo, dos ojos asomando arriba.
-- Movimiento con lerp (`vx += (target - vx) * 0.15`).
-- `pigeon.tilt` se calcula desde `vx` y se aplica con `ctx.rotate(tilt * 0.25)`.
-- Posición clampeada al 28% del canvas en cada eje.
+### HUD de progreso en ruta
 
-### Colisiones
+`_drawProgressHUD()` en `metro_base.js`:
+1. Extrae los nombres de estaciones de la ruta actual.
+2. Para cada nombre: `ctx.save()` → `ctx.translate(x, y)` → `ctx.rotate(-Math.PI/4)` → dibuja texto → `ctx.restore()`.
+3. La estación actual se resalta en amarillo (`PAL.trainYellow`); las visitadas en blanco; las pendientes en gris oscuro.
 
-Hitbox de la paloma fijo en pantalla: `12×12` centrado en su posición. Hitboxes de obstáculos calculados en cada frame con `perspective(z)`. Sólo se comprueban colisiones cuando `|z| < 50` (el plano de la cámara). AABB simple.
+### Estados del juego
 
-### Bucle principal
+`STATE.phase` es un string que gestiona `update(dt)` y `render()` en `main.js`:
 
-`dt` se normaliza a 60fps: `dt = (timestamp - lastTime) / 16.67`. Se clampea a 3 para evitar saltos en frames perdidos. Todo lo que se mueve usa `dt` para ser frame-rate independiente.
+| Fase            | Descripción                                        |
+| --------------- | -------------------------------------------------- |
+| `START`         | Menú principal con paloma animada                  |
+| `ARCADE`        | Mapa de líneas + selector de dificultad/dirección  |
+| `HISTORY`       | Historial de últimos 10 vuelos                     |
+| `CHARACTER`     | Selector de personaje                              |
+| `ACHIEVEMENTS`  | Lista de logros + gestor de perfiles               |
+| `SETTINGS`      | Ajustes del juego                                  |
+| `SCENE_EDITOR`  | Editor de escenas in-game                          |
+| `PLAYING`       | Gameplay activo                                    |
+| `PAUSED`        | Pausa (congela el frame, superpone popup)          |
+| `LEVEL_COMPLETE`| Fin de línea (congela frame, muestra opciones)     |
+| `GAMEOVER`      | Fin de partida (vidas = 0)                         |
 
-### Game states
+### Toast de logros
 
-`STATE.phase` es un string: `'START'`, `'PLAYING'`, `'PAUSED'`, `'GAMEOVER'`. Cada uno se gestiona en `update(dt)` y se renderiza en `render()`.
+`drawAchievementToast(ctx)` en `main.js` se ejecuta cada frame sobre cualquier pantalla:
+- `STATE.achievementToast = { title, icon, framesLeft: 240 }` — disparado por `checkUnlocks()`.
+- Curva de alpha: fade-in 12 frames, sostenido, fade-out 24 frames.
+- Posición fija: esquina superior derecha, 320×56px.
 
 ---
 
 ## Cómo extender
 
+### Nueva línea de metro
+
+1. Añadir datos en `js/escenarios/metros/metros_madrid/datos_madrid.js` (MADRID_LINES).
+2. Crear `js/escenarios/metro_madrid/linea_X.js` extendiendo `MetroBase`.
+3. Registrar el escenario en `js/pantallas/arcade.js` y conectarlo en `main.js`.
+
+### Nuevo logro
+
+1. Añadir una entrada al array `ACHIEVEMENTS` en `js/mecanica/progreso.js` con `id`, `title`, `description`, `icon` y función `check(state)`.
+2. El sistema lo evaluará automáticamente en cada `checkUnlocks()` y mostrará el toast si se desbloquea.
+
+### Nuevo personaje
+
+1. Crear `js/personajes/mi_pajaro.js` con `updateMiPajaro(dt)` y `drawMiPajaro(ctx)`.
+2. Añadir la entrada al array `CHARACTERS` en `js/mecanica/estado.js` con `drawPreview()`, `unlockCondition` y datos descriptivos.
+3. Registrar las funciones update/draw en `main.js` (igual que Pidgey y Red).
+
 ### Nuevo obstáculo
-1. Añadir el `type` en `spawnObstacle()` — [`js/mecanica/spawning.js`](js/mecanica/spawning.js).
-2. Decidir su `x`, `y`, `w`, `h` en coordenadas de mundo.
-3. Añadir un caso en el switch de `drawObstacles()` — [`js/escenarios/metro.js`](js/escenarios/metro.js).
-4. La colisión AABB funciona automáticamente.
+
+1. Añadir la entrada al catálogo en `js/elementos/obstaculos.js`.
+2. Activarlo en `TunelBase` (spawn ponderado) en `js/escenarios/metro_base/tunel_base.js`.
+3. Dibujar el sprite en el switch de `drawObstacles()` — `js/escenarios/metro.js` o `tunel_base.js`.
 
 ### Nuevo coleccionable
-Igual que un obstáculo pero en `spawnCollectible()` y `drawCollectibles()`. Configurar puntos en `checkCollisions()` de `main.js`.
 
-### Escenario Renfe
-Implementar `js/escenarios/renfe.js` con la misma API (`drawTunnel`, `updateObstacles`, `drawObstacles`...). Añadir variable `STATE.escenario` y elegir el módulo activo en `main.js`.
-
-### Power-ups
-Añadir flags como `STATE.shield = 0` en `estado.js`, recoger un coleccionable especial que active el flag, y modificar `checkCollisions` para ignorar el daño cuando esté activo.
-
-### Sonido
-`AudioContext` con osciladores: blip al recoger, ruido al chocar. Sin assets externos.
-
-### High score
-`localStorage.setItem('highscore', score)` en `resetGame()`, mostrarlo en `drawStartScreen` y `drawGameOverScreen`.
+Igual que un obstáculo pero en `js/elementos/coleccionables.js`. Configurar puntos en `checkCollisions()` de `js/mecanica/colisiones.js`.
 
 ---
 
-## Notas
+## Notas técnicas
 
-- El canvas ocupa toda la ventana y se redimensiona dinámicamente. No hay resolución lógica fija.
-- El sprite de la paloma se escala con `ctx.scale(4, 4)` para que sea visible. Si ves la paloma muy pequeña, sube `SPRITE_SCALE` en [`js/personajes/paloma.js`](js/personajes/paloma.js).
-- Para tunear dificultad: `STATE.speed` rampup en `main.js`, intervalos de spawn en `metro.js`.
+- El canvas ocupa toda la ventana y se redimensiona dinámicamente.
+- Todo el pixel art usa exclusivamente `fillRect` (cero imágenes externas).
+- `dt` se normaliza a 60fps: `dt = (timestamp - lastTime) / 16.67`, con clamp a 3 para evitar saltos.
+- El editor in-game (icono de llave) requiere login; usa OAuth/passwordless — no interfiere con los perfiles de jugador.
+- Los datos legacy (`viajepalomero_history`, `viajepalomero_achievements`) se migran automáticamente al perfil activo la primera vez que arranca la nueva versión.
