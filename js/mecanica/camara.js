@@ -2,7 +2,7 @@
 
 import { canvas } from './estado.js';
 
-const FOCAL = 400;  // distancia focal para proyección perspectiva
+export const FOCAL = 400;  // distancia focal para proyección perspectiva
 
 export function initCamera() {
   function resize() {

@@ -210,6 +210,12 @@ export class EstacionBase {
     // LED y logo Metro encima del arco (cuelgan del techo / pared frontal)
     this._drawLEDScreen    (ctx, W, H, vpX, vpY);
     this._drawMetroLogo    (ctx, W, H, vpX, vpY);
+    // Flash blanco de entrada — encadena con el final luminoso del túnel
+    // anterior (sólo visible los primeros 20% de la escena)
+    this._drawEntryFlash   (ctx, W, H);
+    // Flash NEGRO de salida — encadena con el inicio oscuro del próximo
+    // túnel. Sólo visible en el último 5% de la escena.
+    this._drawExitDarkness (ctx, W, H);
 
     // Overlays opcionales (heredados del API previo)
     if (this.cfg.tutorialMessage) this._drawTutorialBanner(ctx, this.cfg.tutorialMessage);
@@ -350,6 +356,70 @@ export class EstacionBase {
     ctx.textBaseline = 'alphabetic';
   }
 
+  // ── Escala de animación de la boca de túnel ─────────────────────────────
+  // Curva temporal en función de la fracción _elapsed/durationSeconds.
+  // Fases SINCRONIZADAS con TunelBase para que las transiciones encajen:
+  //   · t = 0    → 0.50:  VISTA ESTABLE de la estación (arco pequeño al fondo)
+  //                       (la sensación de "salir del túnel anterior" se
+  //                       crea con el flash blanco de _drawEntryFlash)
+  //   · t = 0.50 → 1.00:  ACERCAMIENTO EXPONENCIAL al siguiente túnel
+  //                       — el arco se expande hasta envolver la cámara al
+  //                       final, coincidiendo con el cambio de escena.
+  //
+  // Devuelve un multiplicador positivo (1.0 = tamaño base, sin animación).
+  _tunnelMouthAnimScale() {
+    const dur = this.cfg.durationSeconds;
+    if (!dur || dur <= 0) return 1;
+    const t = Math.min(1, Math.max(0, this._elapsed / dur));
+
+    // ── Fase 1: estación visible (estable a 1.0) ──────────────────────────
+    if (t < 0.50) {
+      return 1.0;
+    }
+    // ── Fase 2: ACERCAMIENTO EXPONENCIAL al siguiente túnel ───────────────
+    // Escala máxima reducida (1.0 → 4.5) para que el cambio de transición
+    // se vea más contenido, sin que el arco invada toda la pantalla.
+    const local = (t - 0.50) / 0.50;
+    const eased = Math.pow(local, 3);
+    return 1.0 + 3.5 * eased;
+  }
+
+  // ── Flash de entrada (blanco) ───────────────────────────────────────────
+  // Al INICIAR la escena de estación venimos del túnel anterior — donde el
+  // efecto final era una luz blanca cegadora. Para que el cambio de escena
+  // sea fluido pintamos un overlay BLANCO que se desvanece rápidamente.
+  // Esto sincroniza el final del TunelBase (luz blanca) con el inicio de
+  // la EstacionBase (continuidad visual).
+  _drawEntryFlash(ctx, W, H) {
+    const dur = this.cfg.durationSeconds;
+    if (!dur || dur <= 0) return;
+    const t = this._elapsed / dur;
+    if (t >= 0.20) return;   // sólo primeros 20% de la escena
+
+    // Curva de desvanecimiento ease-out: rápido al principio, lento al final
+    const local = t / 0.20;
+    const alpha = Math.pow(1 - local, 1.5);
+
+    ctx.fillStyle = `rgba(255, 252, 240, ${alpha})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // ── Flash de salida (negro) ─────────────────────────────────────────────
+  // Al FINAL de la escena (último 5%) pintamos un overlay NEGRO que se
+  // intensifica rápidamente. Esto cubre el resto del andén que el arco no
+  // alcanzó a tapar y enlaza con el fade-in negro del túnel siguiente.
+  _drawExitDarkness(ctx, W, H) {
+    const dur = this.cfg.durationSeconds;
+    if (!dur || dur <= 0) return;
+    const t = this._elapsed / dur;
+    if (t < 0.95) return;
+
+    const local = (t - 0.95) / 0.05;
+    const alpha = Math.pow(local, 2);
+    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
   // ── BOCA DE TÚNEL (arco oscuro al fondo) ─────────────────────────────────
   // Donde acaba el andén, las vías se adentran en el siguiente túnel. Esta
   // boca da el "punto de ruptura" entre la estación iluminada y el túnel
@@ -361,12 +431,16 @@ export class EstacionBase {
   _drawTunnelMouth(ctx, W, H, vpX, vpY, G) {
     const cfg       = this.cfg;
     const baseY     = vpY + 8;
-    // Arco GRANDE — domina visualmente el fondo. Aprox. 28% del ancho del
-    // canvas, dimensiones a partir de las que se calculó el alto para que
-    // el semicírculo dominante sea claramente reconocible como "arco".
-    const innerHalf = Math.max(40, W * 0.13);   // semianchura interior
-    const sidesH    = Math.max(15, W * 0.04);   // alto del tramo recto
-    const frameW    = Math.max(4,  W * 0.012);  // grosor del marco
+    // Forma "boca de túnel" REAL — paredes verticales claramente visibles +
+    // semicírculo arriba. Mismas proporciones EXACTAS que el arco del
+    // TunelBase para que estación y túnel estén interconectados visualmente.
+    const BASE_SCALE = 0.45;
+    const animScale = this._tunnelMouthAnimScale();
+    const scale     = BASE_SCALE * animScale;
+    // Dimensiones unificadas con TunelBase (mismos números):
+    const innerHalf = Math.max(28, W * 0.075) * scale;   // semianchura interior
+    const sidesH    = innerHalf * 0.85;                  // sides ~85% del radio
+    const frameW    = Math.max(3, innerHalf * 0.10);     // marco ~10% del radio
 
     // Helper: crea el path de un arco (rectángulo con techo en semicírculo).
     const archPath = (halfW, h) => {
@@ -667,10 +741,12 @@ export class EstacionBase {
   // del fondo de la estación), igual que en estaciones reales donde el
   // letrero "Metro" cuelga del frontón sobre el arco.
   _drawMetroLogo(ctx, W, H, vpX, vpY) {
-    // Calcular techo del marco del arco (debe coincidir con _drawTunnelMouth)
-    const innerHalf = Math.max(40, W * 0.13);
-    const sidesH    = Math.max(15, W * 0.04);
-    const frameW    = Math.max(4,  W * 0.012);
+    // Calcular techo del marco del arco (debe coincidir con _drawTunnelMouth,
+    // incluyendo la animación de tamaño)
+    const scale     = 0.45 * this._tunnelMouthAnimScale();
+    const innerHalf = Math.max(28, W * 0.075) * scale;
+    const sidesH    = innerHalf * 0.85;
+    const frameW    = Math.max(3, innerHalf * 0.10);
     const archTopY  = (vpY + 8) - (sidesH + frameW) - (innerHalf + frameW);
 
     // Letrero centrado, 4 px sobre el arco. Si no hay sitio, no se dibuja.
