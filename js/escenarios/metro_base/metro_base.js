@@ -91,63 +91,80 @@ export class MetroBase {
       // 1. Pintar la escena que se está yendo a pantalla completa.
       this._outgoingScene.render(ctx);
 
-      // 2. Calcular el círculo de revelación centrado en el punto de fuga
-      //    de la escena entrante. Crece con curva ease-in: arranca lento
-      //    (un punto de luz al fondo) y acelera al final.
+      // 2. CLIP CON FORMA DE ARCO (boca del túnel).
+      // En vez de un círculo, recortamos la silueta del arco — el mismo
+      // doorway que ya dibujan _drawTunnelMouth (estación) y el final del
+      // túnel. Crece desde un arco pequeño en el VP hasta tragarse toda la
+      // pantalla, dando la sensación de ATRAVESAR la puerta a la siguiente
+      // escena. La cámara avanza, el arco se ensancha, el suelo se queda
+      // bajo nuestros pies, y dentro del arco aparece el escenario nuevo.
       const W   = canvas.width;
       const H   = canvas.height;
       const vpX = W / 2;
       const vpY = H * this._getIncomingVPY();
-      // Radio máximo: cubre la esquina más alejada del punto de fuga.
-      const maxR = Math.hypot(
-        Math.max(vpX, W - vpX),
-        Math.max(vpY, H - vpY),
-      ) * 1.05;
-      const t = this.transitionProgress;
-      // Ease-in-quad: el punto de fuga permanece pequeño un tiempo y
-      // luego se traga el plano. Es la sensación de "acercarse al final
-      // del túnel": al principio una luz lejana, al final llena todo.
-      const eased = t * t;
-      const r = eased * maxR;
 
-      if (r > 0.5) {
-        // 3. Recortar un círculo y dibujar dentro la nueva escena.
-        ctx.save();
+      const t     = this.transitionProgress;
+      const eased = t * t;   // ease-in: lento al principio, acelera al final
+
+      // Mismas proporciones que el arco de _drawTunnelMouth / fin de túnel,
+      // así la silueta es 100% reconocible como "la boca por la que entras".
+      const baseHalfW = Math.max(28, W * 0.075) * 0.45;
+      // Diagonal de pantalla + margen — garantiza que el arco final cubre
+      // todas las esquinas, incluso con vpY descentrado.
+      const maxHalfW  = Math.hypot(W, H) * 1.10;
+      const halfW     = baseHalfW + (maxHalfW - baseHalfW) * eased;
+      const sidesH    = halfW * 0.85;
+      const baseY     = vpY + 8;
+      // El borde inferior del arco baja del nivel del suelo (baseY) hasta
+      // por debajo del canvas conforme la cámara "atraviesa" el arco. Sin
+      // esto, la mitad inferior de la pantalla se quedaría con la escena
+      // saliente (suelo) durante toda la transición.
+      const bottom    = baseY + (H + 100 - baseY) * eased;
+
+      const archPath = (hw, sh, btm) => {
         ctx.beginPath();
-        ctx.arc(vpX, vpY, r, 0, Math.PI * 2);
+        ctx.moveTo(vpX - hw, btm);
+        ctx.lineTo(vpX - hw, baseY - sh);
+        ctx.arc(vpX, baseY - sh, hw, Math.PI, 0, false);
+        ctx.lineTo(vpX + hw, btm);
+        ctx.closePath();
+      };
+
+      if (halfW > 1) {
+        // 3. Recortar al arco y pintar la escena entrante DENTRO.
+        ctx.save();
+        archPath(halfW, sidesH, bottom);
         ctx.clip();
         this.currentScene.render(ctx);
         ctx.restore();
 
-        // 4. Halo brillante en el borde del círculo (la "boca del túnel").
-        //    Más intenso a mitad de transición, se desvanece al final.
-        const ringAlpha = (1 - Math.abs(t - 0.55) * 1.8);
+        // 4. Marco del arco — pinta el contorno del doorway. Más intenso a
+        //    mitad de transición, se desvanece al principio y al final.
+        //    Color: dorado al entrar a estación (luz), azul oscuro al
+        //    entrar a túnel (sombra).
+        const ringAlpha = Math.max(0, 1 - Math.abs(t - 0.55) * 1.8);
         if (ringAlpha > 0) {
-          // Color del aro: dorado cuando entras al andén (luz),
-          // azul oscuro cuando entras al túnel (sombra).
           const isIntoStation = this.sceneType === 'station';
           const ringColor = isIntoStation
-            ? `rgba(255, 235, 170, ${ringAlpha * 0.55})`
-            : `rgba(60, 70, 100, ${ringAlpha * 0.6})`;
+            ? `rgba(255, 235, 170, ${ringAlpha * 0.50})`
+            : `rgba(20, 25, 40, ${ringAlpha * 0.65})`;
 
           ctx.save();
           ctx.strokeStyle = ringColor;
-          ctx.lineWidth = 3 + (1 - t) * 5;
-          ctx.beginPath();
-          ctx.arc(vpX, vpY, r, 0, Math.PI * 2);
+          ctx.lineWidth   = 3 + (1 - t) * 5;
+          archPath(halfW, sidesH, bottom);
           ctx.stroke();
 
           // Glow exterior suave usando shadowBlur
           ctx.shadowColor = ringColor;
-          ctx.shadowBlur = 16;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.arc(vpX, vpY, r, 0, Math.PI * 2);
+          ctx.shadowBlur  = 16;
+          ctx.lineWidth   = 1.5;
+          archPath(halfW, sidesH, bottom);
           ctx.stroke();
           ctx.restore();
         }
       } else {
-        // 5. Punto de luz en el VP cuando r es muy pequeño (frame 0–1).
+        // 5. Punto de luz en el VP cuando el arco es subpíxel (frame 0–1).
         const isIntoStation = this.sceneType === 'station';
         const dotColor = isIntoStation
           ? 'rgba(255,240,200,0.9)' : 'rgba(120,140,180,0.7)';
