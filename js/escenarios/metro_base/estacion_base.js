@@ -77,6 +77,23 @@ const DEFAULT_CONFIG = {
   metroLogoBg:        '#FFFFFF',
   metroLogoColor:     '#CC1111',
 
+  // ── Bancos metálicos sobre el andén ────────────────────────────────────
+  numBenches:         1,            // por lado
+  benchTopColor:      '#FFFFFF',
+  benchBodyColor:     '#E8E8E8',
+  benchShadowColor:   '#888888',
+  benchLegColor:      '#666666',
+
+  // ── Carteles colgantes de destino (uno por andén) ──────────────────────
+  numHangingSigns:    2,            // total (1 por andén normalmente)
+  hangingSignBg:      '#0a0a14',    // fondo casi negro del letrero
+  hangingSignText:    '#FFEE99',    // texto color LED ámbar
+  hangingSignCable:   '#222230',    // cable de sujeción al techo
+
+  // ── Frente metálico del andén (cae al foso de la vía) ──────────────────
+  platformFrontColor: '#9098A8',    // gris metálico claro
+  platformFrontShade: '#5A6070',    // sombra inferior
+
   // ── Pasajeros ───────────────────────────────────────────────────────────
   numPassengersLeft:  1,
   numPassengersRight: 1,
@@ -198,6 +215,8 @@ export class EstacionBase {
     this._drawWalls        (ctx, W, H, vpX, vpY, G);
     this._drawSigns        (ctx, W, H, vpX, vpY);
     this._drawPlatforms    (ctx, W, H, vpX, vpY, G);
+    this._drawPlatformFront(ctx, W, H, vpX, vpY, G);
+    this._drawBenches      (ctx, W, H, vpX, vpY, G);
     this._drawPlatformTactile(ctx, W, H, vpX, vpY, G);
     this._drawTracks       (ctx, W, H, vpX, vpY, G);
     this._drawSafetyLines  (ctx, W, H, vpX, vpY, G);
@@ -210,6 +229,9 @@ export class EstacionBase {
     // LED y logo Metro encima del arco (cuelgan del techo / pared frontal)
     this._drawLEDScreen    (ctx, W, H, vpX, vpY);
     this._drawMetroLogo    (ctx, W, H, vpX, vpY);
+    // Carteles colgantes de destino sobre cada andén — al final para que
+    // queden por encima de las paredes pero tapados por trenes cercanos.
+    this._drawHangingSigns (ctx, W, H, vpX, vpY);
     // Las transiciones entrada/salida las gestiona MetroBase con un
     // cross-fade circular desde el punto de fuga; no añadimos overlays
     // de flash blanco ni oscurecimiento aquí — taparían la escena
@@ -352,6 +374,47 @@ export class EstacionBase {
     drawSign(W - 56,   '2');
     ctx.textAlign    = 'left';
     ctx.textBaseline = 'alphabetic';
+  }
+
+  // ── BANCOS METÁLICOS ────────────────────────────────────────────────────
+  // Asientos clásicos del Metro de Madrid (blanco/gris claro), apoyados
+  // sobre el andén. Se pintan en escala según la distancia al VP.
+  _drawBenches(ctx, W, H, vpX, vpY, G) {
+    const n = Math.max(0, this.cfg.numBenches | 0);
+    if (n === 0) return;
+    // Posición Y donde apoyan los bancos: entre el suelo del andén y el
+    // borde con la vía (mitad inferior del andén visible).
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n;
+      const scale = 1 - t * 0.6;              // 1.00 → 0.40
+      // Y interpolada entre el frente del andén (cerca) y el VP (lejos)
+      const y = Math.round(H * 0.62 + t * (vpY + 14 - H * 0.62));
+      // Acercar el banco al borde de la pared correspondiente
+      const xLeftBase  = Math.round(W * 0.06 + t * (vpX - 60 - W * 0.06));
+      const xRightBase = Math.round(W * 0.94 - 30 - t * (W * 0.94 - vpX - 30 - 30));
+      this._drawBench(ctx, xLeftBase,  y, scale);
+      this._drawBench(ctx, xRightBase, y, scale);
+    }
+  }
+
+  _drawBench(ctx, x, y, scale) {
+    const s = (v) => Math.max(1, Math.round(v * scale));
+    const W = s(30);
+    // Patas
+    ctx.fillStyle = this.cfg.benchLegColor;
+    ctx.fillRect(x + s(2),     y + s(3), s(1), s(4));
+    ctx.fillRect(x + W - s(3), y + s(3), s(1), s(4));
+    // Asiento
+    ctx.fillStyle = this.cfg.benchBodyColor;
+    ctx.fillRect(x, y, W, s(3));
+    ctx.fillStyle = this.cfg.benchTopColor;
+    ctx.fillRect(x, y, W, s(1));
+    // Respaldo (atrás del asiento)
+    ctx.fillStyle = '#CCCCCC';
+    ctx.fillRect(x, y - s(7), W, s(1));
+    ctx.fillStyle = this.cfg.benchShadowColor;
+    ctx.fillRect(x + s(2),     y - s(7), s(1), s(7));
+    ctx.fillRect(x + W - s(3), y - s(7), s(1), s(7));
   }
 
   // ── Escala de animación de la boca de túnel ─────────────────────────────
@@ -503,6 +566,133 @@ export class EstacionBase {
     ctx.lineTo(W, H * 0.55);
     ctx.closePath();
     ctx.fill();
+  }
+
+  // ── FRENTE METÁLICO DEL ANDÉN (cae al foso de la vía) ────────────────────
+  // En las estaciones reales, justo bajo la línea amarilla de seguridad hay
+  // una franja vertical metálica plateada que es la "pared" del andén
+  // mirando hacia la vía. Le da volumen al andén — sin esto, el andén se
+  // ve como una alfombra plana en el suelo. La pintamos como un trapecio
+  // que conecta el borde del andén (G.pBL/pBR) con un punto un poco más
+  // bajo, simulando los ~1m de altura del andén respecto al raíl.
+  _drawPlatformFront(ctx, W, H, vpX, vpY, G) {
+    const drop = Math.max(3, H * 0.012);   // grosor de la franja (px)
+    const dropVP = Math.max(1, H * 0.003); // grosor en el VP (perspectiva)
+
+    // Cara izquierda
+    ctx.fillStyle = this.cfg.platformFrontColor;
+    ctx.beginPath();
+    ctx.moveTo(0,           H * 0.55);
+    ctx.lineTo(G.pVL,       vpY + 5);
+    ctx.lineTo(G.pVL,       vpY + 5 + dropVP);
+    ctx.lineTo(0,           H * 0.55 + drop);
+    ctx.closePath();
+    ctx.fill();
+
+    // Sombra inferior (borde con la vía)
+    ctx.fillStyle = this.cfg.platformFrontShade;
+    ctx.beginPath();
+    ctx.moveTo(0,           H * 0.55 + drop * 0.7);
+    ctx.lineTo(G.pVL,       vpY + 5 + dropVP * 0.7);
+    ctx.lineTo(G.pVL,       vpY + 5 + dropVP);
+    ctx.lineTo(0,           H * 0.55 + drop);
+    ctx.closePath();
+    ctx.fill();
+
+    // Cara derecha (espejo)
+    ctx.fillStyle = this.cfg.platformFrontColor;
+    ctx.beginPath();
+    ctx.moveTo(W,           H * 0.55);
+    ctx.lineTo(G.pVR,       vpY + 5);
+    ctx.lineTo(G.pVR,       vpY + 5 + dropVP);
+    ctx.lineTo(W,           H * 0.55 + drop);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = this.cfg.platformFrontShade;
+    ctx.beginPath();
+    ctx.moveTo(W,           H * 0.55 + drop * 0.7);
+    ctx.lineTo(G.pVR,       vpY + 5 + dropVP * 0.7);
+    ctx.lineTo(G.pVR,       vpY + 5 + dropVP);
+    ctx.lineTo(W,           H * 0.55 + drop);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ── CARTELES COLGANTES DE DESTINO ────────────────────────────────────────
+  // Letreros oscuros con texto LED ámbar colgados del techo por dos cables,
+  // uno sobre cada andén. Replican los carteles "Próximo Tren · MONCLOA"
+  // del Metro de Madrid. Si numHangingSigns > 2, se distribuyen a lo largo
+  // del andén con escala de perspectiva.
+  _drawHangingSigns(ctx, W, H, vpX, vpY) {
+    const n = Math.max(0, this.cfg.numHangingSigns | 0);
+    if (n === 0) return;
+    const text = (this.cfg.stationDirection ?? 'MONCLOA').toUpperCase();
+
+    // Distribución: para n=2 → uno sobre cada andén centrado.
+    // Para n=4 → dos por lado escalados en profundidad.
+    const perSide = Math.ceil(n / 2);
+    for (let side = 0; side < 2; side++) {
+      const isLeft = side === 0;
+      for (let i = 0; i < perSide; i++) {
+        const t = perSide === 1 ? 0.0 : i / (perSide - 1);
+        const scale  = 1 - t * 0.55;            // 1.00 → 0.45
+        // Centro horizontal del andén a esta profundidad. Cuando t=0 está
+        // cerca de cámara (centro del andén ~25% del ancho); cuando t=1
+        // se acerca al VP horizontal.
+        const nearCx = isLeft ? W * 0.22 : W * 0.78;
+        const farCx  = isLeft ? vpX - 24 : vpX + 24;
+        const cx     = Math.round((1 - t) * nearCx + t * farCx);
+        // Y del cartel — desciende del techo, escalado por perspectiva
+        const baseY  = Math.round(28 + t * (vpY * 0.45 - 28));
+        this._drawHangingSign(ctx, cx, baseY, scale, text);
+      }
+    }
+  }
+
+  _drawHangingSign(ctx, cx, baseY, scale, text) {
+    const s = (v) => Math.max(1, Math.round(v * scale));
+    const w = s(80);
+    const h = s(20);
+    const x = cx - w / 2;
+    const y = baseY;
+
+    // Cables al techo (arrancan en y=0, llegan al letrero)
+    ctx.fillStyle = this.cfg.hangingSignCable;
+    ctx.fillRect(x + s(10),     0, Math.max(1, s(1)), y);
+    ctx.fillRect(x + w - s(11), 0, Math.max(1, s(1)), y);
+
+    // Marco del letrero (borde oscuro)
+    ctx.fillStyle = '#1a1a22';
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+
+    // Cuerpo del letrero
+    ctx.fillStyle = this.cfg.hangingSignBg;
+    ctx.fillRect(x, y, w, h);
+
+    // Highlight superior (luz indirecta del fluorescente)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.fillRect(x, y, w, Math.max(1, s(2)));
+
+    // Texto LED — Próximo Tren / Destino
+    if (scale > 0.55) {
+      ctx.fillStyle    = this.cfg.hangingSignText;
+      ctx.font         = `bold ${Math.max(5, s(7))}px monospace`;
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      // Línea 1: subtítulo pequeño
+      ctx.font = `${Math.max(4, s(4))}px monospace`;
+      ctx.fillText('PRÓXIMO TREN', cx, y + s(5));
+      // Línea 2: destino grande
+      ctx.font = `bold ${Math.max(5, s(8))}px monospace`;
+      ctx.fillText(text, cx, y + s(13));
+      ctx.textAlign    = 'left';
+      ctx.textBaseline = 'alphabetic';
+    } else {
+      // Letrero pequeño: solo barras LED simbólicas
+      ctx.fillStyle = this.cfg.hangingSignText;
+      ctx.fillRect(x + s(8), y + s(8), w - s(16), Math.max(1, s(2)));
+    }
   }
 
   // ── BALDOSA TÁCTIL (puntos de orientación en el suelo) ───────────────────

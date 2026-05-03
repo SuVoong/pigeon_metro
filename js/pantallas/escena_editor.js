@@ -67,6 +67,9 @@ const STATION_BASE_DEFAULTS = {
   platformColor:      '#5A5A6A',
   numPassengersLeft:  1,
   numPassengersRight: 1,
+  numBenches:         1,
+  numFluorescents:    5,
+  numHangingSigns:    2,
   trainOnLeft:        true,
   trainOnRight:       false,
   durationSeconds:    8,
@@ -399,6 +402,11 @@ function _drawStationControls(ctx, x, y, w) {
   y = _drawSectionHeader(ctx, x, y, w, 'PASAJEROS');
   y = _drawNumRow(ctx, x, y, w, 'Izquierda', 'numPassengersLeft',  1, 0, 6);
   y = _drawNumRow(ctx, x, y, w, 'Derecha',   'numPassengersRight', 1, 0, 6);
+
+  y = _drawSectionHeader(ctx, x, y, w, 'MOBILIARIO');
+  y = _drawNumRow(ctx, x, y, w, 'Bancos/lado',     'numBenches',       1, 0, 4);
+  y = _drawNumRow(ctx, x, y, w, 'Fluorescentes',   'numFluorescents',  1, 0, 9);
+  y = _drawNumRow(ctx, x, y, w, 'Carteles dest.',  'numHangingSigns',  1, 0, 4);
 
   y = _drawSectionHeader(ctx, x, y, w, 'TRENES');
   y = _drawBoolRow(ctx, x, y, w, 'Vía izquierda', 'trainOnLeft');
