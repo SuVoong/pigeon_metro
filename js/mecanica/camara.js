@@ -33,6 +33,37 @@ export function resetCamera() {
   camera.offsetY = 0;
 }
 
+// Rango máximo del offset de cámara — DEBE coincidir con el clamp aplicado en
+// los updates de personaje (paloma/pidgey/angry_bird). Centralizado aquí para
+// que los escenarios sepan cuánto overdraw necesitan.
+export const CAMERA_RANGE_X = 0.35;   // fracción del ancho del canvas
+export const CAMERA_RANGE_Y = 0.25;   // fracción del alto del canvas
+
+/**
+ * Área del MUNDO que la cámara puede llegar a ver, en coords del canvas.
+ * Devuelve los bordes ampliados con el rango máximo del offset, más un
+ * pequeño margen extra para evitar parpadeos en los límites.
+ *
+ * Los renderizadores del escenario deben dibujar entre `left` y `right`
+ * (en lugar de 0..canvas.width) y entre `top` y `bottom` (en lugar de
+ * 0..canvas.height) para que no aparezcan huecos cuando la cámara esté
+ * en el extremo de su rango.
+ */
+export function getViewBounds() {
+  const W = canvas.width;
+  const H = canvas.height;
+  const padX = W * CAMERA_RANGE_X + 4;
+  const padY = H * CAMERA_RANGE_Y + 4;
+  return {
+    left:   -padX,
+    right:  W + padX,
+    top:    -padY,
+    bottom: H + padY,
+    width:  W + padX * 2,
+    height: H + padY * 2,
+  };
+}
+
 export function initCamera() {
   function resize() {
     canvas.width = window.innerWidth;

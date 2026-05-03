@@ -7,6 +7,7 @@
 
 import { canvas, STATE } from '../../mecanica/estado.js';
 import { ENV_CFG }       from '../../editor/env_config.js';
+import { getViewBounds } from '../../mecanica/camara.js';
 
 const FOCAL       = 400;
 const _persp      = z  => FOCAL / (FOCAL + Math.max(z, 1));
@@ -83,9 +84,11 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _drawBackground(ctx, vpX, vpY, cw, ch, config) {
-  // Base negra
+  const B = getViewBounds();
+  // Base negra — extendida con los bounds para que no aparezcan huecos
+  // cuando la cámara se desplaza al máximo.
   ctx.fillStyle = config.bgColor || '#08080d';
-  ctx.fillRect(0, 0, cw, ch);
+  ctx.fillRect(B.left, B.top, B.width, B.height);
 
   // Glow lejano desde el punto de fuga (sensación de profundidad)
   const rad = ctx.createRadialGradient(vpX, vpY, 0, vpX, vpY, cw * 0.45);
@@ -93,7 +96,7 @@ function _drawBackground(ctx, vpX, vpY, cw, ch, config) {
   rad.addColorStop(0.6, 'rgba(18,19,24,0.6)');
   rad.addColorStop(1,   'rgba(0,0,0,0)');
   ctx.fillStyle = rad;
-  ctx.fillRect(0, 0, cw, ch);
+  ctx.fillRect(B.left, B.top, B.width, B.height);
 }
 
 // ── Relleno de las paredes: área a los lados del arco ─────────────────────

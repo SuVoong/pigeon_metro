@@ -12,7 +12,7 @@
 // siguiente túnel.
 
 import { canvas, STATE, pigeon } from '../../mecanica/estado.js';
-import { perspective }            from '../../mecanica/camara.js';
+import { perspective, getViewBounds } from '../../mecanica/camara.js';
 import { drawTrenFrontal, setTrenLED } from '../../elementos/tren.js';
 
 const DEFAULT_CONFIG = {
@@ -209,6 +209,11 @@ export class EstacionBase {
     const vpX = W / 2;
     const vpY = H * this.cfg.vanishingPointY;
 
+    // Bounds del área que la cámara puede ver (incluye el rango móvil).
+    // Las geometrías "grandes" (fondo, techo, paredes, suelo) usan estos
+    // límites en lugar de 0/W/H para no dejar huecos al desplazar la cámara.
+    this._bounds = getViewBounds();
+
     // Geometría trapezoidal de las vías — todas las medidas se calculan
     // como W * (offset/100). En la BASE las vías ocupan mucho ancho (efecto
     // de cercanía); en el VP convergen casi a un punto.
@@ -278,16 +283,18 @@ export class EstacionBase {
 
   // ── FONDO ─────────────────────────────────────────────────────────────────
   _drawBackground(ctx, W, H) {
+    const B = this._bounds;
     ctx.fillStyle = '#050508';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(B.left, B.top, B.width, B.height);
   }
 
   // ── TECHO ─────────────────────────────────────────────────────────────────
   _drawCeiling(ctx, W, H, vpX, vpY) {
+    const B = this._bounds;
     ctx.fillStyle = this.cfg.ceilingColor;
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(W, 0);
+    ctx.moveTo(B.left,  B.top);
+    ctx.lineTo(B.right, B.top);
     ctx.lineTo(vpX + 25, vpY - 10);
     ctx.lineTo(vpX - 25, vpY - 10);
     ctx.closePath();
@@ -296,8 +303,8 @@ export class EstacionBase {
     // Banda azul oscuro superior
     ctx.fillStyle = this.cfg.ceilingBandTop;
     ctx.beginPath();
-    ctx.moveTo(0, 6);
-    ctx.lineTo(W, 6);
+    ctx.moveTo(B.left,  B.top + 6);
+    ctx.lineTo(B.right, B.top + 6);
     ctx.lineTo(vpX + 25, vpY - 12);
     ctx.lineTo(vpX - 25, vpY - 12);
     ctx.closePath();
@@ -332,23 +339,24 @@ export class EstacionBase {
 
   // ── PAREDES laterales (trapecios) ────────────────────────────────────────
   _drawWalls(ctx, W, H, vpX, vpY, G) {
+    const B = this._bounds;
     ctx.fillStyle = this.cfg.wallColor;
 
     // Pared izquierda — vértices del andén (base + VP)
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(G.pVL, vpY - 10);
-    ctx.lineTo(G.pVL, vpY + 5);
-    ctx.lineTo(0, H * 0.55);
+    ctx.moveTo(B.left, B.top);
+    ctx.lineTo(G.pVL,  vpY - 10);
+    ctx.lineTo(G.pVL,  vpY + 5);
+    ctx.lineTo(B.left, H * 0.55);
     ctx.closePath();
     ctx.fill();
 
     // Pared derecha
     ctx.beginPath();
-    ctx.moveTo(W, 0);
-    ctx.lineTo(G.pVR, vpY - 10);
-    ctx.lineTo(G.pVR, vpY + 5);
-    ctx.lineTo(W, H * 0.55);
+    ctx.moveTo(B.right, B.top);
+    ctx.lineTo(G.pVR,   vpY - 10);
+    ctx.lineTo(G.pVR,   vpY + 5);
+    ctx.lineTo(B.right, H * 0.55);
     ctx.closePath();
     ctx.fill();
 
@@ -356,8 +364,8 @@ export class EstacionBase {
     ctx.strokeStyle = this.cfg.wallStripeBlue;
     ctx.lineWidth   = 1.5;
     ctx.beginPath();
-    ctx.moveTo(0, H * 0.30); ctx.lineTo(G.pVL, vpY - 5);
-    ctx.moveTo(W, H * 0.30); ctx.lineTo(G.pVR, vpY - 5);
+    ctx.moveTo(B.left,  H * 0.30); ctx.lineTo(G.pVL, vpY - 5);
+    ctx.moveTo(B.right, H * 0.30); ctx.lineTo(G.pVR, vpY - 5);
     ctx.stroke();
   }
 
@@ -552,23 +560,24 @@ export class EstacionBase {
   // El andén forma un trapecio: ancho en la base (cerca de la cámara) y
   // estrecho al fondo del túnel (punto de fuga).
   _drawPlatforms(ctx, W, H, vpX, vpY, G) {
+    const B = this._bounds;
     ctx.fillStyle = this.cfg.platformColor;
 
     // Andén izquierdo
     ctx.beginPath();
-    ctx.moveTo(0, H);
-    ctx.lineTo(G.pBL, H);
-    ctx.lineTo(G.pVL, vpY + 5);
-    ctx.lineTo(0, H * 0.55);
+    ctx.moveTo(B.left, B.bottom);
+    ctx.lineTo(G.pBL,  H);
+    ctx.lineTo(G.pVL,  vpY + 5);
+    ctx.lineTo(B.left, H * 0.55);
     ctx.closePath();
     ctx.fill();
 
     // Andén derecho
     ctx.beginPath();
-    ctx.moveTo(W, H);
-    ctx.lineTo(G.pBR, H);
-    ctx.lineTo(G.pVR, vpY + 5);
-    ctx.lineTo(W, H * 0.55);
+    ctx.moveTo(B.right, B.bottom);
+    ctx.lineTo(G.pBR,   H);
+    ctx.lineTo(G.pVR,   vpY + 5);
+    ctx.lineTo(B.right, H * 0.55);
     ctx.closePath();
     ctx.fill();
   }
@@ -581,45 +590,46 @@ export class EstacionBase {
   // que conecta el borde del andén (G.pBL/pBR) con un punto un poco más
   // bajo, simulando los ~1m de altura del andén respecto al raíl.
   _drawPlatformFront(ctx, W, H, vpX, vpY, G) {
+    const B = this._bounds;
     const drop = Math.max(3, H * 0.012);   // grosor de la franja (px)
     const dropVP = Math.max(1, H * 0.003); // grosor en el VP (perspectiva)
 
     // Cara izquierda
     ctx.fillStyle = this.cfg.platformFrontColor;
     ctx.beginPath();
-    ctx.moveTo(0,           H * 0.55);
+    ctx.moveTo(B.left,      H * 0.55);
     ctx.lineTo(G.pVL,       vpY + 5);
     ctx.lineTo(G.pVL,       vpY + 5 + dropVP);
-    ctx.lineTo(0,           H * 0.55 + drop);
+    ctx.lineTo(B.left,      H * 0.55 + drop);
     ctx.closePath();
     ctx.fill();
 
     // Sombra inferior (borde con la vía)
     ctx.fillStyle = this.cfg.platformFrontShade;
     ctx.beginPath();
-    ctx.moveTo(0,           H * 0.55 + drop * 0.7);
+    ctx.moveTo(B.left,      H * 0.55 + drop * 0.7);
     ctx.lineTo(G.pVL,       vpY + 5 + dropVP * 0.7);
     ctx.lineTo(G.pVL,       vpY + 5 + dropVP);
-    ctx.lineTo(0,           H * 0.55 + drop);
+    ctx.lineTo(B.left,      H * 0.55 + drop);
     ctx.closePath();
     ctx.fill();
 
     // Cara derecha (espejo)
     ctx.fillStyle = this.cfg.platformFrontColor;
     ctx.beginPath();
-    ctx.moveTo(W,           H * 0.55);
+    ctx.moveTo(B.right,     H * 0.55);
     ctx.lineTo(G.pVR,       vpY + 5);
     ctx.lineTo(G.pVR,       vpY + 5 + dropVP);
-    ctx.lineTo(W,           H * 0.55 + drop);
+    ctx.lineTo(B.right,     H * 0.55 + drop);
     ctx.closePath();
     ctx.fill();
 
     ctx.fillStyle = this.cfg.platformFrontShade;
     ctx.beginPath();
-    ctx.moveTo(W,           H * 0.55 + drop * 0.7);
+    ctx.moveTo(B.right,     H * 0.55 + drop * 0.7);
     ctx.lineTo(G.pVR,       vpY + 5 + dropVP * 0.7);
     ctx.lineTo(G.pVR,       vpY + 5 + dropVP);
-    ctx.lineTo(W,           H * 0.55 + drop);
+    ctx.lineTo(B.right,     H * 0.55 + drop);
     ctx.closePath();
     ctx.fill();
   }
