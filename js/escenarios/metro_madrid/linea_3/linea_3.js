@@ -239,6 +239,7 @@ class Linea3Class {
   reset()              { this.metro.reset(); }
   update(dt)           { this.metro.update(dt); }
   render(ctx)          { this.metro.render(ctx); }
+  renderHUD(ctx)       { this.metro.renderHUD(ctx); }
   getTrainHitboxes()   { return this.metro.getTrainHitboxes(); }
   get isFinished()     { return this.metro.isFinished; }
   get progress()       { return this.metro.progress; }

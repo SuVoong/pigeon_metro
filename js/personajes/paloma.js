@@ -2,7 +2,7 @@
 
 import { pigeon, STATE, canvas } from '../mecanica/estado.js';
 import { keys } from '../mecanica/input.js';
-import { w2sx, w2sy } from '../mecanica/camara.js';
+import { w2sx, w2sy, camera } from '../mecanica/camara.js';
 
 const MAX_VELOCITY = 6;
 const EASING       = 0.15;
@@ -39,19 +39,27 @@ export function updatePigeon(dt) {
   if (pigeon.stunned > 0)    pigeon.stunned--;
   if (pigeon.invincible > 0) pigeon.invincible--;
 
+  // ── Mecánica nueva ──
+  // La paloma queda anclada al centro de la pantalla (pigeon.x = pigeon.y = 0).
+  // Lo que se desplaza con el input es la CÁMARA — todo el escenario se
+  // mueve alrededor de la paloma. La velocidad sigue viviendo en pigeon.vx/vy
+  // por compatibilidad con tilt visual y el sistema de stun.
+  pigeon.x = 0;
+  pigeon.y = 0;
+
   // ── BLOQUEAR INPUT mientras está aturdida ──
   if (pigeon.stunned > 0) {
-    // Aplicar fricción: la paloma pierde velocidad lentamente
+    // Aplicar fricción: la cámara pierde velocidad lentamente
     pigeon.vx *= 0.85;
     pigeon.vy *= 0.85;
-    pigeon.x  += pigeon.vx * dt;
-    pigeon.y  += pigeon.vy * dt;
+    camera.offsetX += pigeon.vx * dt;
+    camera.offsetY += pigeon.vy * dt;
 
-    // Clampear a la zona central del canvas
-    const maxX = canvas.width  * 0.28;
-    const maxY = canvas.height * 0.28;
-    pigeon.x = Math.max(-maxX, Math.min(maxX, pigeon.x));
-    pigeon.y = Math.max(-maxY, Math.min(maxY, pigeon.y));
+    // Clampear el offset a la zona central del canvas
+    const maxX = canvas.width  * 0.35;
+    const maxY = canvas.height * 0.25;
+    camera.offsetX = Math.max(-maxX, Math.min(maxX, camera.offsetX));
+    camera.offsetY = Math.max(-maxY, Math.min(maxY, camera.offsetY));
 
     // Actualizar ángulos de las estrellitas (rotación)
     pigeon.stunStars.forEach(s => {
@@ -66,7 +74,7 @@ export function updatePigeon(dt) {
     return;  // skip normal movement input
   }
 
-  // ── Movimiento normal (código original) ──
+  // ── Movimiento normal: input mueve la cámara, no la paloma ──
   let targetVx = 0, targetVy = 0;
   if (keys['ArrowLeft']  || keys['a']) targetVx -= MAX_VELOCITY;
   if (keys['ArrowRight'] || keys['d']) targetVx += MAX_VELOCITY;
@@ -77,17 +85,17 @@ export function updatePigeon(dt) {
   pigeon.vx += (targetVx - pigeon.vx) * EASING;
   pigeon.vy += (targetVy - pigeon.vy) * EASING;
 
-  // Aplicar velocidad escalada por dt
-  pigeon.x += pigeon.vx * dt;
-  pigeon.y += pigeon.vy * dt;
+  // Aplicar velocidad al OFFSET DE CÁMARA (la paloma queda quieta)
+  camera.offsetX += pigeon.vx * dt;
+  camera.offsetY += pigeon.vy * dt;
 
-  // Clampear a la zona central del canvas
-  const maxX = canvas.width  * 0.28;
-  const maxY = canvas.height * 0.28;
-  pigeon.x = Math.max(-maxX, Math.min(maxX, pigeon.x));
-  pigeon.y = Math.max(-maxY, Math.min(maxY, pigeon.y));
+  // Clampear el offset a la zona central del canvas
+  const maxX = canvas.width  * 0.35;
+  const maxY = canvas.height * 0.25;
+  camera.offsetX = Math.max(-maxX, Math.min(maxX, camera.offsetX));
+  camera.offsetY = Math.max(-maxY, Math.min(maxY, camera.offsetY));
 
-  // Inclinación visual
+  // Inclinación visual (basada en la velocidad de la cámara)
   pigeon.tilt = Math.max(-1, Math.min(1, pigeon.vx / MAX_VELOCITY));
 
   // Ciclo de alas: avanzar cada 7 frames

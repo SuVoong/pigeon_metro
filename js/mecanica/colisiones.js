@@ -1,7 +1,7 @@
 // Detección y respuesta a colisiones: AABB genérico + lógica de juego.
 
 import { canvas, STATE, pigeon, obstacles, collectibles, particles, PAL, DEBUG } from './estado.js';
-import { w2sx, w2sy, perspective } from './camara.js';
+import { w2sx, w2sy, perspective, camera } from './camara.js';
 import { emitParticles } from './spawning.js';
 import { Linea3 } from '../escenarios/metro_madrid/linea_3/linea_3.js';
 import * as PM from '../editor/preset_manager.js';
@@ -24,8 +24,13 @@ export function checkCollisions() {
   const COL_Z    = _f.arcadeCollisionZ  ?? 600;
   const VERT_POS = _f.trainVerticalPos  ?? TRAIN_CFG.verticalPos;
 
-  const pSX = w2sx(pigeon.x);
-  const pSY = w2sy(pigeon.y);
+  // La paloma queda anclada al centro de la pantalla (pigeon.x = pigeon.y = 0).
+  // El input mueve la cámara, no a la paloma. Para colisionar con los
+  // obstáculos —cuyas hitboxes se calculan en coords de mundo, sin aplicar
+  // el offset de cámara— sumamos el offset al hitbox de la paloma. En coords
+  // de mundo, la paloma está donde mira la cámara.
+  const pSX = w2sx(pigeon.x) + camera.offsetX;
+  const pSY = w2sy(pigeon.y) + camera.offsetY;
   const pBox = { x: pSX - HITBOX / 2, y: pSY - HITBOX / 2, w: HITBOX, h: HITBOX };
 
   // ── Contra obstáculos ──
@@ -86,6 +91,8 @@ function _triggerHit() {
   pigeon.vx = 0;
   pigeon.vy = 0;
 
+  // Las plumas/destellos del impacto se emiten donde la paloma se VE en
+  // pantalla (centro fijo), no donde está en coords de mundo.
   _emitImpactParticles(w2sx(pigeon.x), w2sy(pigeon.y));
 
   if (STATE.lives <= 0) {
