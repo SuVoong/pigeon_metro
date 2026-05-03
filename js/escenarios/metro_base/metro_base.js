@@ -207,17 +207,43 @@ export class MetroBase {
   get isOnStation()       { return this.sceneType === 'station'; }
   get isOnTunnel()        { return this.sceneType === 'tunnel'; }
 
-  /** Progreso global 0–1 (estación actual + sub-progreso de la escena). */
+  /**
+   * Progreso global 0–1, sincronizado con los marcadores de estación del
+   * HUD. La paloma se MUEVE solo durante la fase de túnel, y queda
+   * QUIETA en el marcador de la estación durante el andén y durante la
+   * transición (el cross-fade del arco) — visualmente: estás "atravesando
+   * la puerta" sin recorrer distancia entre estaciones.
+   *
+   *   Andén N             → marcador N (fijo)
+   *   Transición           → marcador del currentIdx (fijo)
+   *   Túnel N → N+1        → interpola del marcador N al N+1
+   */
   get progress() {
-    if (this.route.length === 0) return 0;
+    const N = this.route.length;
+    if (N === 0)        return 0;
     if (this._finished) return 1;
-    const sub = this.currentScene && this.currentScene.cfg
-      ? Math.min(1, this.currentScene._elapsed
-                  ? this.currentScene._elapsed / this.currentScene.cfg.durationSeconds
-                  : (this.currentScene._frame / 60) / this.currentScene.cfg.durationSeconds)
-      : 0;
-    const phaseFrac = this.sceneType === 'station' ? sub * 0.5 : 0.5 + sub * 0.5;
-    return Math.min(1, (this.currentIdx + phaseFrac) / this.route.length);
+    const lastIdx = Math.max(1, N - 1);
+
+    // Andén o transición: la paloma se queda exactamente en el marcador
+    // de currentIdx (que es la estación actual o el destino inminente).
+    if (this.isTransitioning || this.sceneType === 'station') {
+      return Math.min(1, this.currentIdx / lastIdx);
+    }
+
+    // Túnel: avanza linealmente del marcador currentIdx al currentIdx+1
+    // según el tiempo transcurrido en el túnel. Descontamos el tramo
+    // inicial que se "consume" durante el cross-fade entrante para que
+    // la paloma arranque sin saltos al terminar la transición.
+    const cfg = this.currentScene?.cfg;
+    const dur = cfg?.durationSeconds || 1;
+    const elapsed = this.currentScene?._elapsed != null
+      ? this.currentScene._elapsed
+      : (this.currentScene?._frame ?? 0) / 60;
+    const transitionUsed = this._transitionDur ?? 0;
+    const effDur     = Math.max(0.1, dur - transitionUsed);
+    const effElapsed = Math.max(0,   elapsed - transitionUsed);
+    const sub = Math.min(1, effElapsed / effDur);
+    return Math.min(1, (this.currentIdx + sub) / lastIdx);
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────
