@@ -210,12 +210,10 @@ export class EstacionBase {
     // LED y logo Metro encima del arco (cuelgan del techo / pared frontal)
     this._drawLEDScreen    (ctx, W, H, vpX, vpY);
     this._drawMetroLogo    (ctx, W, H, vpX, vpY);
-    // Flash blanco de entrada — encadena con el final luminoso del túnel
-    // anterior (sólo visible los primeros 20% de la escena)
-    this._drawEntryFlash   (ctx, W, H);
-    // Flash NEGRO de salida — encadena con el inicio oscuro del próximo
-    // túnel. Sólo visible en el último 5% de la escena.
-    this._drawExitDarkness (ctx, W, H);
+    // Las transiciones entrada/salida las gestiona MetroBase con un
+    // cross-fade circular desde el punto de fuga; no añadimos overlays
+    // de flash blanco ni oscurecimiento aquí — taparían la escena
+    // entrante/saliente dentro del recorte circular.
 
     // Overlays opcionales (heredados del API previo)
     if (this.cfg.tutorialMessage) this._drawTutorialBanner(ctx, this.cfg.tutorialMessage);
@@ -357,14 +355,12 @@ export class EstacionBase {
   }
 
   // ── Escala de animación de la boca de túnel ─────────────────────────────
-  // Curva temporal en función de la fracción _elapsed/durationSeconds.
-  // Fases SINCRONIZADAS con TunelBase para que las transiciones encajen:
+  // Curva temporal en función de la fracción _elapsed/durationSeconds:
   //   · t = 0    → 0.50:  VISTA ESTABLE de la estación (arco pequeño al fondo)
-  //                       (la sensación de "salir del túnel anterior" se
-  //                       crea con el flash blanco de _drawEntryFlash)
   //   · t = 0.50 → 1.00:  ACERCAMIENTO EXPONENCIAL al siguiente túnel
-  //                       — el arco se expande hasta envolver la cámara al
-  //                       final, coincidiendo con el cambio de escena.
+  //                       — el arco se expande para sugerir movimiento hacia
+  //                       el siguiente túnel, justo antes del cross-fade
+  //                       circular que orquesta MetroBase.
   //
   // Devuelve un multiplicador positivo (1.0 = tamaño base, sin animación).
   _tunnelMouthAnimScale() {
@@ -382,42 +378,6 @@ export class EstacionBase {
     const local = (t - 0.50) / 0.50;
     const eased = Math.pow(local, 3);
     return 1.0 + 3.5 * eased;
-  }
-
-  // ── Flash de entrada (blanco) ───────────────────────────────────────────
-  // Al INICIAR la escena de estación venimos del túnel anterior — donde el
-  // efecto final era una luz blanca cegadora. Para que el cambio de escena
-  // sea fluido pintamos un overlay BLANCO que se desvanece rápidamente.
-  // Esto sincroniza el final del TunelBase (luz blanca) con el inicio de
-  // la EstacionBase (continuidad visual).
-  _drawEntryFlash(ctx, W, H) {
-    const dur = this.cfg.durationSeconds;
-    if (!dur || dur <= 0) return;
-    const t = this._elapsed / dur;
-    if (t >= 0.20) return;   // sólo primeros 20% de la escena
-
-    // Curva de desvanecimiento ease-out: rápido al principio, lento al final
-    const local = t / 0.20;
-    const alpha = Math.pow(1 - local, 1.5);
-
-    ctx.fillStyle = `rgba(255, 252, 240, ${alpha})`;
-    ctx.fillRect(0, 0, W, H);
-  }
-
-  // ── Flash de salida (negro) ─────────────────────────────────────────────
-  // Al FINAL de la escena (último 5%) pintamos un overlay NEGRO que se
-  // intensifica rápidamente. Esto cubre el resto del andén que el arco no
-  // alcanzó a tapar y enlaza con el fade-in negro del túnel siguiente.
-  _drawExitDarkness(ctx, W, H) {
-    const dur = this.cfg.durationSeconds;
-    if (!dur || dur <= 0) return;
-    const t = this._elapsed / dur;
-    if (t < 0.95) return;
-
-    const local = (t - 0.95) / 0.05;
-    const alpha = Math.pow(local, 2);
-    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-    ctx.fillRect(0, 0, W, H);
   }
 
   // ── BOCA DE TÚNEL (arco oscuro al fondo) ─────────────────────────────────

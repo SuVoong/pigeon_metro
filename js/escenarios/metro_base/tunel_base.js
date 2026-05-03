@@ -124,7 +124,11 @@ export class TunelBase {
     }
   }
 
-  /** Render: túnel + obstáculos + trenes alineados con las vías. */
+  /** Render: túnel + obstáculos + trenes alineados con las vías.
+   *  Las transiciones entrada/salida las gestiona MetroBase con un
+   *  cross-fade circular desde el punto de fuga; aquí no añadimos
+   *  overlays de oscurecimiento ni "luz al final del túnel" — taparían
+   *  la siguiente escena dentro del recorte circular. */
   render(ctx) {
     drawTunel(ctx, {
       bgColor:               this.cfg.bgColor,
@@ -138,149 +142,6 @@ export class TunelBase {
     const variante   = getTrenVariante(this.cfg.trainLineVariant);
     const trainColor = variante.stripeColor ?? '#F39200';
     this._drawTrainsOnRails(ctx, { stripeColor: trainColor });
-
-    // ── LUZ AL FINAL DEL TÚNEL ───────────────────────────────────────────
-    // Complementa la animación de la boca de túnel en EstacionBase: en vez
-    // de un arco oscuro que crece, es una LUZ BLANCA que aparece al fondo
-    // y crece exponencialmente, cegándonos cuando salimos a la siguiente
-    // estación. La transición túnel ↔ estación queda envuelta en blanco.
-    this._drawTunnelExitLight(ctx);
-
-    // ── Fade-in NEGRO al entrar al túnel ─────────────────────────────────
-    // La estación anterior terminó con el arco oscuro envolviendo la cámara.
-    // Para que el cambio de escena sea fluido, arrancamos el túnel con un
-    // overlay NEGRO que se desvanece rápidamente, dando continuidad visual.
-    this._drawEntryDarkness(ctx);
-  }
-
-  /** Overlay negro que se desvanece al INICIAR la escena de túnel. Encadena
-   *  con el final oscuro del arco de la estación anterior. */
-  _drawEntryDarkness(ctx) {
-    const dur = this.cfg.durationSeconds || 1;
-    const t   = (this._frame / 60) / dur;
-    if (t >= 0.20) return;
-
-    const local = t / 0.20;
-    const alpha = Math.pow(1 - local, 1.5);
-    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-
-  /**
-   * Dibuja la luz blanca al final del túnel — efecto "luz al final del
-   * túnel" que crece exponencialmente. La luz está CONTENIDA dentro de un
-   * arco (la boca del túnel al fondo) — sólo escapa por ahí, simulando
-   * que vemos la siguiente estación a través de la apertura del túnel.
-   *
-   * Curva temporal:
-   *   t = 0.00 → 0.30:  Arco pequeño con luz visible al fondo
-   *   t = 0.30 → 0.70:  Arco/luz crecen moderadamente (nos acercamos)
-   *   t = 0.70 → 1.00:  Crecimiento exponencial — el arco abarca todo
-   *                     y la luz nos ciega al cambiar de escena.
-   */
-  _drawTunnelExitLight(ctx) {
-    const cw  = canvas.width;
-    const ch  = canvas.height;
-    const vpX = cw / 2;
-    const vpY = ch * (this.cfg.vanishingPointY ?? 0.42);
-
-    const dur = this.cfg.durationSeconds || 1;
-    const t   = Math.min(1, Math.max(0, (this._frame / 60) / dur));
-
-    // ── Curva combinada: arco visible desde el principio + acelerón final
-    // Escalas reducidas para que el final del túnel se vea más contenido.
-    let scale, alpha;
-    if (t < 0.30) {
-      const local = t / 0.30;
-      scale = 0.50 + 0.50 * local;          // 0.50 → 1.00
-      alpha = 0.55 + 0.20 * local;          // 0.55 → 0.75
-    } else if (t < 0.70) {
-      const local = (t - 0.30) / 0.40;
-      scale = 1.00 + 1.00 * local;          // 1.0 → 2.0  (antes 2.5)
-      alpha = 0.75 + 0.15 * local;          // 0.75 → 0.90
-    } else {
-      const local = (t - 0.70) / 0.30;
-      const eased = Math.pow(local, 3);
-      scale = 2.0 + 4.0 * eased;            // 2.0 → 6.0  (antes 14.5)
-      alpha = 0.90 + 0.10 * eased;          // 0.90 → 1.00
-    }
-
-    // ── Geometría del ARCO que contiene la luz ────────────────────────────
-    // EXACTAMENTE las mismas proporciones que la boca de túnel de
-    // EstacionBase (paredes verticales 85% del radio + semicírculo arriba).
-    // Esto asegura interconexión visual: el arco que ves al entrar al
-    // túnel y el arco al salir del túnel tienen la misma silueta.
-    const baseScale = 0.45;
-    const innerHalf = Math.max(28, cw * 0.075) * baseScale * scale;
-    const sidesH    = innerHalf * 0.85;
-    const baseY     = vpY + 8;
-
-    // Helper: path del arco (rectángulo con techo semicírculo)
-    const archPath = (halfW, h) => {
-      ctx.beginPath();
-      ctx.moveTo(vpX - halfW, baseY);
-      ctx.lineTo(vpX - halfW, baseY - h);
-      ctx.arc(vpX, baseY - h, halfW, Math.PI, 0, false);
-      ctx.lineTo(vpX + halfW, baseY);
-      ctx.closePath();
-    };
-
-    // ── 1. Recortamos el área a la forma del arco ─────────────────────────
-    ctx.save();
-    archPath(innerHalf, sidesH);
-    ctx.clip();
-
-    // ── 2. Dentro del clip: dibujamos la luz radial ───────────────────────
-    // Centro de la luz: ligeramente sobre el centro del semicírculo
-    const cy = baseY - sidesH - innerHalf * 0.4;
-    const lightRadius = innerHalf * 1.2;
-
-    // Halo cálido (resplandor del andén iluminado al fondo)
-    const halo = ctx.createRadialGradient(vpX, cy, 0, vpX, cy, lightRadius);
-    halo.addColorStop(0,    `rgba(255, 252, 240, ${alpha})`);
-    halo.addColorStop(0.30, `rgba(255, 248, 220, ${alpha * 0.95})`);
-    halo.addColorStop(0.60, `rgba(255, 235, 175, ${alpha * 0.70})`);
-    halo.addColorStop(0.90, `rgba(255, 220, 130, ${alpha * 0.35})`);
-    halo.addColorStop(1,    `rgba(255, 210, 100, ${alpha * 0.15})`);
-    ctx.fillStyle = halo;
-    ctx.fillRect(vpX - lightRadius, cy - lightRadius,
-                 lightRadius * 2, lightRadius * 2);
-
-    // Núcleo blanco brillante (fuente puntual)
-    const coreRadius = Math.max(4, innerHalf * 0.45);
-    const core = ctx.createRadialGradient(vpX, cy, 0, vpX, cy, coreRadius);
-    core.addColorStop(0,   `rgba(255, 255, 255, ${alpha})`);
-    core.addColorStop(0.5, `rgba(255, 255, 250, ${alpha * 0.85})`);
-    core.addColorStop(1,   'rgba(255, 255, 245, 0)');
-    ctx.fillStyle = core;
-    ctx.fillRect(vpX - coreRadius, cy - coreRadius,
-                 coreRadius * 2, coreRadius * 2);
-
-    ctx.restore();   // fin del clip
-
-    // ── 3. Marco oscuro del arco (encuadra la luz) ────────────────────────
-    // Lo dibujamos DESPUÉS del clip para que el contorno del arco sea visible
-    // como un marco fino alrededor de la luz (como una pared con un agujero).
-    const frameW = Math.max(2, innerHalf * 0.06);
-    ctx.strokeStyle = 'rgba(40, 40, 50, 0.8)';
-    ctx.lineWidth = frameW;
-    archPath(innerHalf + frameW * 0.5, sidesH + frameW * 0.5);
-    ctx.stroke();
-
-    // ── 4. Highlight superior del marco (la luz baña el borde del arco) ──
-    ctx.strokeStyle = `rgba(255, 250, 220, ${alpha * 0.7})`;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(vpX, baseY - sidesH, innerHalf, Math.PI, 0, false);
-    ctx.stroke();
-
-    // ── 5. Flash final: cuando el arco cubre todo, overlay blanco ─────────
-    if (t > 0.95) {
-      const flashLocal = (t - 0.95) / 0.05;
-      const flashAlpha = Math.pow(flashLocal, 2);
-      ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
-      ctx.fillRect(0, 0, cw, ch);
-    }
   }
 
   /**
