@@ -12,7 +12,7 @@
 // siguiente túnel.
 
 import { canvas, STATE, pigeon } from '../../mecanica/estado.js';
-import { perspective, getViewBounds } from '../../mecanica/camara.js';
+import { perspective, getViewBounds, getCameraVpY } from '../../mecanica/camara.js';
 import { drawTrenFrontal, setTrenLED } from '../../elementos/tren.js';
 
 const DEFAULT_CONFIG = {
@@ -207,7 +207,10 @@ export class EstacionBase {
     const W   = canvas.width;
     const H   = canvas.height;
     const vpX = W / 2;
-    const vpY = H * this.cfg.vanishingPointY;
+    // VP vertical AJUSTADO por el offsetY de la cámara — al subir/bajar la
+    // paloma, el VP se desplaza y los rieles/paredes/techo cambian de
+    // inclinación. Reemplaza al H*cfg.vanishingPointY estático anterior.
+    const vpY = getCameraVpY(H * this.cfg.vanishingPointY);
 
     // Bounds del área que la cámara puede ver (incluye el rango móvil).
     // Las geometrías "grandes" (fondo, techo, paredes, suelo) usan estos

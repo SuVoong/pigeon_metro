@@ -16,15 +16,33 @@ export const FOCAL = 400;  // distancia focal para proyección perspectiva
 // El HUD y la paloma quedan FUERA del transform, así se ven anclados.
 export const camera = { offsetX: 0, offsetY: 0 };
 
-/** Aplica el desplazamiento de cámara al ctx. Hace ctx.save() implícito. */
+/** Aplica el desplazamiento HORIZONTAL de cámara al ctx. Hace ctx.save() implícito.
+ *  El offset Y NO se aplica como translate — se traduce en un desplazamiento del
+ *  punto de fuga vertical (ver getCameraVpY) para simular que la cámara "rota"
+ *  hacia arriba/abajo en lugar de simplemente deslizarse. Así los rieles, las
+ *  paredes y el techo cambian de inclinación al subir/bajar. */
 export function applyCamera(ctx) {
   ctx.save();
-  ctx.translate(-camera.offsetX, -camera.offsetY);
+  ctx.translate(-camera.offsetX, 0);
 }
 
 /** Restaura el ctx tras applyCamera(). */
 export function unapplyCamera(ctx) {
   ctx.restore();
+}
+
+/** Factor con el que el offsetY mueve el punto de fuga vertical. Más alto =
+ *  efecto de perspectiva más exagerado al subir/bajar. 1.0 sería como un
+ *  desplazamiento puro (los rieles no cambiarían visualmente); por debajo de 1
+ *  produce el efecto de "rotar la cámara". */
+export const VP_PERSPECTIVE_FACTOR = 0.7;
+
+/** Devuelve el punto de fuga vertical AJUSTADO según el offsetY de la cámara.
+ *  Cuando la cámara sube (offsetY < 0), el VP baja en pantalla — los rieles
+ *  apuntan más bajo y vemos más techo (mirando "hacia abajo" desde altura).
+ *  Cuando baja (offsetY > 0), el VP sube y vemos más suelo. */
+export function getCameraVpY(staticVpY) {
+  return staticVpY - camera.offsetY * VP_PERSPECTIVE_FACTOR;
 }
 
 /** Reset al iniciar nueva partida. */

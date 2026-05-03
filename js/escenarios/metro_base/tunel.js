@@ -7,7 +7,7 @@
 
 import { canvas, STATE } from '../../mecanica/estado.js';
 import { ENV_CFG }       from '../../editor/env_config.js';
-import { getViewBounds } from '../../mecanica/camara.js';
+import { getViewBounds, getCameraVpY } from '../../mecanica/camara.js';
 
 const FOCAL       = 400;
 const _persp      = z  => FOCAL / (FOCAL + Math.max(z, 1));
@@ -39,9 +39,12 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   //   · archRadiusRatio      → fracción 0–1 (radio del arco / canvas.height).
   //   · archCenterOffsetRatio→ fracción del canvas.height entre VP y centro
   //                            del arco (controla cuánto suelo es visible).
-  const vpY    = config.vanishingPointY != null
+  // VP vertical ajustado por el offsetY de la cámara — los anillos del túnel
+  // se inclinan al subir/bajar la paloma.
+  const _baseVpY = config.vanishingPointY != null
     ? ch * config.vanishingPointY
     : _defaultVpY();
+  const vpY = getCameraVpY(_baseVpY);
   const maxR   = config.archRadiusRatio != null
     ? ch * config.archRadiusRatio
     : _defaultMaxR();
