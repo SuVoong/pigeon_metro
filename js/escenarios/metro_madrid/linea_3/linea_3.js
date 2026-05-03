@@ -1,25 +1,74 @@
-// metro_madrid/linea_3.js
+// metro_madrid/linea_3/linea_3.js
 // Línea 3 (naranja) — secuencia completa de paradas envuelta sobre MetroBase.
 //
-// El array ROUTE define la sucesión estación → túnel → estación → túnel …
-// Cada parada importa su carpeta dedicada (delicias/, palos_frontera/, …)
-// donde viven los configs visuales/de gameplay específicos. Las paradas que
-// aún no tienen carpeta usan un “stub” genérico construido por _genericStop().
+// Cada parada tiene su carpeta hermana (./<slug>/<slug>.js) que exporta su
+// IDENTIDAD (name/shortName/zone/isCheckpoint) y, opcionalmente, configs de
+// andén/túnel (stationConfig/tunelConfig). Los stubs sin configs heredan los
+// valores procedurales de _genericStop() — rampa de dificultad creciente
+// según la posición en la línea.
+//
+// Para personalizar una estación: añadir stationConfig/tunelConfig al stub
+// (o splittearlo en <slug>_estacion.js / <slug>_tunel.js, ver delicias).
 
-import { MetroBase }    from '../metro_base/metro_base.js';
-import { Delicias }     from './delicias/delicias.js';
-import { STATE }        from '../../mecanica/estado.js';
-import { MADRID_LINES } from '../metros/metros_madrid/datos_madrid.js';
+import { MetroBase }    from '../../metro_base/metro_base.js';
+import { STATE }        from '../../../mecanica/estado.js';
+import { MADRID_LINES } from '../datos_madrid.js';
 import {
   getStationOverride, getTunelOverride,
-}                       from '../escena_overrides.js';
+}                       from '../../escena_overrides.js';
 
-// ── Stub genérico (paradas pendientes de personalización) ───────────────────
-// Para cada estación cuya carpeta dedicada todavía no existe, generamos un
-// objeto RouteStop con configs por defecto + dificultad creciente según
-// la posición en la línea (idx).
+// ── Imports de cada parada (orden = sur → norte de la línea real) ───────────
+import { ElCasar }            from './el_casar/el_casar.js';
+import { VillaverdeAlto }     from './villaverde_alto/villaverde_alto.js';
+import { SanCristobal }       from './san_cristobal/san_cristobal.js';
+import { VillaverdeBajo }     from './villaverde_bajo/villaverde_bajo.js';
+import { CiudadDeLosAngeles } from './ciudad_de_los_angeles/ciudad_de_los_angeles.js';
+import { SanFermin }          from './san_fermin/san_fermin.js';
+import { Hospital12Octubre }  from './hospital_12_octubre/hospital_12_octubre.js';
+import { Almendrales }        from './almendrales/almendrales.js';
+import { Legazpi }            from './legazpi/legazpi.js';
+import { Delicias }           from './delicias/delicias.js';
+import { PalosDeLaFrontera }  from './palos_de_la_frontera/palos_de_la_frontera.js';
+import { Embajadores }        from './embajadores/embajadores.js';
+import { Lavapies }           from './lavapies/lavapies.js';
+import { TirsoDeMolina }      from './tirso_de_molina/tirso_de_molina.js';
+import { Sol }                from './sol/sol.js';
+import { Callao }             from './callao/callao.js';
+import { PlazaDeEspana }      from './plaza_de_espana/plaza_de_espana.js';
+import { VenturaRodriguez }   from './ventura_rodriguez/ventura_rodriguez.js';
+import { Arguelles }          from './arguelles/arguelles.js';
+import { Moncloa }            from './moncloa/moncloa.js';
+
+// Cada entrada se referencia POR NOMBRE (la fuente de verdad del orden y la
+// existencia de cada parada es MADRID_LINES; este map sólo aporta los stubs).
+const STATIONS = {
+  'El Casar':               ElCasar,
+  'Villaverde Alto':        VillaverdeAlto,
+  'San Cristóbal':          SanCristobal,
+  'Villaverde Bajo':        VillaverdeBajo,
+  'Ciudad de los Ángeles':  CiudadDeLosAngeles,
+  'San Fermín':             SanFermin,
+  'Hospital 12 de Octubre': Hospital12Octubre,
+  'Almendrales':            Almendrales,
+  'Legazpi':                Legazpi,
+  'Delicias':               Delicias,
+  'Palos de la Frontera':   PalosDeLaFrontera,
+  'Embajadores':            Embajadores,
+  'Lavapiés':               Lavapies,
+  'Tirso de Molina':        TirsoDeMolina,
+  'Sol':                    Sol,
+  'Callao':                 Callao,
+  'Plaza de España':        PlazaDeEspana,
+  'Ventura Rodríguez':      VenturaRodriguez,
+  'Argüelles':              Arguelles,
+  'Moncloa':                Moncloa,
+};
+
+// ── Configs procedurales (rampa de dificultad sur → norte) ──────────────────
+// Para cada estación generamos stationConfig/tunelConfig por defecto basados
+// en su posición en la línea. Los stubs pueden overridear cualquier campo
+// añadiendo `stationConfig` / `tunelConfig` a su export.
 function _genericStop(name, idx, total) {
-  // Dificultad creciente: trenes más juntos y túneles más rápidos al sur.
   const t = total > 1 ? idx / (total - 1) : 0; // 0 → 1
   const trainSpawn   = Math.round(110 - t * 50);   // 110 → 60
   const obsSpawn     = Math.round(130 - t * 60);   // 130 → 70
@@ -33,10 +82,6 @@ function _genericStop(name, idx, total) {
   const trainOnRight = (idx % 3) === 0;
 
   return {
-    name,
-    shortName:    name.length > 8 ? name.slice(0, 6) + '…' : name,
-    zone:         'A',
-    isCheckpoint: false,
     stationConfig: {
       stationName:        name,
       stationDirection:   'MONCLOA',
@@ -66,17 +111,23 @@ function _genericStop(name, idx, total) {
 const _l3data = MADRID_LINES.find(l => l.id === 3);
 const STATION_NAMES = _l3data ? _l3data.stations.map(s => s.name) : [];
 
-// ── ROUTE: para cada estación, usa su carpeta si existe, si no _genericStop ─
-const SPECIFIC = {
-  'Delicias': Delicias,
-  // 'Palos de la Frontera': Palos,    ← futuro
-  // 'Embajadores': Embajadores,        ← futuro
-  // ...
-};
-
-const ROUTE = STATION_NAMES.map((name, i) =>
-  SPECIFIC[name] ?? _genericStop(name, i, STATION_NAMES.length)
-);
+// ── ROUTE: combina identidad declarativa + configs procedurales ─────────────
+// Si el stub trae stationConfig/tunelConfig propios, se mergean ENCIMA de los
+// procedurales (ganan los del stub). Permite que una estación personalice
+// cualquier campo sin perder el resto del default ni la rampa de dificultad.
+const ROUTE = STATION_NAMES.map((name, i) => {
+  const stub    = STATIONS[name] ?? { name, shortName: name, zone: 'A' };
+  const generic = _genericStop(name, i, STATION_NAMES.length);
+  return {
+    name:         stub.name ?? name,
+    shortName:    stub.shortName ?? name,
+    zone:         stub.zone ?? 'A',
+    isCheckpoint: stub.isCheckpoint ?? false,
+    isTutorial:   stub.isTutorial ?? false,
+    stationConfig: { ...generic.stationConfig, ...(stub.stationConfig ?? {}) },
+    tunelConfig:   { ...generic.tunelConfig,   ...(stub.tunelConfig   ?? {}) },
+  };
+});
 
 // ── Estación por defecto cuando se entra a L3 sin selección concreta ────────
 const DEFAULT_START_STATION = 'Delicias';

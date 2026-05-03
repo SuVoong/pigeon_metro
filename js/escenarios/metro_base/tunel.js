@@ -5,8 +5,8 @@
 //
 // Exporta drawTunel(ctx, config, worldZ) para uso por MetroBase.
 
-import { canvas, STATE } from '../../../mecanica/estado.js';
-import { ENV_CFG }       from '../../../editor/env_config.js';
+import { canvas, STATE } from '../../mecanica/estado.js';
+import { ENV_CFG }       from '../../editor/env_config.js';
 
 const FOCAL       = 400;
 const _persp      = z  => FOCAL / (FOCAL + Math.max(z, 1));

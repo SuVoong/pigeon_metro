@@ -29,11 +29,8 @@ import { handleLevelCompleteInput, drawLevelCompleteScreen } from './pantallas/f
 import {
   handleSceneEditorInput, updateSceneEditor, drawSceneEditorScreen,
 } from './pantallas/escena_editor.js';
-import { MapaMetroMadrid } from './escenarios/metros/metros_madrid/mapa_metro_madrid.js';
-// Línea 3 — nueva arquitectura (orquestador estación↔túnel + HUD).
-// La versión legacy sigue en escenarios/metros/metros_madrid/linea_3/linea_3.js
-// por si hace falta volver a ella; el wiring está sólo aquí.
-import { Linea3 } from './escenarios/metro_madrid/linea_3.js';
+import { MapaMetroMadrid } from './escenarios/metro_madrid/mapa_metro_madrid.js';
+import { Linea3 } from './escenarios/metro_madrid/linea_3/linea_3.js';
 import {
   drawLoginScreen, handleLoginKey, handleLoginClick, isLoginModeActive,
   setLoginSuccessCallback,

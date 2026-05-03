@@ -11,7 +11,7 @@
 // frame de Linea3 (techo + andenes + tren del terminal), encima va el popup.
 
 import { canvas, STATE } from '../mecanica/estado.js';
-import { Linea3 }        from '../escenarios/metro_madrid/linea_3.js';
+import { Linea3 }        from '../escenarios/metro_madrid/linea_3/linea_3.js';
 import { checkUnlocks, saveAchievements } from '../mecanica/progreso.js';
 
 let _rects = [];   // [{x, y, w, h, action}]

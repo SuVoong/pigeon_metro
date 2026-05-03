@@ -7,7 +7,7 @@ import * as Modal from '../editor_modal.js';
 import * as DD from '../widgets/dropdown.js';
 import { DIFFICULTY_COLORS } from '../config_schema.js';
 import { exportPresetToFile, importPresetFromFile } from '../widgets/file_io.js';
-import { MADRID_LINES } from '../../escenarios/metros/metros_madrid/datos_madrid.js';
+import { MADRID_LINES } from '../../escenarios/metro_madrid/datos_madrid.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _hits = [];   // hit-test rects built each draw

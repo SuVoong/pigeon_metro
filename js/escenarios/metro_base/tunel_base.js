@@ -5,13 +5,13 @@
 // cfg.durationSeconds marca isDone=true y el orquestador pasa a la siguiente
 // escena (típicamente una EstacionBase).
 //
-// Reusa el render fotorrealista existente (drawTunel + drawTrack del paquete
-// metros/metro_base) para preservar fidelidad. La novedad es la encapsulación
-// como clase con duración y estado limpio.
+// Reusa el render fotorrealista existente (drawTunel de ./tunel.js) para
+// preservar fidelidad. La novedad es la encapsulación como clase con
+// duración y estado limpio.
 
 import { canvas, STATE }      from '../../mecanica/estado.js';
 import { w2sx, w2sy, perspective } from '../../mecanica/camara.js';
-import { drawTunel }          from '../metros/metro_base/tunel.js';
+import { drawTunel }          from './tunel.js';
 import { OBSTACULOS }         from '../../elementos/obstaculos.js';
 import { getTrenVariante }    from '../../elementos/tren_config.js';
 import { TRAIN_CFG }          from '../../editor/train_config.js';

@@ -1,7 +1,7 @@
 // tab_train.js — Train editor tab: controls for TRAIN_CFG
 
 import { TRAIN_CFG } from '../train_config.js';
-import { drawTrainFront } from '../../escenarios/metros/metro_base/metro_base_render.js';
+import { drawTrainFront } from '../../escenarios/metro_base/metro_base_render.js';
 
 // ── Layout constants ───────────────────────────────────────────────────────────
 const ML  = 14;   // left margin inside panel

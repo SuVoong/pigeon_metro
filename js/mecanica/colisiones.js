@@ -3,7 +3,7 @@
 import { canvas, STATE, pigeon, obstacles, collectibles, particles, PAL, DEBUG } from './estado.js';
 import { w2sx, w2sy, perspective } from './camara.js';
 import { emitParticles } from './spawning.js';
-import { Linea3 } from '../escenarios/metro_madrid/linea_3.js';
+import { Linea3 } from '../escenarios/metro_madrid/linea_3/linea_3.js';
 import * as PM from '../editor/preset_manager.js';
 import { TRAIN_CFG } from '../editor/train_config.js';
 import { saveFlightRecord } from './progreso.js';

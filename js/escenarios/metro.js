@@ -3,7 +3,7 @@
 import { canvas, STATE, obstacles, collectibles, particles, PAL } from '../mecanica/estado.js';
 import { w2sx, w2sy, perspective } from '../mecanica/camara.js';
 import { spawnObstacle, spawnCollectible } from '../mecanica/spawning.js';
-import { drawTunel } from './metros/metro_base/tunel.js';
+import { drawTunel } from './metro_base/tunel.js';
 
 let obstacleSpawnTimer = 0;
 let collectibleSpawnTimer = 0;

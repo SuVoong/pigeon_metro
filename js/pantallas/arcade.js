@@ -24,7 +24,7 @@
 
 import { canvas, STATE, PAL } from '../mecanica/estado.js';
 import { formatFlightTime } from '../mecanica/progreso.js';
-import { MapaMetroMadrid, drawTooltip, clearTooltip } from '../escenarios/metros/metros_madrid/mapa_metro_madrid.js';
+import { MapaMetroMadrid, drawTooltip, clearTooltip } from '../escenarios/metro_madrid/mapa_metro_madrid.js';
 import * as PM from '../editor/preset_manager.js';
 import { DIFFICULTY_COLORS } from '../editor/config_schema.js';
 import { openSceneEditor } from './escena_editor.js';

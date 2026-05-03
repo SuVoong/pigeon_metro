@@ -1,10 +1,9 @@
-// Funciones de dibujo del túnel y trenes — sin estado de juego, sólo render.
-// Coordenadas de mundo: x,y en píxeles relativos al centro del canvas; z = profundidad.
+// Funciones de dibujo de trenes (sprites front/side/perspective) y panel
+// LED de destino — sin estado de juego, sólo render. Compartido por
+// EstacionBase, TunelBase, elementos/tren.js y el preview del editor.
 
-import { canvas, STATE } from '../../../mecanica/estado.js';
-import { w2sx, w2sy, perspective } from '../../../mecanica/camara.js';
-import { TRAIN_CFG } from '../../../editor/train_config.js';
-import * as PM from '../../../editor/preset_manager.js';
+import { STATE } from '../../mecanica/estado.js';
+import { TRAIN_CFG } from '../../editor/train_config.js';
 
 // ── Paleta del tren (valores fijos — estética, no configurables por editor) ───
 const TRAIN_PAL = {
@@ -267,105 +266,3 @@ export function drawTrainPerspective(ctx, cx, cy, scale, lineColor) {
   ctx.fillRect(seamX, top, 2, totalH);
 }
 
-// ── Helpers de sprite de preset ───────────────────────────────────────────────
-
-/** Devuelve el sprite del preset activo para la vía indicada, o null si no hay. */
-function _getSpriteForSide(side) {
-  const trenes = PM.getActive()?.trenes;
-  if (!trenes?.sprites?.length) return null;
-  const id = side === 'left' ? trenes.leftLaneSprite : trenes.rightLaneSprite;
-  return trenes.sprites.find(s => s.id === id) ?? trenes.sprites[0] ?? null;
-}
-
-/**
- * Dibuja el tren usando el pixelData del sprite del preset.
- * El ctx ya está trasladado al centro del tren y escalado por drawScale.
- * El espacio de arte es sprite.pixelData.width × sprite.pixelData.height.
- */
-function _drawFromPixelData(ctx, sprite) {
-  const { pixels, width, height } = sprite.pixelData;
-  const c = sprite.colors;
-  const PALETTE = [ null, c.body, c.window, c.cab, c.stripe, c.ledBg ];
-  const ox = -(width  / 2);
-  const oy = -(height / 2);
-
-  // Renderizar píxel a píxel agrupando runs del mismo color por fila
-  for (let y = 0; y < height; y++) {
-    const row = pixels[y];
-    let x = 0;
-    while (x < width) {
-      const v = row[x];
-      if (!v) { x++; continue; }
-      const col = PALETTE[v];
-      if (!col) { x++; continue; }
-      // Extender el run horizontal del mismo color
-      let run = 1;
-      while (x + run < width && row[x + run] === v) run++;
-      ctx.fillStyle = col;
-      ctx.fillRect(ox + x, oy + y, run, 1);
-      x += run;
-    }
-  }
-
-  // Texto LED scrolling sobre el área ledBg
-  _drawLED(ctx, 1, c.ledText);
-}
-
-// ── drawTrack ─────────────────────────────────────────────────────────────────
-export function drawTrack(ctx, track, config) {
-  const sorted = track.slice().sort((a, b) => b.z - a.z);
-
-  for (const train of sorted) {
-    if (train.z < -50 || train.z > 900) continue;
-
-    const sprite   = _getSpriteForSide(train.side);
-    const vPos     = sprite?.verticalPos     ?? TRAIN_CFG.verticalPos;
-    const scaleMul = sprite?.scaleMultiplier ?? TRAIN_CFG.scaleMultiplier;
-    const yShift   = (vPos - 0.5) * canvas.height;
-
-    const s  = perspective(train.z);
-    const sx = w2sx(train.x * s);
-    const sy = w2sy(train.y * s) + yShift;
-
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.scale(s * scaleMul, s * scaleMul);
-
-    if (train.z < 100) {
-      // Vista 3/4 (tren muy cercano): sigue usando vectores
-      drawTrainPerspective(ctx, 0, 0, 1, config.trainColor ?? TRAIN_CFG.stripeColor);
-    } else if (sprite?.pixelData?.pixels) {
-      _drawFromPixelData(ctx, sprite);
-    } else {
-      drawTrainFront(ctx, 0, 0, 1, config.trainColor ?? TRAIN_CFG.stripeColor);
-    }
-
-    ctx.restore();
-  }
-}
-
-// ── drawStationSign ───────────────────────────────────────────────────────────
-export function drawStationSign(ctx, stationName, lineColor, options = {}) {
-  const cw    = canvas.width;
-  const sy    = options.y ?? 36;
-  const signW = Math.min(280, Math.max(160, cw * 0.35));
-  const signH = 30;
-  const sx    = Math.round(cw / 2 - signW / 2);
-
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillRect(sx + 2, sy + 2, signW, signH);
-
-  ctx.fillStyle = '#0a0a14';
-  ctx.fillRect(sx, sy, signW, signH);
-
-  ctx.fillStyle = lineColor;
-  ctx.fillRect(sx, sy, 5, signH);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 14px monospace';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(stationName, sx + signW / 2, sy + signH / 2 + 1);
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
-}

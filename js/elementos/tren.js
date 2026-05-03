@@ -12,7 +12,7 @@ import {
   drawTrainSide,
   drawTrainPerspective,
   setLEDStation,
-} from '../escenarios/metros/metro_base/metro_base_render.js';
+} from '../escenarios/metro_base/metro_base_render.js';
 
 // ── Paleta por defecto (override por variante.colors si se desea) ────────────
 const DEFAULT_PAL = {
