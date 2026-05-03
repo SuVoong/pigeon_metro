@@ -85,10 +85,15 @@ const DEFAULT_CONFIG = {
   benchLegColor:      '#666666',
 
   // ── Carteles colgantes de destino (uno por andén) ──────────────────────
-  numHangingSigns:    2,            // total (1 por andén normalmente)
-  hangingSignBg:      '#0a0a14',    // fondo casi negro del letrero
-  hangingSignText:    '#FFEE99',    // texto color LED ámbar
-  hangingSignCable:   '#222230',    // cable de sujeción al techo
+  numHangingSigns:        2,            // total (1 por andén normalmente)
+  hangingSignBg:          '#0a0a14',    // fondo casi negro del letrero
+  hangingSignText:        '#FFEE99',    // texto color LED ámbar
+  hangingSignCable:       '#222230',    // cable de sujeción al techo
+  // Destino que va escrito en cada cartel. Por convención:
+  //   andén derecho = Andén 1 = sentido NORTE de la línea
+  //   andén izquierdo = Andén 2 = sentido SUR de la línea
+  andenRightDestination:  'MONCLOA',
+  andenLeftDestination:   'EL CASAR',
 
   // ── Frente metálico del andén (cae al foso de la vía) ──────────────────
   platformFrontColor: '#9098A8',    // gris metálico claro
@@ -627,40 +632,50 @@ export class EstacionBase {
   _drawHangingSigns(ctx, W, H, vpX, vpY) {
     const n = Math.max(0, this.cfg.numHangingSigns | 0);
     if (n === 0) return;
-    const text = (this.cfg.stationDirection ?? 'MONCLOA').toUpperCase();
+
+    const rightText = (this.cfg.andenRightDestination ?? 'MONCLOA').toUpperCase();
+    const leftText  = (this.cfg.andenLeftDestination  ?? 'EL CASAR').toUpperCase();
+
+    // Línea de techo desde donde "cuelgan" los cables. La ponemos por
+    // debajo del HUD de progreso (~70px) para que los cables no se
+    // mezclen con la barra de estaciones.
+    const ceilingY = Math.max(70, H * 0.10);
 
     // Distribución: para n=2 → uno sobre cada andén centrado.
     // Para n=4 → dos por lado escalados en profundidad.
     const perSide = Math.ceil(n / 2);
     for (let side = 0; side < 2; side++) {
       const isLeft = side === 0;
+      const text       = isLeft ? leftText : rightText;
+      const andenLabel = isLeft ? 'Andén 2' : 'Andén 1';
       for (let i = 0; i < perSide; i++) {
         const t = perSide === 1 ? 0.0 : i / (perSide - 1);
         const scale  = 1 - t * 0.55;            // 1.00 → 0.45
-        // Centro horizontal del andén a esta profundidad. Cuando t=0 está
-        // cerca de cámara (centro del andén ~25% del ancho); cuando t=1
-        // se acerca al VP horizontal.
+        // Centro horizontal del andén a esta profundidad.
         const nearCx = isLeft ? W * 0.22 : W * 0.78;
-        const farCx  = isLeft ? vpX - 24 : vpX + 24;
+        const farCx  = isLeft ? vpX - 28 : vpX + 28;
         const cx     = Math.round((1 - t) * nearCx + t * farCx);
-        // Y del cartel — desciende del techo, escalado por perspectiva
-        const baseY  = Math.round(28 + t * (vpY * 0.45 - 28));
-        this._drawHangingSign(ctx, cx, baseY, scale, text);
+        // Y del cartel — a la altura del horizonte del andén.
+        const nearY  = vpY * 0.55;
+        const farY   = vpY * 0.30;
+        const baseY  = Math.round((1 - t) * nearY + t * farY);
+        this._drawHangingSign(ctx, cx, baseY, scale, andenLabel, text, isLeft, ceilingY);
       }
     }
   }
 
-  _drawHangingSign(ctx, cx, baseY, scale, text) {
+  _drawHangingSign(ctx, cx, baseY, scale, andenLabel, destText, isLeft, ceilingY) {
     const s = (v) => Math.max(1, Math.round(v * scale));
-    const w = s(80);
-    const h = s(20);
+    const w = s(96);
+    const h = s(26);
     const x = cx - w / 2;
     const y = baseY;
 
-    // Cables al techo (arrancan en y=0, llegan al letrero)
+    // Cables al techo — arrancan en ceilingY (debajo del HUD) y bajan
+    // hasta el letrero. Visibles durante toda la altura.
     ctx.fillStyle = this.cfg.hangingSignCable;
-    ctx.fillRect(x + s(10),     0, Math.max(1, s(1)), y);
-    ctx.fillRect(x + w - s(11), 0, Math.max(1, s(1)), y);
+    ctx.fillRect(x + s(12),     ceilingY, Math.max(1, s(1)), y - ceilingY);
+    ctx.fillRect(x + w - s(13), ceilingY, Math.max(1, s(1)), y - ceilingY);
 
     // Marco del letrero (borde oscuro)
     ctx.fillStyle = '#1a1a22';
@@ -674,18 +689,20 @@ export class EstacionBase {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
     ctx.fillRect(x, y, w, Math.max(1, s(2)));
 
-    // Texto LED — Próximo Tren / Destino
     if (scale > 0.55) {
-      ctx.fillStyle    = this.cfg.hangingSignText;
-      ctx.font         = `bold ${Math.max(5, s(7))}px monospace`;
-      ctx.textAlign    = 'center';
       ctx.textBaseline = 'middle';
-      // Línea 1: subtítulo pequeño
-      ctx.font = `${Math.max(4, s(4))}px monospace`;
-      ctx.fillText('PRÓXIMO TREN', cx, y + s(5));
-      // Línea 2: destino grande
-      ctx.font = `bold ${Math.max(5, s(8))}px monospace`;
-      ctx.fillText(text, cx, y + s(13));
+      // ── Línea 1: "Andén N" (subtítulo pequeño) ───────────────────────
+      ctx.fillStyle = '#88AADD';
+      ctx.font      = `${Math.max(4, s(5))}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(andenLabel, cx, y + s(6));
+
+      // ── Línea 2: flecha de sentido + destino (grande, en ámbar) ──────
+      const arrow = isLeft ? '←' : '→';
+      ctx.fillStyle = this.cfg.hangingSignText;
+      ctx.font      = `bold ${Math.max(5, s(9))}px monospace`;
+      ctx.fillText(`${arrow} ${destText}`, cx, y + s(17));
+
       ctx.textAlign    = 'left';
       ctx.textBaseline = 'alphabetic';
     } else {

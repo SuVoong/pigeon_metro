@@ -201,12 +201,17 @@ class Linea3Class {
       slice = fullRoute.slice(startIdx);
     }
 
-    // Inyectar stationDirection (el sentido del trayecto) en cada parada.
+    // Inyectar stationDirection (sentido del trayecto del jugador) y los
+    // dos terminales de la línea para los carteles colgantes:
+    //   andén derecho (Andén 1) → terminal NORTE = MONCLOA
+    //   andén izquierdo (Andén 2) → terminal SUR = EL CASAR
     slice = slice.map(stop => ({
       ...stop,
       stationConfig: {
         ...stop.stationConfig,
-        stationDirection: destinationName.toUpperCase(),
+        stationDirection:      destinationName.toUpperCase(),
+        andenRightDestination: northTerminal.toUpperCase(),
+        andenLeftDestination:  southTerminal.toUpperCase(),
       },
     }));
 
