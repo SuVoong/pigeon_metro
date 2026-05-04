@@ -1,7 +1,7 @@
 // Detección y respuesta a colisiones: AABB genérico + lógica de juego.
 
 import { canvas, STATE, pigeon, obstacles, collectibles, particles, PAL, DEBUG } from './estado.js';
-import { w2sx, w2sy, perspective, camera } from './camara.js';
+import { w2sx, w2sy, perspective, camera, CAMERA_RANGE_X } from './camara.js';
 import { emitParticles } from './spawning.js';
 import { Linea3 } from '../escenarios/metro_madrid/linea_3/linea_3.js';
 import * as PM from '../editor/preset_manager.js';
@@ -56,6 +56,20 @@ export function checkCollisions() {
         const oBox = { x: sx - sw / 2, y: sy - sh / 2, w: sw, h: sh };
         if (aabb(pBox, oBox)) { _triggerHit(); break; }
       }
+    }
+
+    // ── Contra paredes laterales (límite del rango de cámara) ──
+    // El offsetX está clampado a ±maxX por updatePigeon. Si la paloma
+    // sigue empujando hacia la pared cuando ya está al borde, choca.
+    // Usamos un epsilon pequeño para tolerancia de redondeo y exigimos
+    // que la velocidad apunte HACIA la pared (vx significativo).
+    const maxX = canvas.width * CAMERA_RANGE_X;
+    const eps  = 1;
+    const VELO_EPS = 0.5;
+    const atLeftWall  = camera.offsetX <= -maxX + eps && pigeon.vx < -VELO_EPS;
+    const atRightWall = camera.offsetX >=  maxX - eps && pigeon.vx >  VELO_EPS;
+    if (atLeftWall || atRightWall) {
+      _triggerHit();
     }
   }
 
