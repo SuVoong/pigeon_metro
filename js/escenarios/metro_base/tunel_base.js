@@ -251,16 +251,25 @@ export class TunelBase {
   _spawnTrain() {
     const side = this._lastTrack === 'right' ? 'left' : 'right';
     this._lastTrack = side;
-    // x/y son legacy (perspective render no se usa ya); side y z controlan
-    // todo en _getTrainScreenPos. Mantenemos w/h por si algún caller los lee.
-    this.tracks[side].push({
-      x: 0,
-      y: 0,
-      z: SPAWN_Z,
-      w: this.cfg.trainW,
-      h: this.cfg.trainH,
-      side,
-    });
+    // Tren de N vagones encadenados — cada vagón es un sub-tren con su
+    // propia z desplazada para que se vean en perspectiva uno detrás del
+    // otro. _drawTrainsOnRails ya itera todos los trenes y los pinta
+    // individualmente, así que un "tren" no es más que un grupo de N
+    // entradas en this.tracks[side].
+    const NUM_VAGONES = this.cfg.numVagones ?? 6;
+    const SEPARACION  = this.cfg.vagonSeparation ?? 50; // unidades de z
+    for (let v = 0; v < NUM_VAGONES; v++) {
+      this.tracks[side].push({
+        x: 0,
+        y: 0,
+        z: SPAWN_Z + v * SEPARACION,
+        w: this.cfg.trainW,
+        h: this.cfg.trainH,
+        side,
+        vagon: v,                  // 0 = cabeza, >0 = vagones traseros
+        isHead: v === 0,
+      });
+    }
   }
 
   _spawnObstacle() {
