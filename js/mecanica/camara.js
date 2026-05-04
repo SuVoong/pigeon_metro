@@ -47,20 +47,23 @@ export function getCameraVpY(staticVpY) {
   return staticVpY - camera.offsetY * VP_PERSPECTIVE_FACTOR;
 }
 
-/** Cuánto se desplaza la paloma EN PANTALLA en función del offset de cámara.
- *  Combinado con la perspectiva dinámica (getCameraVpY), permite que la
- *  paloma "vuele alto" hasta tocar el techo o "pique bajo" hasta rozar los
- *  rieles. Factor 1.0 = la paloma se mueve exactamente con el offset (línea
- *  recta), factor < 1 = parallax (la paloma se queda más al centro). */
-export const PIGEON_DRIFT_Y = 1.0;
-export const PIGEON_DRIFT_X = 0.0;   // X queda fija porque applyCamera ya
-                                     // aplica translate X al escenario.
-
+/** Desplazamiento VISUAL de la paloma en pantalla en función del offset de
+ *  cámara. La curva NO es lineal: la paloma se queda casi quieta al centro
+ *  cuando el offset es pequeño y se acerca al borde sólo cuando el offset
+ *  llega al máximo. Curva cúbica:
+ *
+ *     n = offsetY / maxY     ∈ [-1, 1]
+ *     dy = sign(n) · |n|^3 · maxY
+ *
+ *  Resultado: para offsetY = 50 % del máximo, sólo se desplaza un 12.5 %.
+ *  Sólo en el extremo (100 % offset) la paloma "toca" el techo / los rieles.
+ *  X queda fija porque applyCamera ya aplica translate X al escenario.
+ */
 export function getPigeonScreenOffset() {
-  return {
-    dx: camera.offsetX * PIGEON_DRIFT_X,
-    dy: camera.offsetY * PIGEON_DRIFT_Y,
-  };
+  const maxY = canvas.height * CAMERA_RANGE_Y;
+  const ny   = maxY > 0 ? camera.offsetY / maxY : 0;
+  const dy   = Math.sign(ny) * Math.pow(Math.abs(ny), 3) * maxY;
+  return { dx: 0, dy };
 }
 
 /** Reset al iniciar nueva partida. */
