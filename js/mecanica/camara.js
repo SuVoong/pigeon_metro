@@ -34,8 +34,10 @@ export function unapplyCamera(ctx) {
 /** Factor con el que el offsetY mueve el punto de fuga vertical. Más alto =
  *  efecto de perspectiva más exagerado al subir/bajar. 1.0 sería como un
  *  desplazamiento puro (los rieles no cambiarían visualmente); por debajo de 1
- *  produce el efecto de "rotar la cámara". */
-export const VP_PERSPECTIVE_FACTOR = 0.7;
+ *  produce el efecto de "rotar la cámara". 0.85 da un efecto fuerte donde,
+ *  al máximo offsetY, el VP atraviesa la línea del horizonte y la paloma
+ *  parece tocar el techo (arriba) o los rieles (abajo). */
+export const VP_PERSPECTIVE_FACTOR = 0.85;
 
 /** Devuelve el punto de fuga vertical AJUSTADO según el offsetY de la cámara.
  *  Cuando la cámara sube (offsetY < 0), el VP baja en pantalla — los rieles
@@ -54,8 +56,11 @@ export function resetCamera() {
 // Rango máximo del offset de cámara — DEBE coincidir con el clamp aplicado en
 // los updates de personaje (paloma/pidgey/angry_bird). Centralizado aquí para
 // que los escenarios sepan cuánto overdraw necesitan.
-export const CAMERA_RANGE_X = 0.35;   // fracción del ancho del canvas
-export const CAMERA_RANGE_Y = 0.25;   // fracción del alto del canvas
+//   X: ±35% — al moverse al borde lateral, la paloma "choca" con la pared
+//   Y: ±45% — al subir hasta el máximo la paloma casi roza el techo, al
+//             bajar casi toca los rieles
+export const CAMERA_RANGE_X = 0.35;
+export const CAMERA_RANGE_Y = 0.45;
 
 /**
  * Área del MUNDO que la cámara puede llegar a ver, en coords del canvas.

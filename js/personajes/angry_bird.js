@@ -2,7 +2,7 @@
 
 import { pigeon, STATE, canvas } from '../mecanica/estado.js';
 import { keys } from '../mecanica/input.js';
-import { w2sx, w2sy, camera } from '../mecanica/camara.js';
+import { w2sx, w2sy, camera, CAMERA_RANGE_X, CAMERA_RANGE_Y } from '../mecanica/camara.js';
 
 const MAX_VELOCITY = 6;
 const EASING       = 0.15;
@@ -46,8 +46,8 @@ export function updateAngryBird(dt) {
     camera.offsetX += pigeon.vx * dt;
     camera.offsetY += pigeon.vy * dt;
 
-    const maxX = canvas.width  * 0.35;
-    const maxY = canvas.height * 0.25;
+    const maxX = canvas.width  * CAMERA_RANGE_X;
+    const maxY = canvas.height * CAMERA_RANGE_Y;
     camera.offsetX = Math.max(-maxX, Math.min(maxX, camera.offsetX));
     camera.offsetY = Math.max(-maxY, Math.min(maxY, camera.offsetY));
 
@@ -67,8 +67,8 @@ export function updateAngryBird(dt) {
   camera.offsetX += pigeon.vx * dt;
   camera.offsetY += pigeon.vy * dt;
 
-  const maxX = canvas.width  * 0.35;
-  const maxY = canvas.height * 0.25;
+  const maxX = canvas.width  * CAMERA_RANGE_X;
+  const maxY = canvas.height * CAMERA_RANGE_Y;
   camera.offsetX = Math.max(-maxX, Math.min(maxX, camera.offsetX));
   camera.offsetY = Math.max(-maxY, Math.min(maxY, camera.offsetY));
 
