@@ -10,7 +10,7 @@
 // duración y estado limpio.
 
 import { canvas, STATE }      from '../../mecanica/estado.js';
-import { w2sx, w2sy, perspective } from '../../mecanica/camara.js';
+import { w2sx, w2sy, perspective, camera, CAMERA_RANGE_X, CAMERA_RANGE_Y } from '../../mecanica/camara.js';
 import { drawTunel }          from './tunel.js';
 import { OBSTACULOS }         from '../../elementos/obstaculos.js';
 import { getTrenVariante }    from '../../elementos/tren_config.js';
@@ -203,7 +203,16 @@ export class TunelBase {
         ctx.fill();
       }
 
-      // 2. Pintar el vagón
+      // 2a. CARA LATERAL — visible cuando la cámara se desplaza al lado.
+      //     Si offsetX > 0 (paloma a la derecha), vemos el lateral
+      //     IZQUIERDO del tren (pegado al lado izquierdo del frontal).
+      //     Si offsetX < 0, lateral DERECHO. Ancho proporcional a |nx|.
+      this._drawTrainSide(ctx, pos, variant);
+
+      // 2b. CARA SUPERIOR/INFERIOR — techo visible al subir, bajos al bajar.
+      this._drawTrainTopBottom(ctx, pos, variant);
+
+      // 2c. Pintar la cara FRONTAL del vagón (encima de las laterales)
       drawTrenFrontal(ctx, pos.cx, pos.cy, pos.scale, variant, undefined);
 
       // 3. Halo de faros sólo para la cabeza del tren
@@ -219,6 +228,99 @@ export class TunelBase {
 
       lastPainted.set(ref.trainId, { ref, pos });
     }
+  }
+
+  // ── CARAS 3D del tren — laterales y techo ─────────────────────────────────
+  // Cuando la cámara se desplaza, vemos el costado/techo del vagón. La cara
+  // se pinta como un trapecio del color del tren (con líneas para sugerir
+  // ventanas) pegado al sprite frontal por el lado opuesto al desplazamiento.
+
+  _drawTrainSide(ctx, pos, variant) {
+    const maxX = canvas.width * CAMERA_RANGE_X;
+    if (maxX <= 0) return;
+    const nx = camera.offsetX / maxX;       // -1..1
+    if (Math.abs(nx) < 0.05) return;        // umbral muerto, evita parpadeo
+
+    // Ancho de la cara frontal en pantalla a esta profundidad (~80 px base)
+    const frontHalfW = 28 * pos.scale;
+    const frontHalfH = 18 * pos.scale;
+    // Profundidad visible del lateral en pantalla — proporcional a |nx|
+    // y al ancho del frente. Al máximo offset, el lateral es ≈80% del frente.
+    const sideDepth = Math.abs(nx) * frontHalfW * 1.6;
+
+    // Lado opuesto al desplazamiento de la cámara
+    const sign = nx > 0 ? -1 : 1;            // -1 = lateral izquierdo, +1 = derecho
+    const xNear = pos.cx + sign * frontHalfW; // arista del frente
+    const xFar  = xNear  + sign * sideDepth;  // arista trasera del lateral
+
+    const yTop = pos.cy - frontHalfH;
+    const yBot = pos.cy + frontHalfH;
+
+    // Cuerpo del lateral (claro)
+    ctx.fillStyle = '#D8D8E0';
+    ctx.beginPath();
+    ctx.moveTo(xNear, yTop);
+    ctx.lineTo(xFar,  yTop + frontHalfH * 0.15);
+    ctx.lineTo(xFar,  yBot - frontHalfH * 0.15);
+    ctx.lineTo(xNear, yBot);
+    ctx.closePath();
+    ctx.fill();
+
+    // Franja de color de línea (banda longitudinal)
+    const stripeColor = variant?.stripeColor ?? '#1A3A8A';
+    ctx.fillStyle = stripeColor;
+    const stripeYTop = pos.cy + frontHalfH * 0.15;
+    const stripeYBot = pos.cy + frontHalfH * 0.45;
+    ctx.beginPath();
+    ctx.moveTo(xNear, stripeYTop);
+    ctx.lineTo(xFar,  stripeYTop + frontHalfH * 0.05);
+    ctx.lineTo(xFar,  stripeYBot - frontHalfH * 0.05);
+    ctx.lineTo(xNear, stripeYBot);
+    ctx.closePath();
+    ctx.fill();
+
+    // Ventanas (3 verticales oscuras) — solo si hay sitio
+    if (Math.abs(sideDepth) > 4) {
+      ctx.fillStyle = '#1A2E3A';
+      const winYTop = pos.cy - frontHalfH * 0.55;
+      const winYBot = pos.cy - frontHalfH * 0.10;
+      for (let i = 1; i <= 3; i++) {
+        const t = i / 4;            // 0.25, 0.5, 0.75
+        const wx = xNear + sign * sideDepth * t;
+        const ww = Math.max(1, Math.abs(sideDepth) * 0.12);
+        ctx.fillRect(wx - ww / 2, winYTop, ww, winYBot - winYTop);
+      }
+    }
+  }
+
+  _drawTrainTopBottom(ctx, pos, variant) {
+    const maxY = canvas.height * CAMERA_RANGE_Y;
+    if (maxY <= 0) return;
+    const ny = camera.offsetY / maxY;
+    if (Math.abs(ny) < 0.05) return;
+
+    const frontHalfW = 28 * pos.scale;
+    const frontHalfH = 18 * pos.scale;
+    // ny > 0 (paloma abajo) → vemos los BAJOS del tren
+    // ny < 0 (paloma arriba) → vemos el TECHO
+    const isTop = ny < 0;
+    const depth = Math.abs(ny) * frontHalfH * 1.5;
+
+    const xLeft  = pos.cx - frontHalfW;
+    const xRight = pos.cx + frontHalfW;
+    const yEdge  = isTop ? pos.cy - frontHalfH : pos.cy + frontHalfH;
+    const yFar   = isTop ? yEdge - depth        : yEdge + depth;
+    // Inset horizontal para sugerir perspectiva (techo más estrecho atrás)
+    const inset  = frontHalfW * Math.abs(ny) * 0.15;
+
+    ctx.fillStyle = isTop ? '#A0A0A8' : '#3A3A48';   // techo gris claro / bajos oscuros
+    ctx.beginPath();
+    ctx.moveTo(xLeft,           yEdge);
+    ctx.lineTo(xRight,          yEdge);
+    ctx.lineTo(xRight - inset,  yFar);
+    ctx.lineTo(xLeft  + inset,  yFar);
+    ctx.closePath();
+    ctx.fill();
   }
 
   /**
