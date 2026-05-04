@@ -12,7 +12,7 @@
 // siguiente túnel.
 
 import { canvas, STATE, pigeon } from '../../mecanica/estado.js';
-import { perspective, getViewBounds, getCameraVpY } from '../../mecanica/camara.js';
+import { perspective, getViewBounds, getCameraVpY, camera, CAMERA_RANGE_X } from '../../mecanica/camara.js';
 import { drawTrenFrontal, setTrenLED } from '../../elementos/tren.js';
 
 const DEFAULT_CONFIG = {
@@ -681,47 +681,91 @@ export class EstacionBase {
     const s = (v) => Math.max(1, Math.round(v * scale));
     const w = s(96);
     const h = s(26);
-    const x = cx - w / 2;
     const y = baseY;
 
+    // ── PERSPECTIVA 3D del cartel según el offset de cámara ────────────────
+    // Cuando la paloma se desplaza, los carteles se ven INCLINADOS:
+    //   · El lado del cartel hacia donde se mueve la cámara se ve más
+    //     estrecho (es el lado "lejos") y desplazado verticalmente.
+    //   · El lado opuesto (cerca de la cámara) se ve más ancho y bajo.
+    //   · Esto simula una rotación leve en el eje vertical.
+    //
+    // El cartel se dibuja como TRAPECIO con 4 vértices (TL, TR, BR, BL)
+    // ajustados según nx = offsetX / maxX (∈ -1..1).
+    const maxX = canvas.width * CAMERA_RANGE_X;
+    const nx   = maxX > 0 ? camera.offsetX / maxX : 0;
+    // Inclinación: hasta 30 % de "encogimiento" en un lado del cartel
+    const tilt = nx * 0.30;
+    // Lado del cartel "lejos" (hacia donde mira la cámara) se encoje
+    const xL  = cx - w / 2;
+    const xR  = cx + w / 2;
+    // Si nx > 0 (paloma derecha), el lado IZQUIERDO del cartel queda lejos
+    const inL = tilt > 0 ? Math.abs(tilt) * w * 0.5 : 0;
+    const inR = tilt < 0 ? Math.abs(tilt) * w * 0.5 : 0;
+    const dyL = tilt > 0 ? Math.abs(tilt) * h * 0.4 : 0;
+    const dyR = tilt < 0 ? Math.abs(tilt) * h * 0.4 : 0;
+    // Vértices finales del trapezoide
+    const tlx = xL + inL, tly = y + dyL;
+    const trx = xR - inR, try_ = y + dyR;
+    const brx = xR - inR, bry = y + h - dyR;
+    const blx = xL + inL, bly = y + h - dyL;
+
     // Cables al techo — arrancan en ceilingY (debajo del HUD) y bajan
-    // hasta el letrero. Visibles durante toda la altura.
+    // hasta el letrero. Siguen los vértices superiores del trapezoide
+    // (asomados según la inclinación) para mantener coherencia visual.
     ctx.fillStyle = this.cfg.hangingSignCable;
-    ctx.fillRect(x + s(12),     ceilingY, Math.max(1, s(1)), y - ceilingY);
-    ctx.fillRect(x + w - s(13), ceilingY, Math.max(1, s(1)), y - ceilingY);
+    ctx.fillRect(Math.round(tlx + s(12)), ceilingY, Math.max(1, s(1)), tly - ceilingY);
+    ctx.fillRect(Math.round(trx - s(13)), ceilingY, Math.max(1, s(1)), try_ - ceilingY);
 
-    // Marco del letrero (borde oscuro)
-    ctx.fillStyle = '#1a1a22';
-    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    // Helper para pintar un trapezoide del color dado (con un pequeño
+    // inflado para el marco oscuro).
+    const fillTrap = (ox, color) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(tlx - ox, tly - ox);
+      ctx.lineTo(trx + ox, try_ - ox);
+      ctx.lineTo(brx + ox, bry + ox);
+      ctx.lineTo(blx - ox, bly + ox);
+      ctx.closePath();
+      ctx.fill();
+    };
 
-    // Cuerpo del letrero
-    ctx.fillStyle = this.cfg.hangingSignBg;
-    ctx.fillRect(x, y, w, h);
-
-    // Highlight superior (luz indirecta del fluorescente)
+    // Marco oscuro (inflado 1px)
+    fillTrap(1, '#1a1a22');
+    // Cuerpo del cartel
+    fillTrap(0, this.cfg.hangingSignBg);
+    // Highlight superior (banda fina)
     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-    ctx.fillRect(x, y, w, Math.max(1, s(2)));
+    ctx.beginPath();
+    ctx.moveTo(tlx, tly);
+    ctx.lineTo(trx, try_);
+    ctx.lineTo(trx, try_ + Math.max(1, s(2)));
+    ctx.lineTo(tlx, tly  + Math.max(1, s(2)));
+    ctx.closePath();
+    ctx.fill();
 
     if (scale > 0.55) {
+      // El texto NO se inclina (ctx.fillText no soporta perspectiva
+      // fácilmente); solo se centra entre los vértices izq y der del
+      // trapezoide y se desplaza verticalmente con el lado central.
+      const textCx = (tlx + trx) / 2;
+      const yMid   = (tly + try_) / 2;
       ctx.textBaseline = 'middle';
-      // ── Línea 1: "Andén N" (subtítulo pequeño) ───────────────────────
       ctx.fillStyle = '#88AADD';
       ctx.font      = `${Math.max(4, s(5))}px monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText(andenLabel, cx, y + s(6));
+      ctx.fillText(andenLabel, textCx, yMid + s(6));
 
-      // ── Línea 2: flecha de sentido + destino (grande, en ámbar) ──────
       const arrow = isLeft ? '←' : '→';
       ctx.fillStyle = this.cfg.hangingSignText;
       ctx.font      = `bold ${Math.max(5, s(9))}px monospace`;
-      ctx.fillText(`${arrow} ${destText}`, cx, y + s(17));
+      ctx.fillText(`${arrow} ${destText}`, textCx, yMid + s(17));
 
       ctx.textAlign    = 'left';
       ctx.textBaseline = 'alphabetic';
     } else {
-      // Letrero pequeño: solo barras LED simbólicas
       ctx.fillStyle = this.cfg.hangingSignText;
-      ctx.fillRect(x + s(8), y + s(8), w - s(16), Math.max(1, s(2)));
+      ctx.fillRect(tlx + s(8), tly + s(8), (trx - tlx) - s(16), Math.max(1, s(2)));
     }
   }
 
