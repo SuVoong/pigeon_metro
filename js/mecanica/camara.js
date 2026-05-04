@@ -40,11 +40,12 @@ export function unapplyCamera(ctx) {
 export const VP_PERSPECTIVE_FACTOR = 0.85;
 
 /** Devuelve el punto de fuga vertical AJUSTADO según el offsetY de la cámara.
- *  Cuando la cámara sube (offsetY < 0), el VP baja en pantalla — los rieles
- *  apuntan más bajo y vemos más techo (mirando "hacia abajo" desde altura).
- *  Cuando baja (offsetY > 0), el VP sube y vemos más suelo. */
+ *  Cuando la cámara/paloma SUBE (offsetY < 0), el VP también sube en pantalla
+ *  — al estar en altura, el horizonte se queda al nivel de los nuevos ojos
+ *  de la paloma. Vemos más suelo bajo el VP.
+ *  Cuando BAJA (offsetY > 0), el VP baja y vemos más techo encima del VP. */
 export function getCameraVpY(staticVpY) {
-  return staticVpY - camera.offsetY * VP_PERSPECTIVE_FACTOR;
+  return staticVpY + camera.offsetY * VP_PERSPECTIVE_FACTOR;
 }
 
 /** Desplazamiento VISUAL de la paloma en pantalla en función del offset de
