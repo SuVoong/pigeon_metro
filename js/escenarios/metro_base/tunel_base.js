@@ -95,11 +95,22 @@ export class TunelBase {
 
     const speed = this.cfg.speed;
 
-    // Avanzar Z de trenes
+    // Avanzar Z de trenes y limpiar vagones pasados.
+    // Cada vagón pertenece a un "tren" identificado por trainId. Solo
+    // eliminamos un vagón si TODOS los vagones de su tren ya pasaron el
+    // umbral — así la cabeza no se borra antes que la cola y el tren
+    // entero permanece visible al cruzar el borde de pantalla.
     for (const track of [this.tracks.left, this.tracks.right]) {
       for (const t of track) t.z -= speed * dt * 4;
+      // Construir map trainId → maxZ del grupo
+      const maxZByTrain = new Map();
+      for (const t of track) {
+        const cur = maxZByTrain.get(t.trainId) ?? -Infinity;
+        if (t.z > cur) maxZByTrain.set(t.trainId, t.z);
+      }
       for (let i = track.length - 1; i >= 0; i--) {
-        if (track[i].z < -100) track.splice(i, 1);
+        const groupMax = maxZByTrain.get(track[i].trainId);
+        if (groupMax !== undefined && groupMax < -100) track.splice(i, 1);
       }
     }
 
@@ -152,25 +163,61 @@ export class TunelBase {
    * estación es visualmente continua.
    */
   _drawTrainsOnRails(ctx, variant) {
-    // Pintamos los más lejanos primero para que los cercanos los tapen
-    const all = [...this.tracks.left, ...this.tracks.right]
-      .filter((t) => t.z >= -50 && t.z <= 900)
-      .sort((a, b) => b.z - a.z);
-
-    for (const train of all) {
-      const pos = this._getTrainScreenPos(train);
+    // Pintamos los más lejanos primero para que los cercanos los tapen.
+    // Sólo el vagón con isHead=true recibe halo de faros — los traseros
+    // van con la cara frontal pero sin luces (parecen vagones intermedios).
+    // Entre dos vagones consecutivos del MISMO trainId pintamos un fuelle
+    // (trapecio oscuro) que tapa el hueco entre ellos.
+    const all = [];
+    for (const t of [...this.tracks.left, ...this.tracks.right]) {
+      if (t.z < -50 || t.z > 900) continue;
+      const pos = this._getTrainScreenPos(t);
       if (!pos) continue;
+      all.push({ ref: t, pos });
+    }
+    all.sort((a, b) => b.ref.z - a.ref.z);
 
+    // Map trainId → último vagón pintado (de mayor z), para encadenar
+    // fuelles cuando el vagón actual es el siguiente del tren.
+    const lastPainted = new Map();
+
+    for (const { ref, pos } of all) {
+      // 1. Fuelle al vagón previamente pintado del mismo tren
+      const prev = lastPainted.get(ref.trainId);
+      if (prev && prev.ref.vagon === ref.vagon - 1) {
+        // prev es vagón anterior (z mayor → arriba/pequeño); ref es vagón
+        // actual (z menor → abajo/grande). El fuelle es un trapecio que
+        // conecta el centro de prev con el centro de ref, con anchos
+        // proporcionales a sus escalas.
+        const wPrev = 28 * prev.pos.scale;
+        const wCur  = 28 * pos.scale;
+        const hPrev = 18 * prev.pos.scale;
+        const hCur  = 18 * pos.scale;
+        ctx.fillStyle = '#0a0a14';
+        ctx.beginPath();
+        ctx.moveTo(prev.pos.cx - wPrev, prev.pos.cy + hPrev * 0.2);
+        ctx.lineTo(prev.pos.cx + wPrev, prev.pos.cy + hPrev * 0.2);
+        ctx.lineTo(pos.cx       + wCur, pos.cy       - hCur  * 0.2);
+        ctx.lineTo(pos.cx       - wCur, pos.cy       - hCur  * 0.2);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // 2. Pintar el vagón
       drawTrenFrontal(ctx, pos.cx, pos.cy, pos.scale, variant, undefined);
 
-      // Halo de faros (mismo que EstacionBase)
-      const haloR = 25 * pos.scale;
-      const grad  = ctx.createRadialGradient(pos.cx, pos.cy - 5 * pos.scale, 1,
-                                              pos.cx, pos.cy - 5 * pos.scale, haloR);
-      grad.addColorStop(0, 'rgba(255, 200, 100, 0.4)');
-      grad.addColorStop(1, 'rgba(255, 200, 100, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(pos.cx - haloR, pos.cy - 30 * pos.scale, haloR * 2, 50 * pos.scale);
+      // 3. Halo de faros sólo para la cabeza del tren
+      if (ref.isHead) {
+        const haloR = 25 * pos.scale;
+        const grad  = ctx.createRadialGradient(pos.cx, pos.cy - 5 * pos.scale, 1,
+                                                pos.cx, pos.cy - 5 * pos.scale, haloR);
+        grad.addColorStop(0, 'rgba(255, 200, 100, 0.4)');
+        grad.addColorStop(1, 'rgba(255, 200, 100, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(pos.cx - haloR, pos.cy - 30 * pos.scale, haloR * 2, 50 * pos.scale);
+      }
+
+      lastPainted.set(ref.trainId, { ref, pos });
     }
   }
 
@@ -251,13 +298,16 @@ export class TunelBase {
   _spawnTrain() {
     const side = this._lastTrack === 'right' ? 'left' : 'right';
     this._lastTrack = side;
-    // Tren de N vagones encadenados — cada vagón es un sub-tren con su
-    // propia z desplazada para que se vean en perspectiva uno detrás del
-    // otro. _drawTrainsOnRails ya itera todos los trenes y los pinta
-    // individualmente, así que un "tren" no es más que un grupo de N
-    // entradas en this.tracks[side].
+    // Tren de N vagones encadenados — cada vagón es una entrada con su
+    // propia z desplazada. Comparten un trainId común para que la
+    // limpieza por z no rompa el tren a la mitad (ver update()).
     const NUM_VAGONES = this.cfg.numVagones ?? 6;
-    const SEPARACION  = this.cfg.vagonSeparation ?? 50; // unidades de z
+    // Separación intermedia: suficiente para que los vagones se distingan
+    // unos de otros en perspectiva, pero unidos por el fuelle oscuro que
+    // _drawTrainsOnRails pinta entre cada par consecutivo.
+    const SEPARACION  = this.cfg.vagonSeparation ?? 32;
+    this._nextTrainId = (this._nextTrainId ?? 0) + 1;
+    const trainId = this._nextTrainId;
     for (let v = 0; v < NUM_VAGONES; v++) {
       this.tracks[side].push({
         x: 0,
@@ -266,6 +316,7 @@ export class TunelBase {
         w: this.cfg.trainW,
         h: this.cfg.trainH,
         side,
+        trainId,                   // todos los vagones del mismo tren
         vagon: v,                  // 0 = cabeza, >0 = vagones traseros
         isHead: v === 0,
       });
