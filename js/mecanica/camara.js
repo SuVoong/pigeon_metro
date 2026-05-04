@@ -82,6 +82,15 @@ export function resetCamera() {
 export const CAMERA_RANGE_X = 0.35;
 export const CAMERA_RANGE_Y = 0.45;
 
+// Desplazamiento vertical de la paloma respecto a w2sy(0) = canvas/2.
+// Sube a +0.18*H → la paloma reposa al ~68 % del canvas (más cerca de los
+// rieles y de la altura real del tren). Aplica tanto al render visual como
+// a la hitbox para que la colisión coincida con lo que se ve.
+export const PIGEON_VERTICAL_OFFSET_RATIO = 0.18;
+export function getPigeonVerticalOffset() {
+  return canvas.height * PIGEON_VERTICAL_OFFSET_RATIO;
+}
+
 /**
  * Área del MUNDO que la cámara puede llegar a ver, en coords del canvas.
  * Devuelve los bordes ampliados con el rango máximo del offset, más un

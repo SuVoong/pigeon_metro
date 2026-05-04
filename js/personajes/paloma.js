@@ -4,6 +4,7 @@ import { pigeon, STATE, canvas } from '../mecanica/estado.js';
 import { keys } from '../mecanica/input.js';
 import {
   w2sx, w2sy, camera, CAMERA_RANGE_X, CAMERA_RANGE_Y, getPigeonScreenOffset,
+  getPigeonVerticalOffset,
 } from '../mecanica/camara.js';
 
 const MAX_VELOCITY = 6;
@@ -114,7 +115,7 @@ export function drawPigeon(ctx) {
   // (pigeon.x, pigeon.y) = (0, 0) world.
   const drift = getPigeonScreenOffset();
   const sx = w2sx(pigeon.x) + drift.dx;
-  const sy = w2sy(pigeon.y) + drift.dy;
+  const sy = w2sy(pigeon.y) + drift.dy + getPigeonVerticalOffset();
 
   // ── PARPADEO durante invencibilidad (después del stun) ──
   // Solo cuando NO está en stun (stun = 0) e invincible > 0
