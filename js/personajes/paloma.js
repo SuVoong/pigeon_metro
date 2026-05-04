@@ -2,7 +2,9 @@
 
 import { pigeon, STATE, canvas } from '../mecanica/estado.js';
 import { keys } from '../mecanica/input.js';
-import { w2sx, w2sy, camera, CAMERA_RANGE_X, CAMERA_RANGE_Y } from '../mecanica/camara.js';
+import {
+  w2sx, w2sy, camera, CAMERA_RANGE_X, CAMERA_RANGE_Y, getPigeonScreenOffset,
+} from '../mecanica/camara.js';
 
 const MAX_VELOCITY = 6;
 const EASING       = 0.15;
@@ -106,8 +108,13 @@ export function updatePigeon(dt) {
 }
 
 export function drawPigeon(ctx) {
-  const sx = w2sx(pigeon.x);
-  const sy = w2sy(pigeon.y);
+  // Posición visual = centro fijo + drift por offset de cámara. El drift
+  // permite que la paloma "vuele" hasta el techo o pique a los rieles
+  // cuando el jugador mantiene Up/Down al máximo. La hitbox sigue en
+  // (pigeon.x, pigeon.y) = (0, 0) world.
+  const drift = getPigeonScreenOffset();
+  const sx = w2sx(pigeon.x) + drift.dx;
+  const sy = w2sy(pigeon.y) + drift.dy;
 
   // ── PARPADEO durante invencibilidad (después del stun) ──
   // Solo cuando NO está en stun (stun = 0) e invincible > 0
