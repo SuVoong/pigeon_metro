@@ -26,8 +26,11 @@ export function circleHitsBox(circle, box) {
   return dx * dx + dy * dy <= circle.r * circle.r;
 }
 
-// Hitbox cuadrada de la paloma cuando el preset no define un valor
-const PIGEON_HITBOX_DEFAULT = 36;
+// Hitbox cuadrada de la paloma cuando el preset no define un valor.
+// Reducida 25 % (36 → 27) en sintonía con SPRITE_SCALE 3 → 2.25 en
+// paloma.js / pidgey.js / angry_bird.js, para que la colisión coincida
+// con el sprite ahora más pequeño.
+const PIGEON_HITBOX_DEFAULT = 27;
 
 // ── Colisiones de gameplay ────────────────────────────────────────────────────
 export function checkCollisions() {

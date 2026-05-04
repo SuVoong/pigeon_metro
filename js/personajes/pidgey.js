@@ -8,7 +8,7 @@ import {
 
 const MAX_VELOCITY = 6;
 const EASING       = 0.15;
-const SPRITE_SCALE = 3;
+const SPRITE_SCALE = 2.25;  // reducido 25 % desde 3 para coherencia con paloma
 
 // Paleta
 const PAL_PIDGEY = {

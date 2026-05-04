@@ -18,10 +18,12 @@ const _vpX        = () => canvas.width  / 2;
 // misma posición vertical de la pantalla.
 const _defaultVpY        = () => canvas.height * (ENV_CFG?.vanishingPointY ?? 0.42);
 // Arco MUY APRETADO — el techo curva sobre los trenes dentro del canvas,
-// sin dejar el "V abierto" hacia las esquinas superiores. archCY bajo
-// (offset grande) acerca la base de las paredes a la altura del tren.
-const _defaultArchOffset = () => canvas.height * 0.40;
-const _defaultMaxR       = () => canvas.height * 0.40;
+// sin dejar el "V abierto" hacia las esquinas superiores. Sección reducida
+// otro −60 % respecto a la versión 0.30 (0.40 → 0.30 → 0.12) — la "boca"
+// del túnel queda muy estrecha, casi a la altura del tren al fondo.
+// archOffset = maxR mantiene la cresta del arco exactamente en vpY.
+const _defaultArchOffset = () => canvas.height * 0.12;
+const _defaultMaxR       = () => canvas.height * 0.12;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRY POINT
@@ -117,12 +119,13 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   // ── Coeficientes de geometría del arco ─────────────────────────────────
   // TOP_RATIO controla DÓNDE convergen las paredes cerca del VP. Con 0.06
   // el túnel deja un "V" abierto enorme entre las paredes y la parte
-  // superior del canvas. Subiéndolo a 0.20 las paredes se juntan más
-  // afuera del VP, dejando MENOS espacio interior — el techo se "cierra".
-  const TOP_RATIO   = 0.20;       // antes 0.06
+  // superior del canvas. Subido a 0.28 las paredes se juntan más afuera
+  // del VP, dejando MENOS espacio interior — el techo se "cierra" aún más
+  // tras la reducción de maxR (sección ~25% más estrecha).
+  const TOP_RATIO   = 0.28;       // antes 0.20
   const FLOOR_RATIO = 0.18;
   const CTRL_RATIO  = 0.60;
-  const TOP_DIP     = 0.30;       // antes 0.10 — dip del techo, debe ser
+  const TOP_DIP     = 0.42;       // antes 0.30 — dip del techo, debe ser
                                   // mayor que TOP_RATIO para que la curva
                                   // baje al centro
 
@@ -329,10 +332,12 @@ function _drawFloor(ctx, vpX, archCY, cw, ch) {
 // porcentajes del ancho del canvas que usa estacion_base.js (mantén ambos
 // sincronizados si tocas estos números).
 //
-//   - Vía exterior  ±32% W   (BASE)   → ±1.8% W   (VP)
-//   - Vía interior  ± 3% W   (BASE)   → ±1.5% W   (VP)
-const TRACK_OUTER_RATIO_BASE = 0.32;
-const TRACK_INNER_RATIO_BASE = 0.03;
+//   - Vía exterior  ±42 % W   (BASE)   → ±1.8 % W   (VP)
+//   - Vía interior  ± 2 % W   (BASE)   → ±1.5 % W   (VP)
+// Ensanchado desde 32/3 → 42/2 para que ambos trenes ocupen ~76 % del
+// ancho del canvas en la base (sintonizado con TRAIN_TO_TRACK_RATIO 0.95).
+const TRACK_OUTER_RATIO_BASE = 0.42;
+const TRACK_INNER_RATIO_BASE = 0.02;
 const TRACK_OUTER_RATIO_VP   = 0.018;
 const TRACK_INNER_RATIO_VP   = 0.015;
 

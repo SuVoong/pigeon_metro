@@ -26,8 +26,8 @@ const DEFAULT_CONFIG = {
   // (×100 para que el editor muestre números legibles tipo 32, 2.5, etc.).
   // Esto produce un trapecio fuerte: las vías ocupan ~64% del ancho en la
   // base (cerca de la cámara) y se cierran al ~3% en el punto de fuga.
-  trackOuterOffset:   32,      // % de W desde el centro al carril exterior (BASE)
-  trackInnerOffset:   3,       // % de W al carril interior (BASE) — gap central pequeño
+  trackOuterOffset:   42,      // % de W desde el centro al carril exterior (BASE)
+  trackInnerOffset:   2,       // % de W al carril interior (BASE) — gap central pequeño
   trackOuterOffsetVP: 1.8,     // % de W al carril exterior (VP)
   trackInnerOffsetVP: 1.5,     // % de W al carril interior (VP)
   // Borde del andén (donde el suelo gris se corta y empieza el foso de la vía)
@@ -1044,7 +1044,8 @@ export class EstacionBase {
     const SPRITE_W = 48;
     const SPRITE_H = 40;
     // Proporción del ancho de vía que el tren ocupa a la base.
-    const TRAIN_TO_TRACK_RATIO = 0.85;
+    // 0.95 (antes 0.85) → trenes más anchos, ~55 % del canvas entre ambos.
+    const TRAIN_TO_TRACK_RATIO = 0.95;
 
     this._trains.forEach((train) => {
       const t = train.progress;        // 0 = lejos (VP), 1 = cerca (base)
@@ -1067,7 +1068,7 @@ export class EstacionBase {
       const cx = (1 - t) * cVP + t * cBase;
       const trackWidthHere = (1 - t) * wVP + t * wBase;
 
-      // Escala de tren: el tren ocupa ~85% del ancho de vía a esa profundidad.
+      // Escala de tren: el tren ocupa ~95 % del ancho de vía a esa profundidad.
       const scale = Math.max(0.05, (trackWidthHere * TRAIN_TO_TRACK_RATIO) / SPRITE_W);
 
       // Posición vertical: la BASE del sprite se alinea con la traviesa

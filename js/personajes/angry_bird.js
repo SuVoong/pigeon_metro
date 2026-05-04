@@ -8,7 +8,7 @@ import {
 
 const MAX_VELOCITY = 6;
 const EASING       = 0.15;
-const SPRITE_SCALE = 3;   // 32px × 3 = 96px en pantalla
+const SPRITE_SCALE = 2.25;  // 32px × 2.25 = 72px (reducido 25 % desde 3)
 
 // Paleta de Red
 const PAL_RED = {

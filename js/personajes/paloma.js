@@ -9,7 +9,7 @@ import {
 
 const MAX_VELOCITY = 6;
 const EASING       = 0.15;
-const SPRITE_SCALE = 3;   // 32px diseño × 3 = 96px en pantalla
+const SPRITE_SCALE = 2.25;  // 32px diseño × 2.25 = 72px (reducido 25 % desde 3)
 
 // Paleta
 const PAL_PALOMA = {
