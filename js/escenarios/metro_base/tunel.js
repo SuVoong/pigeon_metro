@@ -17,8 +17,11 @@ const _vpX        = () => canvas.width  / 2;
 // túnel ↔ estación mantiene el punto de fuga (y por tanto las vías) en la
 // misma posición vertical de la pantalla.
 const _defaultVpY        = () => canvas.height * (ENV_CFG?.vanishingPointY ?? 0.42);
-const _defaultArchOffset = () => canvas.height * 0.20;
-const _defaultMaxR       = () => canvas.height * 0.70;
+// Arco MUY APRETADO — el techo curva sobre los trenes dentro del canvas,
+// sin dejar el "V abierto" hacia las esquinas superiores. archCY bajo
+// (offset grande) acerca la base de las paredes a la altura del tren.
+const _defaultArchOffset = () => canvas.height * 0.40;
+const _defaultMaxR       = () => canvas.height * 0.40;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRY POINT
@@ -111,6 +114,18 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   const wallColorMid  = '#22242a';
   const wallColorLight = '#2e3038';
 
+  // ── Coeficientes de geometría del arco ─────────────────────────────────
+  // TOP_RATIO controla DÓNDE convergen las paredes cerca del VP. Con 0.06
+  // el túnel deja un "V" abierto enorme entre las paredes y la parte
+  // superior del canvas. Subiéndolo a 0.20 las paredes se juntan más
+  // afuera del VP, dejando MENOS espacio interior — el techo se "cierra".
+  const TOP_RATIO   = 0.20;       // antes 0.06
+  const FLOOR_RATIO = 0.18;
+  const CTRL_RATIO  = 0.60;
+  const TOP_DIP     = 0.30;       // antes 0.10 — dip del techo, debe ser
+                                  // mayor que TOP_RATIO para que la curva
+                                  // baje al centro
+
   // ── Pared IZQUIERDA ──────────────────────────────────────────────────────
   ctx.save();
   ctx.beginPath();
@@ -119,11 +134,11 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   // Sube a lo largo del borde izquierdo hasta el suelo
   ctx.lineTo(0, ch);
   // Va hacia el punto donde el arco toca el suelo (izquierda)
-  ctx.lineTo(vpX - maxR * 0.18, archCY);
+  ctx.lineTo(vpX - maxR * FLOOR_RATIO, archCY);
   // Curva bezier hacia el punto de fuga (simula la curvatura del arco)
   ctx.quadraticCurveTo(
-    vpX - maxR * 0.60, vpY + (archCY - vpY) * 0.4,
-    vpX - maxR * 0.06, vpY - maxR * 0.06,
+    vpX - maxR * CTRL_RATIO, vpY + (archCY - vpY) * 0.4,
+    vpX - maxR * TOP_RATIO, vpY - maxR * TOP_RATIO,
   );
   // Esquina superior izquierda del canvas
   ctx.lineTo(0, 0);
@@ -138,10 +153,10 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
 
   // Borde de la pared izquierda (línea de junta arco–pared)
   ctx.beginPath();
-  ctx.moveTo(vpX - maxR * 0.06, vpY - maxR * 0.06);
+  ctx.moveTo(vpX - maxR * TOP_RATIO, vpY - maxR * TOP_RATIO);
   ctx.quadraticCurveTo(
-    vpX - maxR * 0.60, vpY + (archCY - vpY) * 0.4,
-    vpX - maxR * 0.18, archCY,
+    vpX - maxR * CTRL_RATIO, vpY + (archCY - vpY) * 0.4,
+    vpX - maxR * FLOOR_RATIO, archCY,
   );
   ctx.strokeStyle = 'rgba(0,0,0,0.5)';
   ctx.lineWidth   = 3;
@@ -153,10 +168,10 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   ctx.beginPath();
   ctx.moveTo(cw, 0);
   ctx.lineTo(cw, ch);
-  ctx.lineTo(vpX + maxR * 0.18, archCY);
+  ctx.lineTo(vpX + maxR * FLOOR_RATIO, archCY);
   ctx.quadraticCurveTo(
-    vpX + maxR * 0.60, vpY + (archCY - vpY) * 0.4,
-    vpX + maxR * 0.06, vpY - maxR * 0.06,
+    vpX + maxR * CTRL_RATIO, vpY + (archCY - vpY) * 0.4,
+    vpX + maxR * TOP_RATIO, vpY - maxR * TOP_RATIO,
   );
   ctx.lineTo(cw, 0);
   ctx.closePath();
@@ -169,10 +184,10 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   ctx.fill();
 
   ctx.beginPath();
-  ctx.moveTo(vpX + maxR * 0.06, vpY - maxR * 0.06);
+  ctx.moveTo(vpX + maxR * TOP_RATIO, vpY - maxR * TOP_RATIO);
   ctx.quadraticCurveTo(
-    vpX + maxR * 0.60, vpY + (archCY - vpY) * 0.4,
-    vpX + maxR * 0.18, archCY,
+    vpX + maxR * CTRL_RATIO, vpY + (archCY - vpY) * 0.4,
+    vpX + maxR * FLOOR_RATIO, archCY,
   );
   ctx.strokeStyle = 'rgba(0,0,0,0.5)';
   ctx.lineWidth   = 3;
@@ -184,8 +199,8 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.lineTo(cw, 0);
-  ctx.lineTo(vpX + maxR * 0.06, vpY - maxR * 0.06);
-  ctx.quadraticCurveTo(vpX, vpY - maxR * 0.10, vpX - maxR * 0.06, vpY - maxR * 0.06);
+  ctx.lineTo(vpX + maxR * TOP_RATIO, vpY - maxR * TOP_RATIO);
+  ctx.quadraticCurveTo(vpX, vpY - maxR * TOP_DIP, vpX - maxR * TOP_RATIO, vpY - maxR * TOP_RATIO);
   ctx.closePath();
 
   const tg = ctx.createLinearGradient(0, 0, 0, vpY);
