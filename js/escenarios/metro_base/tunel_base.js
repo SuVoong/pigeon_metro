@@ -8,9 +8,13 @@
 // Reusa el render fotorrealista existente (drawTunel de ./tunel.js) para
 // preservar fidelidad. La novedad es la encapsulación como clase con
 // duración y estado limpio.
+//
+// Modelo del tren: una sola entrada por convoy con `zHead` (frente) y
+// `length` (extensión en Z). La pieza se pinta como UNA forma extruida
+// (techo + costado + cara frontal), no como N sprites encadenados.
 
 import { canvas, STATE }      from '../../mecanica/estado.js';
-import { w2sx, w2sy, perspective, camera, CAMERA_RANGE_X, CAMERA_RANGE_Y } from '../../mecanica/camara.js';
+import { w2sx, w2sy, perspective, getCameraVpY } from '../../mecanica/camara.js';
 import { drawTunel }          from './tunel.js';
 import { OBSTACULOS }         from '../../elementos/obstaculos.js';
 import { getTrenVariante }    from '../../elementos/tren_config.js';
@@ -34,9 +38,10 @@ const DEFAULT_CONFIG = {
   bgColor:            '#050508',
   lightColor:         '#ffeebb',
   // ── Geometría (todas son fracciones 0–1 del canvas) ──────────────────────
-  // null → drawTunel usa los defaults históricos (vp=0.47, radio=0.70,
-  // offset arco=0.20). El editor de escenarios puede sobrescribirlas.
-  vanishingPointY:       null,
+  // VP arriba (0.30) → MENOS techo, más canvas abajo para trenes y vías.
+  // null usaría los defaults históricos de drawTunel — aquí los fijamos para
+  // forzar la composición "tren bajo, techo apretado" pedida.
+  vanishingPointY:       0.30,
   archRadiusRatio:       null,    // ancho del túnel
   archCenterOffsetRatio: null,    // cuánto suelo se ve
   // ── Gameplay ──────────────────────────────────────────────────────────────
@@ -56,6 +61,8 @@ const SPAWN_Z = 800;
 export class TunelBase {
   constructor(configOverride = {}) {
     this.cfg       = { ...DEFAULT_CONFIG, ...configOverride };
+    // Cada elemento de tracks.{left,right} es un TREN COMPLETO:
+    //   { trainId, side, zHead, longVag, numVag, length }
     this.tracks    = { left: [], right: [] };
     this.obstacles = [];
     this._frame    = 0;
@@ -63,6 +70,7 @@ export class TunelBase {
     this._obstacleTimer = 0;
     this._lastTrack     = 'right';
     this._done     = false;
+    this._nextTrainId = 0;
   }
 
   get isDone() { return this._done; }
@@ -77,6 +85,7 @@ export class TunelBase {
     this._obstacleTimer = 0;
     this._lastTrack     = 'right';
     this._done          = false;
+    this._nextTrainId   = 0;
   }
 
   /**
@@ -95,22 +104,13 @@ export class TunelBase {
 
     const speed = this.cfg.speed;
 
-    // Avanzar Z de trenes y limpiar vagones pasados.
-    // Cada vagón pertenece a un "tren" identificado por trainId. Solo
-    // eliminamos un vagón si TODOS los vagones de su tren ya pasaron el
-    // umbral — así la cabeza no se borra antes que la cola y el tren
-    // entero permanece visible al cruzar el borde de pantalla.
+    // Avanzar zHead de cada tren y limpiar los que ya han salido.
+    // El tren ocupa [zHead .. zHead + length]. Cuando incluso la cola
+    // (zTail) ha cruzado el umbral negativo, el convoy entero ha pasado.
     for (const track of [this.tracks.left, this.tracks.right]) {
-      for (const t of track) t.z -= speed * dt * 4;
-      // Construir map trainId → maxZ del grupo
-      const maxZByTrain = new Map();
-      for (const t of track) {
-        const cur = maxZByTrain.get(t.trainId) ?? -Infinity;
-        if (t.z > cur) maxZByTrain.set(t.trainId, t.z);
-      }
+      for (const t of track) t.zHead -= speed * dt * 4;
       for (let i = track.length - 1; i >= 0; i--) {
-        const groupMax = maxZByTrain.get(track[i].trainId);
-        if (groupMax !== undefined && groupMax < -100) track.splice(i, 1);
+        if (track[i].zHead + track[i].length < -100) track.splice(i, 1);
       }
     }
 
@@ -152,201 +152,207 @@ export class TunelBase {
 
     const variante   = getTrenVariante(this.cfg.trainLineVariant);
     const trainColor = variante.stripeColor ?? '#F39200';
-    this._drawTrainsOnRails(ctx, { stripeColor: trainColor });
+    this._drawTrainsExtruded(ctx, { stripeColor: trainColor });
   }
 
   /**
-   * Dibuja los trenes pegados al CENTRO de cada vía a su profundidad. Usa
-   * las mismas matemáticas que EstacionBase._drawTrains: el sprite se
-   * escala para ocupar ~85% del ancho de la vía y la BASE del sprite cae
-   * sobre la traviesa correspondiente. De este modo la transición túnel ↔
-   * estación es visualmente continua.
+   * Pinta cada tren como UNA pieza extruida (techo + costado + cara frontal).
+   * Las divisiones de vagón se sugieren con marcas transversales en el techo
+   * y puertas dobles a lo largo del costado — no son sprites separados.
    */
-  _drawTrainsOnRails(ctx, variant) {
-    // Pintamos los más lejanos primero para que los cercanos los tapen.
-    // Sólo el vagón con isHead=true recibe halo de faros — los traseros
-    // van con la cara frontal pero sin luces (parecen vagones intermedios).
-    // Entre dos vagones consecutivos del MISMO trainId pintamos un fuelle
-    // (trapecio oscuro) que tapa el hueco entre ellos.
-    const all = [];
-    for (const t of [...this.tracks.left, ...this.tracks.right]) {
-      if (t.z < -50 || t.z > 900) continue;
-      const pos = this._getTrainScreenPos(t);
-      if (!pos) continue;
-      all.push({ ref: t, pos });
-    }
-    all.sort((a, b) => b.ref.z - a.ref.z);
+  _drawTrainsExtruded(ctx, variant) {
+    const all = [...this.tracks.left, ...this.tracks.right];
+    // Más lejos primero para que los cercanos los tapen.
+    all.sort((a, b) => b.zHead - a.zHead);
 
-    // Map trainId → último vagón pintado (de mayor z), para encadenar
-    // fuelles cuando el vagón actual es el siguiente del tren.
-    const lastPainted = new Map();
+    for (const train of all) {
+      // Recortar SOLO si todo el convoy está fuera de rango. NO clampar la
+      // cabeza al pasar la cámara: la cara frontal debe seguir su z natural
+      // y salir por debajo del canvas, dejando ver el costado/techo del
+      // resto del tren mientras "atraviesa" la cámara.
+      if (train.zHead > 1100) continue;                          // aún por aparecer
+      if (train.zHead + train.length < -100) continue;           // ya pasó del todo
 
-    for (const { ref, pos } of all) {
-      // 1. Fuelle al vagón previamente pintado del mismo tren
-      const prev = lastPainted.get(ref.trainId);
-      if (prev && prev.ref.vagon === ref.vagon - 1) {
-        // prev es vagón anterior (z mayor → arriba/pequeño); ref es vagón
-        // actual (z menor → abajo/grande). El fuelle es un trapecio que
-        // conecta el centro de prev con el centro de ref, con anchos
-        // proporcionales a sus escalas.
-        const wPrev = 28 * prev.pos.scale;
-        const wCur  = 28 * pos.scale;
-        const hPrev = 18 * prev.pos.scale;
-        const hCur  = 18 * pos.scale;
-        ctx.fillStyle = '#0a0a14';
-        ctx.beginPath();
-        ctx.moveTo(prev.pos.cx - wPrev, prev.pos.cy + hPrev * 0.2);
-        ctx.lineTo(prev.pos.cx + wPrev, prev.pos.cy + hPrev * 0.2);
-        ctx.lineTo(pos.cx       + wCur, pos.cy       - hCur  * 0.2);
-        ctx.lineTo(pos.cx       - wCur, pos.cy       - hCur  * 0.2);
-        ctx.closePath();
-        ctx.fill();
+      const zTail = train.zHead + train.length;
+      const headPos = this._getTrainPosAtZ(train.zHead, train.side);
+      const tailPos = this._getTrainPosAtZ(zTail, train.side);
+      if (!headPos || !tailPos) continue;
+
+      const halfW_head = 24 * headPos.scale;
+      const halfH_head = 20 * headPos.scale;
+      const halfW_tail = 24 * tailPos.scale;
+      const halfH_tail = 20 * tailPos.scale;
+
+      // Costado VISIBLE: el lado del tren que mira hacia el centro de la
+      // pantalla. Tren en vía DERECHA → su flanco izquierdo es el visible.
+      const sideSign = train.side === 'right' ? -1 : 1;
+
+      const headLeftX  = headPos.cx + sideSign * halfW_head;   // borde visible
+      const headRightX = headPos.cx - sideSign * halfW_head;   // borde oculto (tras la cabina)
+      const headTopY   = headPos.cy - halfH_head;
+      const headBotY   = headPos.cy + halfH_head;
+      const tailLeftX  = tailPos.cx + sideSign * halfW_tail;
+      const tailRightX = tailPos.cx - sideSign * halfW_tail;
+      const tailTopY   = tailPos.cy - halfH_tail;
+      const tailBotY   = tailPos.cy + halfH_tail;
+
+      const lineColor = variant?.stripeColor ?? '#F39200';
+
+      // ── 1. TECHO (top face) ─────────────────────────────────────────────
+      // Trapecio entre los 4 vértices superiores. Degradado a lo largo
+      // (claro al frente → oscuro al fondo) sugiere sombra del túnel.
+      const roofGrad = ctx.createLinearGradient(headPos.cx, headTopY, tailPos.cx, tailTopY);
+      roofGrad.addColorStop(0, '#C8C8D0');
+      roofGrad.addColorStop(1, '#6E6E78');
+      ctx.fillStyle = roofGrad;
+      ctx.beginPath();
+      ctx.moveTo(headLeftX,  headTopY);
+      ctx.lineTo(headRightX, headTopY);
+      ctx.lineTo(tailRightX, tailTopY);
+      ctx.lineTo(tailLeftX,  tailTopY);
+      ctx.closePath(); ctx.fill();
+
+      // Línea longitudinal del techo (canalón / pantógrafo)
+      ctx.strokeStyle = 'rgba(40,40,50,0.55)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(headPos.cx, headTopY + halfH_head * 0.04);
+      ctx.lineTo(tailPos.cx, tailTopY + halfH_tail * 0.04);
+      ctx.stroke();
+
+      // Junturas transversales entre vagones
+      for (let v = 1; v < train.numVag; v++) {
+        const t  = v / train.numVag;
+        const xL = headLeftX  + (tailLeftX  - headLeftX)  * t;
+        const xR = headRightX + (tailRightX - headRightX) * t;
+        const yT = headTopY   + (tailTopY   - headTopY)   * t;
+        ctx.strokeStyle = 'rgba(30,30,40,0.45)';
+        ctx.beginPath(); ctx.moveTo(xL, yT); ctx.lineTo(xR, yT); ctx.stroke();
       }
 
-      // 2a. CARA LATERAL — visible cuando la cámara se desplaza al lado.
-      //     Si offsetX > 0 (paloma a la derecha), vemos el lateral
-      //     IZQUIERDO del tren (pegado al lado izquierdo del frontal).
-      //     Si offsetX < 0, lateral DERECHO. Ancho proporcional a |nx|.
-      this._drawTrainSide(ctx, pos, variant);
+      // ── 2. COSTADO LATERAL (panel blanco) ───────────────────────────────
+      ctx.fillStyle = '#E8E8EE';
+      ctx.beginPath();
+      ctx.moveTo(headLeftX, headTopY);
+      ctx.lineTo(tailLeftX, tailTopY);
+      ctx.lineTo(tailLeftX, tailBotY);
+      ctx.lineTo(headLeftX, headBotY);
+      ctx.closePath(); ctx.fill();
 
-      // 2b. CARA SUPERIOR/INFERIOR — techo visible al subir, bajos al bajar.
-      this._drawTrainTopBottom(ctx, pos, variant);
+      // Sombra superior del lateral (donde cae el techo sobre la chapa)
+      const roofShadowH_head = halfH_head * 0.18;
+      const roofShadowH_tail = halfH_tail * 0.18;
+      ctx.fillStyle = '#BBBBC2';
+      ctx.beginPath();
+      ctx.moveTo(headLeftX, headTopY);
+      ctx.lineTo(tailLeftX, tailTopY);
+      ctx.lineTo(tailLeftX, tailTopY + roofShadowH_tail);
+      ctx.lineTo(headLeftX, headTopY + roofShadowH_head);
+      ctx.closePath(); ctx.fill();
 
-      // 2c. Pintar la cara FRONTAL del vagón (encima de las laterales)
-      drawTrenFrontal(ctx, pos.cx, pos.cy, pos.scale, variant, undefined);
+      // Banda corrida de ventanas
+      const winT_head = halfH_head * 0.30, winB_head = halfH_head * 0.05;
+      const winT_tail = halfH_tail * 0.30, winB_tail = halfH_tail * 0.05;
+      ctx.fillStyle = '#1F3344';
+      ctx.beginPath();
+      ctx.moveTo(headLeftX, headPos.cy - winT_head);
+      ctx.lineTo(tailLeftX, tailPos.cy - winT_tail);
+      ctx.lineTo(tailLeftX, tailPos.cy - winB_tail);
+      ctx.lineTo(headLeftX, headPos.cy - winB_head);
+      ctx.closePath(); ctx.fill();
 
-      // 3. Halo de faros sólo para la cabeza del tren
-      if (ref.isHead) {
-        const haloR = 25 * pos.scale;
-        const grad  = ctx.createRadialGradient(pos.cx, pos.cy - 5 * pos.scale, 1,
-                                                pos.cx, pos.cy - 5 * pos.scale, haloR);
-        grad.addColorStop(0, 'rgba(255, 200, 100, 0.4)');
-        grad.addColorStop(1, 'rgba(255, 200, 100, 0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(pos.cx - haloR, pos.cy - 30 * pos.scale, haloR * 2, 50 * pos.scale);
+      // Subdivisiones (marcos de vagón) y puertas dobles dentro de cada vagón
+      const lerp = (a, b, t) => a + (b - a) * t;
+      for (let v = 0; v <= train.numVag; v++) {
+        const t  = v / train.numVag;
+        const x1 = lerp(headLeftX, tailLeftX, t);
+        const yT = lerp(headTopY,  tailTopY,  t);
+        const yB = lerp(headBotY,  tailBotY,  t);
+        ctx.strokeStyle = 'rgba(80,80,90,0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x1, yT); ctx.lineTo(x1, yB); ctx.stroke();
+      }
+      for (let v = 0; v < train.numVag; v++) {
+        for (const f of [v / train.numVag + 1 / (3 * train.numVag),
+                          v / train.numVag + 2 / (3 * train.numVag)]) {
+          const xC      = lerp(headLeftX, tailLeftX, f);
+          const yT      = lerp(headPos.cy + halfH_head * 0.05,
+                                tailPos.cy + halfH_tail * 0.05, f);
+          const yB      = lerp(headBotY - halfH_head * 0.30,
+                                tailBotY - halfH_tail * 0.30, f);
+          const xL_door = lerp(headLeftX, tailLeftX, f - 0.005);
+          const xR_door = lerp(headLeftX, tailLeftX, f + 0.005);
+          ctx.fillStyle = '#888';
+          ctx.beginPath();
+          ctx.moveTo(xL_door, yT); ctx.lineTo(xR_door, yT);
+          ctx.lineTo(xR_door, yB); ctx.lineTo(xL_door, yB);
+          ctx.closePath(); ctx.fill();
+        }
       }
 
-      lastPainted.set(ref.trainId, { ref, pos });
+      // Franja de color de línea (continua a lo largo del costado)
+      const stripeT_head = halfH_head * 0.40, stripeB_head = halfH_head * 0.65;
+      const stripeT_tail = halfH_tail * 0.40, stripeB_tail = halfH_tail * 0.65;
+      ctx.fillStyle = lineColor;
+      ctx.beginPath();
+      ctx.moveTo(headLeftX, headPos.cy + stripeT_head);
+      ctx.lineTo(tailLeftX, tailPos.cy + stripeT_tail);
+      ctx.lineTo(tailLeftX, tailPos.cy + stripeB_tail);
+      ctx.lineTo(headLeftX, headPos.cy + stripeB_head);
+      ctx.closePath(); ctx.fill();
+
+      // Chasis (base oscura)
+      ctx.fillStyle = '#222233';
+      ctx.beginPath();
+      ctx.moveTo(headLeftX, headPos.cy + stripeB_head);
+      ctx.lineTo(tailLeftX, tailPos.cy + stripeB_tail);
+      ctx.lineTo(tailLeftX, tailBotY);
+      ctx.lineTo(headLeftX, headBotY);
+      ctx.closePath(); ctx.fill();
+
+      // ── 3. CARA FRONTAL (cabina) sólo en la cabeza ─────────────────────
+      // Se pinta encima del costado para que la arista frontal quede limpia.
+      drawTrenFrontal(ctx, headPos.cx, headPos.cy, headPos.scale, variant, undefined);
+
+      // ── 4. Halo de faros ────────────────────────────────────────────────
+      const haloR = 25 * headPos.scale;
+      const grad  = ctx.createRadialGradient(headPos.cx, headPos.cy - 5 * headPos.scale, 1,
+                                              headPos.cx, headPos.cy - 5 * headPos.scale, haloR);
+      grad.addColorStop(0, 'rgba(255, 200, 100, 0.4)');
+      grad.addColorStop(1, 'rgba(255, 200, 100, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(headPos.cx - haloR, headPos.cy - 30 * headPos.scale, haloR * 2, 50 * headPos.scale);
     }
-  }
-
-  // ── CARAS 3D del tren — laterales y techo ─────────────────────────────────
-  // Cuando la cámara se desplaza, vemos el costado/techo del vagón. La cara
-  // se pinta como un trapecio del color del tren (con líneas para sugerir
-  // ventanas) pegado al sprite frontal por el lado opuesto al desplazamiento.
-
-  _drawTrainSide(ctx, pos, variant) {
-    const maxX = canvas.width * CAMERA_RANGE_X;
-    if (maxX <= 0) return;
-    const nx = camera.offsetX / maxX;       // -1..1
-    if (Math.abs(nx) < 0.05) return;        // umbral muerto, evita parpadeo
-
-    // Ancho de la cara frontal en pantalla a esta profundidad (~80 px base)
-    const frontHalfW = 28 * pos.scale;
-    const frontHalfH = 18 * pos.scale;
-    // Profundidad visible del lateral en pantalla — proporcional a |nx|
-    // y al ancho del frente. Al máximo offset, el lateral es ≈80% del frente.
-    const sideDepth = Math.abs(nx) * frontHalfW * 1.6;
-
-    // Lado opuesto al desplazamiento de la cámara
-    const sign = nx > 0 ? -1 : 1;            // -1 = lateral izquierdo, +1 = derecho
-    const xNear = pos.cx + sign * frontHalfW; // arista del frente
-    const xFar  = xNear  + sign * sideDepth;  // arista trasera del lateral
-
-    const yTop = pos.cy - frontHalfH;
-    const yBot = pos.cy + frontHalfH;
-
-    // Cuerpo del lateral (claro)
-    ctx.fillStyle = '#D8D8E0';
-    ctx.beginPath();
-    ctx.moveTo(xNear, yTop);
-    ctx.lineTo(xFar,  yTop + frontHalfH * 0.15);
-    ctx.lineTo(xFar,  yBot - frontHalfH * 0.15);
-    ctx.lineTo(xNear, yBot);
-    ctx.closePath();
-    ctx.fill();
-
-    // Franja de color de línea (banda longitudinal)
-    const stripeColor = variant?.stripeColor ?? '#1A3A8A';
-    ctx.fillStyle = stripeColor;
-    const stripeYTop = pos.cy + frontHalfH * 0.15;
-    const stripeYBot = pos.cy + frontHalfH * 0.45;
-    ctx.beginPath();
-    ctx.moveTo(xNear, stripeYTop);
-    ctx.lineTo(xFar,  stripeYTop + frontHalfH * 0.05);
-    ctx.lineTo(xFar,  stripeYBot - frontHalfH * 0.05);
-    ctx.lineTo(xNear, stripeYBot);
-    ctx.closePath();
-    ctx.fill();
-
-    // Ventanas (3 verticales oscuras) — solo si hay sitio
-    if (Math.abs(sideDepth) > 4) {
-      ctx.fillStyle = '#1A2E3A';
-      const winYTop = pos.cy - frontHalfH * 0.55;
-      const winYBot = pos.cy - frontHalfH * 0.10;
-      for (let i = 1; i <= 3; i++) {
-        const t = i / 4;            // 0.25, 0.5, 0.75
-        const wx = xNear + sign * sideDepth * t;
-        const ww = Math.max(1, Math.abs(sideDepth) * 0.12);
-        ctx.fillRect(wx - ww / 2, winYTop, ww, winYBot - winYTop);
-      }
-    }
-  }
-
-  _drawTrainTopBottom(ctx, pos, variant) {
-    const maxY = canvas.height * CAMERA_RANGE_Y;
-    if (maxY <= 0) return;
-    const ny = camera.offsetY / maxY;
-    if (Math.abs(ny) < 0.05) return;
-
-    const frontHalfW = 28 * pos.scale;
-    const frontHalfH = 18 * pos.scale;
-    // ny > 0 (paloma abajo) → vemos los BAJOS del tren
-    // ny < 0 (paloma arriba) → vemos el TECHO
-    const isTop = ny < 0;
-    const depth = Math.abs(ny) * frontHalfH * 1.5;
-
-    const xLeft  = pos.cx - frontHalfW;
-    const xRight = pos.cx + frontHalfW;
-    const yEdge  = isTop ? pos.cy - frontHalfH : pos.cy + frontHalfH;
-    const yFar   = isTop ? yEdge - depth        : yEdge + depth;
-    // Inset horizontal para sugerir perspectiva (techo más estrecho atrás)
-    const inset  = frontHalfW * Math.abs(ny) * 0.15;
-
-    ctx.fillStyle = isTop ? '#A0A0A8' : '#3A3A48';   // techo gris claro / bajos oscuros
-    ctx.beginPath();
-    ctx.moveTo(xLeft,           yEdge);
-    ctx.lineTo(xRight,          yEdge);
-    ctx.lineTo(xRight - inset,  yFar);
-    ctx.lineTo(xLeft  + inset,  yFar);
-    ctx.closePath();
-    ctx.fill();
   }
 
   /**
-   * Calcula la posición de pantalla y escala de un tren basándose en su z
-   * y en el lado de la vía. El tren se posiciona en el CENTRO de la vía a
-   * esa profundidad (interpolación trapezoidal), no por proyección
-   * perspectiva pura — esto garantiza alineación exacta con los rieles.
+   * Calcula la posición de pantalla y escala de un punto del tren a una
+   * profundidad z y en un lado de vía. El punto se sitúa en el CENTRO de la
+   * vía a esa profundidad (interpolación trapezoidal), igual que en el
+   * sistema anterior — así el tren queda alineado con los rieles.
    *
-   * Devuelve { cx, cy, scale } o null si el tren está fuera de rango.
+   * Devuelve { cx, cy, scale } o null si está totalmente fuera de rango.
    */
-  _getTrainScreenPos(train) {
-    if (train.z < -50 || train.z > 900) return null;
+  _getTrainPosAtZ(z, side) {
+    // Nota: NO se descarta por z negativa. Cuando la cabeza atraviesa la
+    // cámara (z < 0) seguimos proyectando para que el costado/techo del
+    // tren continúen mostrándose mientras la cara frontal sale por abajo.
+    if (z > 1200) return null;
 
     const cw   = canvas.width;
     const ch   = canvas.height;
     const vpX  = cw / 2;
-    const vpY  = ch * (this.cfg.vanishingPointY ?? TUNEL_VPY_RATIO);
+    // VP vertical AJUSTADO por camera.offsetY — igual que los rieles
+    // (tunel.js _drawRails). Sin esto, al subir/bajar la paloma los rieles
+    // se inclinan pero el tren no, y queda desalineado.
+    const vpY  = getCameraVpY(ch * (this.cfg.vanishingPointY ?? TUNEL_VPY_RATIO));
     const SPAWN = SPAWN_Z;
 
-    // Progress 0 = lejos (VP), 1 = cerca (base). Lo derivamos de z para que
-    // los cálculos coincidan con la curva de scroll del túnel.
-    const prog = Math.max(-0.05, Math.min(1.5, 1 - train.z / SPAWN));
+    // Permite prog > 1 para que la cabeza siga bajando por debajo del canvas
+    // (atravesando la cámara) en vez de quedarse pegada al borde inferior.
+    const prog = Math.max(-0.10, Math.min(2.0, 1 - z / SPAWN));
 
-    // Centro de la vía y ancho a esa profundidad (interpolación lineal entre
-    // base y VP — coincide con _drawRails de tunel.js).
-    const sign = train.side === 'left' ? -1 : 1;
+    const sign = side === 'left' ? -1 : 1;
     const centerBase = vpX + sign * cw * (TRACK_OUTER_RATIO_BASE + TRACK_INNER_RATIO_BASE) / 2;
     const centerVP   = vpX + sign * cw * (TRACK_OUTER_RATIO_VP   + TRACK_INNER_RATIO_VP)   / 2;
     const widthBase  = cw * (TRACK_OUTER_RATIO_BASE - TRACK_INNER_RATIO_BASE);
@@ -355,12 +361,10 @@ export class TunelBase {
     const cx     = (1 - prog) * centerVP + prog * centerBase;
     const widthH = (1 - prog) * widthVP   + prog * widthBase;
 
-    // Escala: el tren ocupa ~85% del ancho de vía a esta profundidad
     const SPRITE_W = TRAIN_CFG.baseWidth  ?? 48;
     const SPRITE_H = TRAIN_CFG.baseHeight ?? 40;
-    const scale    = Math.max(0.05, (widthH * TRAIN_TO_TRACK_RATIO) / SPRITE_W);
+    const scale    = Math.max(0.04, (widthH * TRAIN_TO_TRACK_RATIO) / SPRITE_W);
 
-    // Y: la BASE del sprite se alinea con la traviesa (el rail a esa altura)
     const bottomY = (1 - prog) * (vpY + 8) + prog * ch;
     const cy      = bottomY - (SPRITE_H * scale) / 2;
 
@@ -368,31 +372,52 @@ export class TunelBase {
   }
 
   /**
-   * Hitboxes de los trenes en coords de pantalla. Usa la MISMA geometría
-   * que el render para que las colisiones cuadren con lo que se ve.
+   * Hitboxes de los trenes — un HALO CIRCULAR por tren, centrado en la cara
+   * frontal de la cabeza del convoy (donde están los faros, la zona de
+   * peligro real). La paloma colisiona si toca el halo, no el AABB
+   * completo del sprite. Devuelve círculos con `{ cx, cy, r }` y mantiene
+   * los campos `{ x, y, w, h }` (bounding box del círculo) para que el
+   * código que pinta hitboxes en debug pueda seguir leyéndolos.
+   *
+   * Sólo la cabeza colisiona — al pasar el frente, el resto del convoy
+   * queda lateralmente fuera del corredor de vuelo. Esto elimina el bug
+   * histórico de "morir contra el segundo vagón" cuando la cabeza ya
+   * había pasado.
    */
   getTrainHitboxes() {
     const preset = PM.getActive();
     const _f     = preset?.fisica ?? {};
     const margin = _f.trainHitboxMargin ?? 0;
-    const SPRITE_W = TRAIN_CFG.baseWidth  ?? 48;
+    // Radio base del halo: la mitad del alto del sprite (40 / 2 = 20 px),
+    // así el halo INSCRIBE el cuerpo del tren — no se sale por encima del
+    // techo ni por debajo del chasis. La paloma colisiona cuando entra en
+    // el área que realmente ocupa el frente del tren, no en un aura más
+    // alta de lo que mide el vagón.
     const SPRITE_H = TRAIN_CFG.baseHeight ?? 40;
-    const boxes  = [];
+    const HALO_R_BASE = SPRITE_H / 2;
+    const halos = [];
 
     for (const track of [this.tracks.left, this.tracks.right]) {
       for (const train of track) {
-        const pos = this._getTrainScreenPos(train);
+        const pos = this._getTrainPosAtZ(train.zHead, train.side);
         if (!pos) continue;
 
-        const renderW = SPRITE_W * pos.scale;
-        const renderH = SPRITE_H * pos.scale;
-        const hw = renderW * (0.5 - margin);
-        const hh = renderH * (0.5 - margin);
-
-        boxes.push({ x: pos.cx - hw, y: pos.cy - hh, w: hw * 2, h: hh * 2 });
+        const r  = HALO_R_BASE * pos.scale * (1 - margin);
+        if (r < 1) continue;
+        // Centro del halo: centro EXACTO del sprite del tren (no
+        // desplazado a los faros). Coincide con la posición de la paloma
+        // que vuela centrada en pantalla y a la altura de la vía.
+        const cx = pos.cx;
+        const cy = pos.cy;
+        halos.push({
+          cx, cy, r,
+          // Bounding box (compatibilidad: el debug y otros consumidores AABB
+          // pueden usarlos sin saber del círculo).
+          x: cx - r, y: cy - r, w: r * 2, h: r * 2,
+        });
       }
     }
-    return boxes;
+    return halos;
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────
@@ -400,29 +425,20 @@ export class TunelBase {
   _spawnTrain() {
     const side = this._lastTrack === 'right' ? 'left' : 'right';
     this._lastTrack = side;
-    // Tren de N vagones encadenados — cada vagón es una entrada con su
-    // propia z desplazada. Comparten un trainId común para que la
-    // limpieza por z no rompa el tren a la mitad (ver update()).
-    const NUM_VAGONES = this.cfg.numVagones ?? 6;
-    // Separación intermedia: suficiente para que los vagones se distingan
-    // unos de otros en perspectiva, pero unidos por el fuelle oscuro que
-    // _drawTrainsOnRails pinta entre cada par consecutivo.
-    const SEPARACION  = this.cfg.vagonSeparation ?? 32;
-    this._nextTrainId = (this._nextTrainId ?? 0) + 1;
-    const trainId = this._nextTrainId;
-    for (let v = 0; v < NUM_VAGONES; v++) {
-      this.tracks[side].push({
-        x: 0,
-        y: 0,
-        z: SPAWN_Z + v * SEPARACION,
-        w: this.cfg.trainW,
-        h: this.cfg.trainH,
-        side,
-        trainId,                   // todos los vagones del mismo tren
-        vagon: v,                  // 0 = cabeza, >0 = vagones traseros
-        isHead: v === 0,
-      });
-    }
+
+    const numVag  = this.cfg.numVagones      ?? 6;
+    const longVag = this.cfg.vagonSeparation ?? 32;
+    const length  = numVag * longVag;
+    this._nextTrainId++;
+
+    this.tracks[side].push({
+      trainId: this._nextTrainId,
+      side,
+      zHead:   SPAWN_Z,
+      longVag,
+      numVag,
+      length,
+    });
   }
 
   _spawnObstacle() {

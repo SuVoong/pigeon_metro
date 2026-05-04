@@ -1,7 +1,7 @@
 // Detección y respuesta a colisiones: AABB genérico + lógica de juego.
 
 import { canvas, STATE, pigeon, obstacles, collectibles, particles, PAL, DEBUG } from './estado.js';
-import { w2sx, w2sy, perspective, camera, CAMERA_RANGE_X } from './camara.js';
+import { w2sx, w2sy, perspective, camera, CAMERA_RANGE_X, getPigeonVerticalOffset } from './camara.js';
 import { emitParticles } from './spawning.js';
 import { Linea3 } from '../escenarios/metro_madrid/linea_3/linea_3.js';
 import * as PM from '../editor/preset_manager.js';
@@ -12,6 +12,18 @@ import { saveFlightRecord } from './progreso.js';
 export function aabb(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x &&
          a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+// ── Círculo vs caja AABB ──────────────────────────────────────────────────────
+// Para hitboxes "halo" (los trenes): el contorno del peligro es circular,
+// no rectangular. El test acerca el centro del círculo al punto más próximo
+// de la caja y compara distancia² con r².
+export function circleHitsBox(circle, box) {
+  const cx = Math.max(box.x, Math.min(circle.cx, box.x + box.w));
+  const cy = Math.max(box.y, Math.min(circle.cy, box.y + box.h));
+  const dx = circle.cx - cx;
+  const dy = circle.cy - cy;
+  return dx * dx + dy * dy <= circle.r * circle.r;
 }
 
 // Hitbox cuadrada de la paloma cuando el preset no define un valor
@@ -30,7 +42,7 @@ export function checkCollisions() {
   // el offset de cámara— sumamos el offset al hitbox de la paloma. En coords
   // de mundo, la paloma está donde mira la cámara.
   const pSX = w2sx(pigeon.x) + camera.offsetX;
-  const pSY = w2sy(pigeon.y) + camera.offsetY;
+  const pSY = w2sy(pigeon.y) + camera.offsetY + getPigeonVerticalOffset();
   const pBox = { x: pSX - HITBOX / 2, y: pSY - HITBOX / 2, w: HITBOX, h: HITBOX };
 
   // ── Contra obstáculos ──
@@ -41,9 +53,11 @@ export function checkCollisions() {
       // para que ambos coincidan en el mismo sistema de coordenadas.
       const yShift = (VERT_POS - 0.5) * canvas.height;
       const pBoxL3 = { x: pBox.x, y: pBox.y + yShift, w: HITBOX, h: HITBOX };
-      const trainBoxes = Linea3.getTrainHitboxes();
-      for (const tBox of trainBoxes) {
-        if (aabb(pBoxL3, tBox)) { _triggerHit(); break; }
+      // Los hitboxes de los trenes son HALOS (círculos centrados en la
+      // cabeza). circleHitsBox los testea contra la caja de la paloma.
+      const trainHalos = Linea3.getTrainHitboxes();
+      for (const halo of trainHalos) {
+        if (circleHitsBox(halo, pBoxL3)) { _triggerHit(); break; }
       }
     } else {
       for (const o of obstacles) {
@@ -107,7 +121,7 @@ function _triggerHit() {
 
   // Las plumas/destellos del impacto se emiten donde la paloma se VE en
   // pantalla (centro fijo), no donde está en coords de mundo.
-  _emitImpactParticles(w2sx(pigeon.x), w2sy(pigeon.y));
+  _emitImpactParticles(w2sx(pigeon.x), w2sy(pigeon.y) + getPigeonVerticalOffset());
 
   if (STATE.lives <= 0) {
     saveFlightRecord(STATE.totalPlaySeconds);
@@ -161,7 +175,7 @@ export function drawDebugHitboxes(ctx) {
     ? (vertPos - 0.5) * canvas.height : 0;
 
   const pX = w2sx(pigeon.x) - hitboxSize / 2;
-  const pY = w2sy(pigeon.y) - hitboxSize / 2 + yShiftDbg;
+  const pY = w2sy(pigeon.y) - hitboxSize / 2 + yShiftDbg + getPigeonVerticalOffset();
 
   ctx.strokeStyle = 'rgba(0,255,0,0.8)';
   ctx.lineWidth = 2;
@@ -174,7 +188,7 @@ export function drawDebugHitboxes(ctx) {
   }
 
   ctx.fillStyle = '#00FF00';
-  ctx.fillRect(w2sx(pigeon.x) - 3, w2sy(pigeon.y) - 3, 6, 6);
+  ctx.fillRect(w2sx(pigeon.x) - 3, w2sy(pigeon.y) - 3 + getPigeonVerticalOffset(), 6, 6);
 
   const colZ = _f.arcadeCollisionZ ?? 600;
   const trainBoxes = STATE.selectedScenario === 'linea_3'
@@ -191,7 +205,15 @@ export function drawDebugHitboxes(ctx) {
   for (const b of trainBoxes) {
     ctx.strokeStyle = 'rgba(255,0,0,0.7)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(b.x, b.y, b.w, b.h);
+    // Si el hitbox es un halo (tren), pintar círculo; si es AABB (obstáculo
+    // de otros escenarios), pintar el rectángulo.
+    if (b.r != null) {
+      ctx.beginPath();
+      ctx.arc(b.cx, b.cy, b.r, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.strokeRect(b.x, b.y, b.w, b.h);
+    }
     ctx.fillStyle = '#FF0000';
     ctx.fillRect(b.x + b.w / 2 - 2, b.y + b.h / 2 - 2, 4, 4);
   }
