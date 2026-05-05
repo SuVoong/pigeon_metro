@@ -26,15 +26,17 @@ import * as PM                from '../../editor/preset_manager.js';
 // siguen exactamente el CENTRO de cada vía a su profundidad para que se vean
 // "circular sobre los rieles" sin desalineación. Si tocas estas constantes,
 // cámbialas también en tunel.js y estacion_base.js (DEFAULT_CONFIG).
-// Ensanchado desde 32/3 → 42/2 para que los trenes cubran ~76 % del canvas.
-const TRACK_OUTER_RATIO_BASE = 0.42;
+// 0.32/0.02 (antes 0.42/0.02) → cada vía ~30 % del canvas en la base.
+// Con TRAIN_TO_TRACK_RATIO 0.85 los dos trenes ocupan ~51 % del ancho
+// (la "mitad" del canvas), dejando ver el arco del túnel a los lados.
+const TRACK_OUTER_RATIO_BASE = 0.32;
 const TRACK_INNER_RATIO_BASE = 0.02;
 const TRACK_OUTER_RATIO_VP   = 0.018;
 const TRACK_INNER_RATIO_VP   = 0.015;
 const TUNEL_VPY_RATIO        = 0.42;   // coincide con _defaultVpY de tunel.js
-// 0.95 (antes 0.85): cada tren ocupa ~95 % del ancho de su vía → los dos
-// trenes juntos cubren ~55 % del ancho del canvas en la base (vs ~49 %).
-const TRAIN_TO_TRACK_RATIO   = 0.95;
+// 0.85 (antes 0.95): cada tren ocupa ~85 % del ancho de su vía → los dos
+// trenes juntos cubren ~51 % del canvas (la mitad pedida).
+const TRAIN_TO_TRACK_RATIO   = 0.85;
 
 const DEFAULT_CONFIG = {
   // ── Visual ────────────────────────────────────────────────────────────────

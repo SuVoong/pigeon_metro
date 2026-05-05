@@ -26,7 +26,7 @@ const DEFAULT_CONFIG = {
   // (×100 para que el editor muestre números legibles tipo 32, 2.5, etc.).
   // Esto produce un trapecio fuerte: las vías ocupan ~64% del ancho en la
   // base (cerca de la cámara) y se cierran al ~3% en el punto de fuga.
-  trackOuterOffset:   42,      // % de W desde el centro al carril exterior (BASE)
+  trackOuterOffset:   32,      // % de W desde el centro al carril exterior (BASE)
   trackInnerOffset:   2,       // % de W al carril interior (BASE) — gap central pequeño
   trackOuterOffsetVP: 1.8,     // % de W al carril exterior (VP)
   trackInnerOffsetVP: 1.5,     // % de W al carril interior (VP)
@@ -1044,8 +1044,8 @@ export class EstacionBase {
     const SPRITE_W = 48;
     const SPRITE_H = 40;
     // Proporción del ancho de vía que el tren ocupa a la base.
-    // 0.95 (antes 0.85) → trenes más anchos, ~55 % del canvas entre ambos.
-    const TRAIN_TO_TRACK_RATIO = 0.95;
+    // 0.85 (antes 0.95) → trenes más estrechos, ~51 % del canvas entre ambos.
+    const TRAIN_TO_TRACK_RATIO = 0.85;
 
     this._trains.forEach((train) => {
       const t = train.progress;        // 0 = lejos (VP), 1 = cerca (base)

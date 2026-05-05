@@ -334,9 +334,11 @@ function _drawFloor(ctx, vpX, archCY, cw, ch) {
 //
 //   - Vía exterior  ±42 % W   (BASE)   → ±1.8 % W   (VP)
 //   - Vía interior  ± 2 % W   (BASE)   → ±1.5 % W   (VP)
-// Ensanchado desde 32/3 → 42/2 para que ambos trenes ocupen ~76 % del
-// ancho del canvas en la base (sintonizado con TRAIN_TO_TRACK_RATIO 0.95).
-const TRACK_OUTER_RATIO_BASE = 0.42;
+// 0.32/0.02 (antes 0.42/0.02) → cada vía ocupa ~30 % del canvas en la base.
+// Combinado con TRAIN_TO_TRACK_RATIO 0.85, los dos trenes juntos cubren
+// ~51 % del ancho — caben dentro del arco del túnel en lugar de
+// desbordarlo. Valores validados en mockup_tren.html.
+const TRACK_OUTER_RATIO_BASE = 0.32;
 const TRACK_INNER_RATIO_BASE = 0.02;
 const TRACK_OUTER_RATIO_VP   = 0.018;
 const TRACK_INNER_RATIO_VP   = 0.015;
