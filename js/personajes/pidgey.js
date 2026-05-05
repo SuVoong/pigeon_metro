@@ -3,7 +3,8 @@
 import { pigeon, STATE, canvas } from '../mecanica/estado.js';
 import { keys } from '../mecanica/input.js';
 import {
-  w2sx, w2sy, camera, CAMERA_RANGE_X, CAMERA_RANGE_Y, getPigeonScreenOffset,
+  w2sx, w2sy, camera, CAMERA_RANGE_X, CAMERA_RANGE_Y_UP, CAMERA_RANGE_Y_DOWN,
+  getPigeonScreenOffset,
 } from '../mecanica/camara.js';
 
 const MAX_VELOCITY = 6;
@@ -48,10 +49,11 @@ export function updatePidgey(dt) {
     camera.offsetX += pigeon.vx * dt;
     camera.offsetY += pigeon.vy * dt;
 
-    const maxX = canvas.width  * CAMERA_RANGE_X;
-    const maxY = canvas.height * CAMERA_RANGE_Y;
-    camera.offsetX = Math.max(-maxX, Math.min(maxX, camera.offsetX));
-    camera.offsetY = Math.max(-maxY, Math.min(maxY, camera.offsetY));
+    const maxX     = canvas.width  * CAMERA_RANGE_X;
+    const maxYUp   = canvas.height * CAMERA_RANGE_Y_UP;
+    const maxYDown = canvas.height * CAMERA_RANGE_Y_DOWN;
+    camera.offsetX = Math.max(-maxX,    Math.min(maxX,    camera.offsetX));
+    camera.offsetY = Math.max(-maxYUp,  Math.min(maxYDown, camera.offsetY));
 
     pigeon.stunStars.forEach(s => {
       s.angle += 0.18 * dt;
@@ -76,10 +78,11 @@ export function updatePidgey(dt) {
   camera.offsetX += pigeon.vx * dt;
   camera.offsetY += pigeon.vy * dt;
 
-  const maxX = canvas.width  * CAMERA_RANGE_X;
-  const maxY = canvas.height * CAMERA_RANGE_Y;
-  camera.offsetX = Math.max(-maxX, Math.min(maxX, camera.offsetX));
-  camera.offsetY = Math.max(-maxY, Math.min(maxY, camera.offsetY));
+  const maxX     = canvas.width  * CAMERA_RANGE_X;
+  const maxYUp   = canvas.height * CAMERA_RANGE_Y_UP;
+  const maxYDown = canvas.height * CAMERA_RANGE_Y_DOWN;
+  camera.offsetX = Math.max(-maxX,    Math.min(maxX,    camera.offsetX));
+  camera.offsetY = Math.max(-maxYUp,  Math.min(maxYDown, camera.offsetY));
 
   pigeon.tilt = Math.max(-1, Math.min(1, pigeon.vx / MAX_VELOCITY));
 

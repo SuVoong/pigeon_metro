@@ -51,19 +51,22 @@ export function getCameraVpY(staticVpY) {
 /** Desplazamiento VISUAL de la paloma en pantalla en función del offset de
  *  cámara. La curva NO es lineal: la paloma se queda casi quieta al centro
  *  cuando el offset es pequeño y se acerca al borde sólo cuando el offset
- *  llega al máximo. Curva cúbica:
+ *  llega al máximo. Curva cúbica con rango ASIMÉTRICO:
  *
- *     n = offsetY / maxY     ∈ [-1, 1]
- *     dy = sign(n) · |n|^3 · maxY
+ *     maxAct = offsetY < 0 ? maxYUp : maxYDown
+ *     n  = offsetY / maxAct          ∈ [-1, 1]
+ *     dy = sign(n) · |n|^3 · maxAct
  *
- *  Resultado: para offsetY = 50 % del máximo, sólo se desplaza un 12.5 %.
- *  Sólo en el extremo (100 % offset) la paloma "toca" el techo / los rieles.
- *  X queda fija porque applyCamera ya aplica translate X al escenario.
+ *  Como la paloma reposa alto (ratio −0.18 → ~32 % canvas) tiene poco
+ *  recorrido hacia arriba antes del techo y mucho hacia abajo hasta los
+ *  raíles. Por eso maxYDown > maxYUp.
  */
 export function getPigeonScreenOffset() {
-  const maxY = canvas.height * CAMERA_RANGE_Y;
-  const ny   = maxY > 0 ? camera.offsetY / maxY : 0;
-  const dy   = Math.sign(ny) * Math.pow(Math.abs(ny), 3) * maxY;
+  const maxYUp   = canvas.height * CAMERA_RANGE_Y_UP;
+  const maxYDown = canvas.height * CAMERA_RANGE_Y_DOWN;
+  const maxAct   = camera.offsetY < 0 ? maxYUp : maxYDown;
+  const ny       = maxAct > 0 ? camera.offsetY / maxAct : 0;
+  const dy       = Math.sign(ny) * Math.pow(Math.abs(ny), 3) * maxAct;
   return { dx: 0, dy };
 }
 
@@ -77,10 +80,16 @@ export function resetCamera() {
 // los updates de personaje (paloma/pidgey/angry_bird). Centralizado aquí para
 // que los escenarios sepan cuánto overdraw necesitan.
 //   X: ±35% — al moverse al borde lateral, la paloma "choca" con la pared
-//   Y: ±45% — al subir hasta el máximo la paloma casi roza el techo, al
-//             bajar casi toca los rieles
-export const CAMERA_RANGE_X = 0.35;
-export const CAMERA_RANGE_Y = 0.45;
+//   Y_UP   = 0.30 → desde reposo (32 % canvas) hasta ~2 % (justo bajo el techo)
+//   Y_DOWN = 0.65 → desde reposo hasta ~97 % (la paloma toca los raíles)
+//   Asimétrico porque la paloma reposa alto y tiene poco recorrido hacia
+//   arriba pero mucho hacia abajo.
+export const CAMERA_RANGE_X      = 0.35;
+export const CAMERA_RANGE_Y_UP   = 0.30;
+export const CAMERA_RANGE_Y_DOWN = 0.65;
+// Compatibilidad: máximo absoluto del eje Y, usado por getViewBounds para
+// dimensionar el overdraw de los escenarios.
+export const CAMERA_RANGE_Y      = Math.max(CAMERA_RANGE_Y_UP, CAMERA_RANGE_Y_DOWN);
 
 // Desplazamiento vertical de la paloma respecto a w2sy(0) = canvas/2.
 // −0.18 → la paloma reposa al ~32 % del canvas: en la zona oscura entre el
