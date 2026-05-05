@@ -177,6 +177,14 @@ export class MetroBase {
     } else if (this.currentScene) {
       this.currentScene.render(ctx);
     }
+    // El HUD ya NO se pinta aquí — main.js lo pinta DESPUÉS de
+    // unapplyCamera para que quede anclado a la pantalla y no se desplace
+    // con el escenario cuando la paloma "mueve la cámara". Ver renderHUD().
+  }
+
+  /** HUD del progreso. Se pinta SIN aplicar el offset de cámara — debe
+   *  quedar anclado a la pantalla independientemente del input. */
+  renderHUD(ctx) {
     this._drawProgressHUD(ctx);
   }
 

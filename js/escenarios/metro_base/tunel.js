@@ -7,6 +7,7 @@
 
 import { canvas, STATE } from '../../mecanica/estado.js';
 import { ENV_CFG }       from '../../editor/env_config.js';
+import { getViewBounds, getCameraVpY } from '../../mecanica/camara.js';
 
 const FOCAL       = 400;
 const _persp      = z  => FOCAL / (FOCAL + Math.max(z, 1));
@@ -16,8 +17,13 @@ const _vpX        = () => canvas.width  / 2;
 // túnel ↔ estación mantiene el punto de fuga (y por tanto las vías) en la
 // misma posición vertical de la pantalla.
 const _defaultVpY        = () => canvas.height * (ENV_CFG?.vanishingPointY ?? 0.42);
-const _defaultArchOffset = () => canvas.height * 0.20;
-const _defaultMaxR       = () => canvas.height * 0.70;
+// Arco MUY APRETADO — el techo curva sobre los trenes dentro del canvas,
+// sin dejar el "V abierto" hacia las esquinas superiores. Sección reducida
+// otro −60 % respecto a la versión 0.30 (0.40 → 0.30 → 0.12) — la "boca"
+// del túnel queda muy estrecha, casi a la altura del tren al fondo.
+// archOffset = maxR mantiene la cresta del arco exactamente en vpY.
+const _defaultArchOffset = () => canvas.height * 0.12;
+const _defaultMaxR       = () => canvas.height * 0.12;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRY POINT
@@ -38,9 +44,12 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   //   · archRadiusRatio      → fracción 0–1 (radio del arco / canvas.height).
   //   · archCenterOffsetRatio→ fracción del canvas.height entre VP y centro
   //                            del arco (controla cuánto suelo es visible).
-  const vpY    = config.vanishingPointY != null
+  // VP vertical ajustado por el offsetY de la cámara — los anillos del túnel
+  // se inclinan al subir/bajar la paloma.
+  const _baseVpY = config.vanishingPointY != null
     ? ch * config.vanishingPointY
     : _defaultVpY();
+  const vpY = getCameraVpY(_baseVpY);
   const maxR   = config.archRadiusRatio != null
     ? ch * config.archRadiusRatio
     : _defaultMaxR();
@@ -83,9 +92,11 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _drawBackground(ctx, vpX, vpY, cw, ch, config) {
-  // Base negra
+  const B = getViewBounds();
+  // Base negra — extendida con los bounds para que no aparezcan huecos
+  // cuando la cámara se desplaza al máximo.
   ctx.fillStyle = config.bgColor || '#08080d';
-  ctx.fillRect(0, 0, cw, ch);
+  ctx.fillRect(B.left, B.top, B.width, B.height);
 
   // Glow lejano desde el punto de fuga (sensación de profundidad)
   const rad = ctx.createRadialGradient(vpX, vpY, 0, vpX, vpY, cw * 0.45);
@@ -93,7 +104,7 @@ function _drawBackground(ctx, vpX, vpY, cw, ch, config) {
   rad.addColorStop(0.6, 'rgba(18,19,24,0.6)');
   rad.addColorStop(1,   'rgba(0,0,0,0)');
   ctx.fillStyle = rad;
-  ctx.fillRect(0, 0, cw, ch);
+  ctx.fillRect(B.left, B.top, B.width, B.height);
 }
 
 // ── Relleno de las paredes: área a los lados del arco ─────────────────────
@@ -105,6 +116,19 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   const wallColorMid  = '#22242a';
   const wallColorLight = '#2e3038';
 
+  // ── Coeficientes de geometría del arco ─────────────────────────────────
+  // TOP_RATIO controla DÓNDE convergen las paredes cerca del VP. Con 0.06
+  // el túnel deja un "V" abierto enorme entre las paredes y la parte
+  // superior del canvas. Subido a 0.28 las paredes se juntan más afuera
+  // del VP, dejando MENOS espacio interior — el techo se "cierra" aún más
+  // tras la reducción de maxR (sección ~25% más estrecha).
+  const TOP_RATIO   = 0.20;       // antes 0.20
+  const FLOOR_RATIO = 0.18;
+  const CTRL_RATIO  = 0.50;
+  const TOP_DIP     = 0.30;       // antes 0.30 — dip del techo, debe ser
+                                  // mayor que TOP_RATIO para que la curva
+                                  // baje al centro
+
   // ── Pared IZQUIERDA ──────────────────────────────────────────────────────
   ctx.save();
   ctx.beginPath();
@@ -113,11 +137,11 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   // Sube a lo largo del borde izquierdo hasta el suelo
   ctx.lineTo(0, ch);
   // Va hacia el punto donde el arco toca el suelo (izquierda)
-  ctx.lineTo(vpX - maxR * 0.18, archCY);
+  ctx.lineTo(vpX - maxR * FLOOR_RATIO, archCY);
   // Curva bezier hacia el punto de fuga (simula la curvatura del arco)
   ctx.quadraticCurveTo(
-    vpX - maxR * 0.60, vpY + (archCY - vpY) * 0.4,
-    vpX - maxR * 0.06, vpY - maxR * 0.06,
+    vpX - maxR * CTRL_RATIO, vpY + (archCY - vpY) * 0.4,
+    vpX - maxR * TOP_RATIO, vpY - maxR * TOP_RATIO,
   );
   // Esquina superior izquierda del canvas
   ctx.lineTo(0, 0);
@@ -132,10 +156,10 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
 
   // Borde de la pared izquierda (línea de junta arco–pared)
   ctx.beginPath();
-  ctx.moveTo(vpX - maxR * 0.06, vpY - maxR * 0.06);
+  ctx.moveTo(vpX - maxR * TOP_RATIO, vpY - maxR * TOP_RATIO);
   ctx.quadraticCurveTo(
-    vpX - maxR * 0.60, vpY + (archCY - vpY) * 0.4,
-    vpX - maxR * 0.18, archCY,
+    vpX - maxR * CTRL_RATIO, vpY + (archCY - vpY) * 0.4,
+    vpX - maxR * FLOOR_RATIO, archCY,
   );
   ctx.strokeStyle = 'rgba(0,0,0,0.5)';
   ctx.lineWidth   = 3;
@@ -147,10 +171,10 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   ctx.beginPath();
   ctx.moveTo(cw, 0);
   ctx.lineTo(cw, ch);
-  ctx.lineTo(vpX + maxR * 0.18, archCY);
+  ctx.lineTo(vpX + maxR * FLOOR_RATIO, archCY);
   ctx.quadraticCurveTo(
-    vpX + maxR * 0.60, vpY + (archCY - vpY) * 0.4,
-    vpX + maxR * 0.06, vpY - maxR * 0.06,
+    vpX + maxR * CTRL_RATIO, vpY + (archCY - vpY) * 0.4,
+    vpX + maxR * TOP_RATIO, vpY - maxR * TOP_RATIO,
   );
   ctx.lineTo(cw, 0);
   ctx.closePath();
@@ -163,10 +187,10 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   ctx.fill();
 
   ctx.beginPath();
-  ctx.moveTo(vpX + maxR * 0.06, vpY - maxR * 0.06);
+  ctx.moveTo(vpX + maxR * TOP_RATIO, vpY - maxR * TOP_RATIO);
   ctx.quadraticCurveTo(
-    vpX + maxR * 0.60, vpY + (archCY - vpY) * 0.4,
-    vpX + maxR * 0.18, archCY,
+    vpX + maxR * CTRL_RATIO, vpY + (archCY - vpY) * 0.4,
+    vpX + maxR * FLOOR_RATIO, archCY,
   );
   ctx.strokeStyle = 'rgba(0,0,0,0.5)';
   ctx.lineWidth   = 3;
@@ -178,8 +202,8 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.lineTo(cw, 0);
-  ctx.lineTo(vpX + maxR * 0.06, vpY - maxR * 0.06);
-  ctx.quadraticCurveTo(vpX, vpY - maxR * 0.10, vpX - maxR * 0.06, vpY - maxR * 0.06);
+  ctx.lineTo(vpX + maxR * TOP_RATIO, vpY - maxR * TOP_RATIO);
+  ctx.quadraticCurveTo(vpX, vpY - maxR * TOP_DIP, vpX - maxR * TOP_RATIO, vpY - maxR * TOP_RATIO);
   ctx.closePath();
 
   const tg = ctx.createLinearGradient(0, 0, 0, vpY);
@@ -308,10 +332,14 @@ function _drawFloor(ctx, vpX, archCY, cw, ch) {
 // porcentajes del ancho del canvas que usa estacion_base.js (mantén ambos
 // sincronizados si tocas estos números).
 //
-//   - Vía exterior  ±32% W   (BASE)   → ±1.8% W   (VP)
-//   - Vía interior  ± 3% W   (BASE)   → ±1.5% W   (VP)
+//   - Vía exterior  ±42 % W   (BASE)   → ±1.8 % W   (VP)
+//   - Vía interior  ± 2 % W   (BASE)   → ±1.5 % W   (VP)
+// 0.32/0.02 (antes 0.42/0.02) → cada vía ocupa ~30 % del canvas en la base.
+// Combinado con TRAIN_TO_TRACK_RATIO 0.85, los dos trenes juntos cubren
+// ~51 % del ancho — caben dentro del arco del túnel en lugar de
+// desbordarlo. Valores validados en mockup_tren.html.
 const TRACK_OUTER_RATIO_BASE = 0.32;
-const TRACK_INNER_RATIO_BASE = 0.03;
+const TRACK_INNER_RATIO_BASE = 0.02;
 const TRACK_OUTER_RATIO_VP   = 0.018;
 const TRACK_INNER_RATIO_VP   = 0.015;
 

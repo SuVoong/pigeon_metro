@@ -14,7 +14,7 @@ export const DELICIAS_TUNEL_CONFIG = {
   durationSeconds:       18,
   trainSpawnInterval:    110,    // muy espaciados (modo tutorial)
   obstacleSpawnInterval: 130,    // obstáculos esporádicos
-  obstacleTypes:         ['pipe'],
+  obstacleTypes:         [],
   trainLineVariant:      'linea_3',
   speed:                 1.6,    // un poco más lento que el resto de tramos
 };

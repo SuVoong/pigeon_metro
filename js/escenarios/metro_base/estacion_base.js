@@ -12,7 +12,7 @@
 // siguiente túnel.
 
 import { canvas, STATE, pigeon } from '../../mecanica/estado.js';
-import { perspective }            from '../../mecanica/camara.js';
+import { perspective, getViewBounds, getCameraVpY, camera, CAMERA_RANGE_X } from '../../mecanica/camara.js';
 import { drawTrenFrontal, setTrenLED } from '../../elementos/tren.js';
 
 const DEFAULT_CONFIG = {
@@ -27,7 +27,7 @@ const DEFAULT_CONFIG = {
   // Esto produce un trapecio fuerte: las vías ocupan ~64% del ancho en la
   // base (cerca de la cámara) y se cierran al ~3% en el punto de fuga.
   trackOuterOffset:   32,      // % de W desde el centro al carril exterior (BASE)
-  trackInnerOffset:   3,       // % de W al carril interior (BASE) — gap central pequeño
+  trackInnerOffset:   2,       // % de W al carril interior (BASE) — gap central pequeño
   trackOuterOffsetVP: 1.8,     // % de W al carril exterior (VP)
   trackInnerOffsetVP: 1.5,     // % de W al carril interior (VP)
   // Borde del andén (donde el suelo gris se corta y empieza el foso de la vía)
@@ -207,7 +207,15 @@ export class EstacionBase {
     const W   = canvas.width;
     const H   = canvas.height;
     const vpX = W / 2;
-    const vpY = H * this.cfg.vanishingPointY;
+    // VP vertical AJUSTADO por el offsetY de la cámara — al subir/bajar la
+    // paloma, el VP se desplaza y los rieles/paredes/techo cambian de
+    // inclinación. Reemplaza al H*cfg.vanishingPointY estático anterior.
+    const vpY = getCameraVpY(H * this.cfg.vanishingPointY);
+
+    // Bounds del área que la cámara puede ver (incluye el rango móvil).
+    // Las geometrías "grandes" (fondo, techo, paredes, suelo) usan estos
+    // límites en lugar de 0/W/H para no dejar huecos al desplazar la cámara.
+    this._bounds = getViewBounds();
 
     // Geometría trapezoidal de las vías — todas las medidas se calculan
     // como W * (offset/100). En la BASE las vías ocupan mucho ancho (efecto
@@ -278,16 +286,18 @@ export class EstacionBase {
 
   // ── FONDO ─────────────────────────────────────────────────────────────────
   _drawBackground(ctx, W, H) {
+    const B = this._bounds;
     ctx.fillStyle = '#050508';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(B.left, B.top, B.width, B.height);
   }
 
   // ── TECHO ─────────────────────────────────────────────────────────────────
   _drawCeiling(ctx, W, H, vpX, vpY) {
+    const B = this._bounds;
     ctx.fillStyle = this.cfg.ceilingColor;
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(W, 0);
+    ctx.moveTo(B.left,  B.top);
+    ctx.lineTo(B.right, B.top);
     ctx.lineTo(vpX + 25, vpY - 10);
     ctx.lineTo(vpX - 25, vpY - 10);
     ctx.closePath();
@@ -296,8 +306,8 @@ export class EstacionBase {
     // Banda azul oscuro superior
     ctx.fillStyle = this.cfg.ceilingBandTop;
     ctx.beginPath();
-    ctx.moveTo(0, 6);
-    ctx.lineTo(W, 6);
+    ctx.moveTo(B.left,  B.top + 6);
+    ctx.lineTo(B.right, B.top + 6);
     ctx.lineTo(vpX + 25, vpY - 12);
     ctx.lineTo(vpX - 25, vpY - 12);
     ctx.closePath();
@@ -332,23 +342,24 @@ export class EstacionBase {
 
   // ── PAREDES laterales (trapecios) ────────────────────────────────────────
   _drawWalls(ctx, W, H, vpX, vpY, G) {
+    const B = this._bounds;
     ctx.fillStyle = this.cfg.wallColor;
 
     // Pared izquierda — vértices del andén (base + VP)
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(G.pVL, vpY - 10);
-    ctx.lineTo(G.pVL, vpY + 5);
-    ctx.lineTo(0, H * 0.55);
+    ctx.moveTo(B.left, B.top);
+    ctx.lineTo(G.pVL,  vpY - 10);
+    ctx.lineTo(G.pVL,  vpY + 5);
+    ctx.lineTo(B.left, H * 0.55);
     ctx.closePath();
     ctx.fill();
 
     // Pared derecha
     ctx.beginPath();
-    ctx.moveTo(W, 0);
-    ctx.lineTo(G.pVR, vpY - 10);
-    ctx.lineTo(G.pVR, vpY + 5);
-    ctx.lineTo(W, H * 0.55);
+    ctx.moveTo(B.right, B.top);
+    ctx.lineTo(G.pVR,   vpY - 10);
+    ctx.lineTo(G.pVR,   vpY + 5);
+    ctx.lineTo(B.right, H * 0.55);
     ctx.closePath();
     ctx.fill();
 
@@ -356,8 +367,8 @@ export class EstacionBase {
     ctx.strokeStyle = this.cfg.wallStripeBlue;
     ctx.lineWidth   = 1.5;
     ctx.beginPath();
-    ctx.moveTo(0, H * 0.30); ctx.lineTo(G.pVL, vpY - 5);
-    ctx.moveTo(W, H * 0.30); ctx.lineTo(G.pVR, vpY - 5);
+    ctx.moveTo(B.left,  H * 0.30); ctx.lineTo(G.pVL, vpY - 5);
+    ctx.moveTo(B.right, H * 0.30); ctx.lineTo(G.pVR, vpY - 5);
     ctx.stroke();
   }
 
@@ -552,23 +563,24 @@ export class EstacionBase {
   // El andén forma un trapecio: ancho en la base (cerca de la cámara) y
   // estrecho al fondo del túnel (punto de fuga).
   _drawPlatforms(ctx, W, H, vpX, vpY, G) {
+    const B = this._bounds;
     ctx.fillStyle = this.cfg.platformColor;
 
     // Andén izquierdo
     ctx.beginPath();
-    ctx.moveTo(0, H);
-    ctx.lineTo(G.pBL, H);
-    ctx.lineTo(G.pVL, vpY + 5);
-    ctx.lineTo(0, H * 0.55);
+    ctx.moveTo(B.left, B.bottom);
+    ctx.lineTo(G.pBL,  H);
+    ctx.lineTo(G.pVL,  vpY + 5);
+    ctx.lineTo(B.left, H * 0.55);
     ctx.closePath();
     ctx.fill();
 
     // Andén derecho
     ctx.beginPath();
-    ctx.moveTo(W, H);
-    ctx.lineTo(G.pBR, H);
-    ctx.lineTo(G.pVR, vpY + 5);
-    ctx.lineTo(W, H * 0.55);
+    ctx.moveTo(B.right, B.bottom);
+    ctx.lineTo(G.pBR,   H);
+    ctx.lineTo(G.pVR,   vpY + 5);
+    ctx.lineTo(B.right, H * 0.55);
     ctx.closePath();
     ctx.fill();
   }
@@ -581,45 +593,46 @@ export class EstacionBase {
   // que conecta el borde del andén (G.pBL/pBR) con un punto un poco más
   // bajo, simulando los ~1m de altura del andén respecto al raíl.
   _drawPlatformFront(ctx, W, H, vpX, vpY, G) {
+    const B = this._bounds;
     const drop = Math.max(3, H * 0.012);   // grosor de la franja (px)
     const dropVP = Math.max(1, H * 0.003); // grosor en el VP (perspectiva)
 
     // Cara izquierda
     ctx.fillStyle = this.cfg.platformFrontColor;
     ctx.beginPath();
-    ctx.moveTo(0,           H * 0.55);
+    ctx.moveTo(B.left,      H * 0.55);
     ctx.lineTo(G.pVL,       vpY + 5);
     ctx.lineTo(G.pVL,       vpY + 5 + dropVP);
-    ctx.lineTo(0,           H * 0.55 + drop);
+    ctx.lineTo(B.left,      H * 0.55 + drop);
     ctx.closePath();
     ctx.fill();
 
     // Sombra inferior (borde con la vía)
     ctx.fillStyle = this.cfg.platformFrontShade;
     ctx.beginPath();
-    ctx.moveTo(0,           H * 0.55 + drop * 0.7);
+    ctx.moveTo(B.left,      H * 0.55 + drop * 0.7);
     ctx.lineTo(G.pVL,       vpY + 5 + dropVP * 0.7);
     ctx.lineTo(G.pVL,       vpY + 5 + dropVP);
-    ctx.lineTo(0,           H * 0.55 + drop);
+    ctx.lineTo(B.left,      H * 0.55 + drop);
     ctx.closePath();
     ctx.fill();
 
     // Cara derecha (espejo)
     ctx.fillStyle = this.cfg.platformFrontColor;
     ctx.beginPath();
-    ctx.moveTo(W,           H * 0.55);
+    ctx.moveTo(B.right,     H * 0.55);
     ctx.lineTo(G.pVR,       vpY + 5);
     ctx.lineTo(G.pVR,       vpY + 5 + dropVP);
-    ctx.lineTo(W,           H * 0.55 + drop);
+    ctx.lineTo(B.right,     H * 0.55 + drop);
     ctx.closePath();
     ctx.fill();
 
     ctx.fillStyle = this.cfg.platformFrontShade;
     ctx.beginPath();
-    ctx.moveTo(W,           H * 0.55 + drop * 0.7);
+    ctx.moveTo(B.right,     H * 0.55 + drop * 0.7);
     ctx.lineTo(G.pVR,       vpY + 5 + dropVP * 0.7);
     ctx.lineTo(G.pVR,       vpY + 5 + dropVP);
-    ctx.lineTo(W,           H * 0.55 + drop);
+    ctx.lineTo(B.right,     H * 0.55 + drop);
     ctx.closePath();
     ctx.fill();
   }
@@ -668,47 +681,91 @@ export class EstacionBase {
     const s = (v) => Math.max(1, Math.round(v * scale));
     const w = s(96);
     const h = s(26);
-    const x = cx - w / 2;
     const y = baseY;
 
+    // ── PERSPECTIVA 3D del cartel según el offset de cámara ────────────────
+    // Cuando la paloma se desplaza, los carteles se ven INCLINADOS:
+    //   · El lado del cartel hacia donde se mueve la cámara se ve más
+    //     estrecho (es el lado "lejos") y desplazado verticalmente.
+    //   · El lado opuesto (cerca de la cámara) se ve más ancho y bajo.
+    //   · Esto simula una rotación leve en el eje vertical.
+    //
+    // El cartel se dibuja como TRAPECIO con 4 vértices (TL, TR, BR, BL)
+    // ajustados según nx = offsetX / maxX (∈ -1..1).
+    const maxX = canvas.width * CAMERA_RANGE_X;
+    const nx   = maxX > 0 ? camera.offsetX / maxX : 0;
+    // Inclinación: hasta 30 % de "encogimiento" en un lado del cartel
+    const tilt = nx * 0.30;
+    // Lado del cartel "lejos" (hacia donde mira la cámara) se encoje
+    const xL  = cx - w / 2;
+    const xR  = cx + w / 2;
+    // Si nx > 0 (paloma derecha), el lado IZQUIERDO del cartel queda lejos
+    const inL = tilt > 0 ? Math.abs(tilt) * w * 0.5 : 0;
+    const inR = tilt < 0 ? Math.abs(tilt) * w * 0.5 : 0;
+    const dyL = tilt > 0 ? Math.abs(tilt) * h * 0.4 : 0;
+    const dyR = tilt < 0 ? Math.abs(tilt) * h * 0.4 : 0;
+    // Vértices finales del trapezoide
+    const tlx = xL + inL, tly = y + dyL;
+    const trx = xR - inR, try_ = y + dyR;
+    const brx = xR - inR, bry = y + h - dyR;
+    const blx = xL + inL, bly = y + h - dyL;
+
     // Cables al techo — arrancan en ceilingY (debajo del HUD) y bajan
-    // hasta el letrero. Visibles durante toda la altura.
+    // hasta el letrero. Siguen los vértices superiores del trapezoide
+    // (asomados según la inclinación) para mantener coherencia visual.
     ctx.fillStyle = this.cfg.hangingSignCable;
-    ctx.fillRect(x + s(12),     ceilingY, Math.max(1, s(1)), y - ceilingY);
-    ctx.fillRect(x + w - s(13), ceilingY, Math.max(1, s(1)), y - ceilingY);
+    ctx.fillRect(Math.round(tlx + s(12)), ceilingY, Math.max(1, s(1)), tly - ceilingY);
+    ctx.fillRect(Math.round(trx - s(13)), ceilingY, Math.max(1, s(1)), try_ - ceilingY);
 
-    // Marco del letrero (borde oscuro)
-    ctx.fillStyle = '#1a1a22';
-    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    // Helper para pintar un trapezoide del color dado (con un pequeño
+    // inflado para el marco oscuro).
+    const fillTrap = (ox, color) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(tlx - ox, tly - ox);
+      ctx.lineTo(trx + ox, try_ - ox);
+      ctx.lineTo(brx + ox, bry + ox);
+      ctx.lineTo(blx - ox, bly + ox);
+      ctx.closePath();
+      ctx.fill();
+    };
 
-    // Cuerpo del letrero
-    ctx.fillStyle = this.cfg.hangingSignBg;
-    ctx.fillRect(x, y, w, h);
-
-    // Highlight superior (luz indirecta del fluorescente)
+    // Marco oscuro (inflado 1px)
+    fillTrap(1, '#1a1a22');
+    // Cuerpo del cartel
+    fillTrap(0, this.cfg.hangingSignBg);
+    // Highlight superior (banda fina)
     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-    ctx.fillRect(x, y, w, Math.max(1, s(2)));
+    ctx.beginPath();
+    ctx.moveTo(tlx, tly);
+    ctx.lineTo(trx, try_);
+    ctx.lineTo(trx, try_ + Math.max(1, s(2)));
+    ctx.lineTo(tlx, tly  + Math.max(1, s(2)));
+    ctx.closePath();
+    ctx.fill();
 
     if (scale > 0.55) {
+      // El texto NO se inclina (ctx.fillText no soporta perspectiva
+      // fácilmente); solo se centra entre los vértices izq y der del
+      // trapezoide y se desplaza verticalmente con el lado central.
+      const textCx = (tlx + trx) / 2;
+      const yMid   = (tly + try_) / 2;
       ctx.textBaseline = 'middle';
-      // ── Línea 1: "Andén N" (subtítulo pequeño) ───────────────────────
       ctx.fillStyle = '#88AADD';
       ctx.font      = `${Math.max(4, s(5))}px monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText(andenLabel, cx, y + s(6));
+      ctx.fillText(andenLabel, textCx, yMid + s(6));
 
-      // ── Línea 2: flecha de sentido + destino (grande, en ámbar) ──────
       const arrow = isLeft ? '←' : '→';
       ctx.fillStyle = this.cfg.hangingSignText;
       ctx.font      = `bold ${Math.max(5, s(9))}px monospace`;
-      ctx.fillText(`${arrow} ${destText}`, cx, y + s(17));
+      ctx.fillText(`${arrow} ${destText}`, textCx, yMid + s(17));
 
       ctx.textAlign    = 'left';
       ctx.textBaseline = 'alphabetic';
     } else {
-      // Letrero pequeño: solo barras LED simbólicas
       ctx.fillStyle = this.cfg.hangingSignText;
-      ctx.fillRect(x + s(8), y + s(8), w - s(16), Math.max(1, s(2)));
+      ctx.fillRect(tlx + s(8), tly + s(8), (trx - tlx) - s(16), Math.max(1, s(2)));
     }
   }
 
@@ -987,6 +1044,7 @@ export class EstacionBase {
     const SPRITE_W = 48;
     const SPRITE_H = 40;
     // Proporción del ancho de vía que el tren ocupa a la base.
+    // 0.85 (antes 0.95) → trenes más estrechos, ~51 % del canvas entre ambos.
     const TRAIN_TO_TRACK_RATIO = 0.85;
 
     this._trains.forEach((train) => {
@@ -1010,7 +1068,7 @@ export class EstacionBase {
       const cx = (1 - t) * cVP + t * cBase;
       const trackWidthHere = (1 - t) * wVP + t * wBase;
 
-      // Escala de tren: el tren ocupa ~85% del ancho de vía a esa profundidad.
+      // Escala de tren: el tren ocupa ~95 % del ancho de vía a esa profundidad.
       const scale = Math.max(0.05, (trackWidthHere * TRAIN_TO_TRACK_RATIO) / SPRITE_W);
 
       // Posición vertical: la BASE del sprite se alinea con la traviesa

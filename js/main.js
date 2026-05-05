@@ -4,7 +4,7 @@ import { canvas, ctx, STATE, pigeon, obstacles, collectibles, particles, CHARACT
 import { loadFlightHistory, checkUnlocks, loadAchievements, saveAchievements } from './mecanica/progreso.js';
 import { loadActiveProfile } from './mecanica/perfil.js';
 import { initInput, keys, consumeKey } from './mecanica/input.js';
-import { initCamera } from './mecanica/camara.js';
+import { initCamera, applyCamera, unapplyCamera, resetCamera } from './mecanica/camara.js';
 import { checkCollisions, drawDebugHitboxes } from './mecanica/colisiones.js';
 import { updatePigeon,     drawPigeon     } from './personajes/paloma.js';
 import { updatePidgey,     drawPidgey     } from './personajes/pidgey.js';
@@ -109,6 +109,7 @@ function startNewGame() {
   pigeon.stunStars  = [];
   pigeon.tilt       = 0;
   STATE.cameraShake = 0;
+  resetCamera();   // resetear el offset XY de la cámara móvil
   obstacles.length = 0;
   collectibles.length = 0;
   particles.length = 0;
@@ -201,7 +202,6 @@ function update(dt) {
       CHARACTERS[STATE.selectedCharacter].update(dt);
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.update(dt);
-        updateCollectibles(dt);
         // Fin de línea: la paloma ha llegado al terminal de la dirección
         // elegida. Pasamos a LEVEL_COMPLETE para mostrar el popup de
         // "Dar la vuelta" / "Terminar".
@@ -293,51 +293,63 @@ function render() {
       break;
 
     case 'PLAYING':
+      // Mecánica nueva: la paloma queda anclada al centro de la pantalla y
+      // todo el escenario se desplaza con el offset de cámara. Aplicamos
+      // el transform SOLO al contenido world-space (escenario, obstáculos,
+      // coleccionables, partículas). Paloma y HUD quedan FUERA del transform
+      // → siempre visibles en la misma posición de pantalla.
+      applyCamera(ctx);
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.render(ctx);
-        drawCollectibles(ctx);
       } else {
         drawTunnel(ctx);
         drawObstacles(ctx);
         drawCollectibles(ctx);
       }
       drawParticles(ctx);
+      unapplyCamera(ctx);
       CHARACTERS[STATE.selectedCharacter].draw(ctx);
+      if (STATE.selectedScenario === 'linea_3') Linea3.renderHUD(ctx);
       drawHUD(ctx);
       break;
 
     case 'PAUSED':
+      applyCamera(ctx);
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.render(ctx);
-        drawCollectibles(ctx);
       } else {
         drawTunnel(ctx);
         drawObstacles(ctx);
         drawCollectibles(ctx);
       }
       drawParticles(ctx);
+      unapplyCamera(ctx);
       CHARACTERS[STATE.selectedCharacter].draw(ctx);
+      if (STATE.selectedScenario === 'linea_3') Linea3.renderHUD(ctx);
       drawHUD(ctx);
       drawPauseScreen(ctx);
       break;
 
     case 'LEVEL_COMPLETE':
       // Congelar el último frame del juego y superponer el popup.
+      applyCamera(ctx);
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.render(ctx);
-        drawCollectibles(ctx);
       } else {
         drawTunnel(ctx);
         drawObstacles(ctx);
         drawCollectibles(ctx);
       }
       drawParticles(ctx);
+      unapplyCamera(ctx);
       CHARACTERS[STATE.selectedCharacter].draw(ctx);
+      if (STATE.selectedScenario === 'linea_3') Linea3.renderHUD(ctx);
       drawHUD(ctx);
       drawLevelCompleteScreen(ctx, mouse);
       break;
 
     case 'GAMEOVER':
+      applyCamera(ctx);
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.render(ctx);
       } else {
@@ -345,6 +357,8 @@ function render() {
         drawObstacles(ctx);
       }
       drawParticles(ctx);
+      unapplyCamera(ctx);
+      if (STATE.selectedScenario === 'linea_3') Linea3.renderHUD(ctx);
       drawHUD(ctx);
       drawGameOverScreen(ctx);
       break;

@@ -2,11 +2,14 @@
 
 import { pigeon, STATE, canvas } from '../mecanica/estado.js';
 import { keys } from '../mecanica/input.js';
-import { w2sx, w2sy } from '../mecanica/camara.js';
+import {
+  w2sx, w2sy, camera, CAMERA_RANGE_X, CAMERA_RANGE_Y_UP, CAMERA_RANGE_Y_DOWN,
+  getPigeonScreenOffset,
+} from '../mecanica/camara.js';
 
 const MAX_VELOCITY = 6;
 const EASING       = 0.15;
-const SPRITE_SCALE = 3;
+const SPRITE_SCALE = 2.25;  // reducido 25 % desde 3 para coherencia con paloma
 
 // Paleta
 const PAL_PIDGEY = {
@@ -35,17 +38,22 @@ export function updatePidgey(dt) {
   if (pigeon.stunned > 0)    pigeon.stunned--;
   if (pigeon.invincible > 0) pigeon.invincible--;
 
+  // Pidgey queda anclado al centro; el input mueve la cámara.
+  pigeon.x = 0;
+  pigeon.y = 0;
+
   // ── BLOQUEAR INPUT mientras está aturdido ──
   if (pigeon.stunned > 0) {
     pigeon.vx *= 0.85;
     pigeon.vy *= 0.85;
-    pigeon.x  += pigeon.vx * dt;
-    pigeon.y  += pigeon.vy * dt;
+    camera.offsetX += pigeon.vx * dt;
+    camera.offsetY += pigeon.vy * dt;
 
-    const maxX = canvas.width  * 0.28;
-    const maxY = canvas.height * 0.28;
-    pigeon.x = Math.max(-maxX, Math.min(maxX, pigeon.x));
-    pigeon.y = Math.max(-maxY, Math.min(maxY, pigeon.y));
+    const maxX     = canvas.width  * CAMERA_RANGE_X;
+    const maxYUp   = canvas.height * CAMERA_RANGE_Y_UP;
+    const maxYDown = canvas.height * CAMERA_RANGE_Y_DOWN;
+    camera.offsetX = Math.max(-maxX,    Math.min(maxX,    camera.offsetX));
+    camera.offsetY = Math.max(-maxYUp,  Math.min(maxYDown, camera.offsetY));
 
     pigeon.stunStars.forEach(s => {
       s.angle += 0.18 * dt;
@@ -58,7 +66,7 @@ export function updatePidgey(dt) {
     return;
   }
 
-  // ── Movimiento normal ──
+  // ── Movimiento normal: input mueve la cámara, no el sprite ──
   let targetVx = 0, targetVy = 0;
   if (keys['ArrowLeft']  || keys['a']) targetVx -= MAX_VELOCITY;
   if (keys['ArrowRight'] || keys['d']) targetVx += MAX_VELOCITY;
@@ -67,13 +75,14 @@ export function updatePidgey(dt) {
 
   pigeon.vx += (targetVx - pigeon.vx) * EASING;
   pigeon.vy += (targetVy - pigeon.vy) * EASING;
-  pigeon.x  += pigeon.vx * dt;
-  pigeon.y  += pigeon.vy * dt;
+  camera.offsetX += pigeon.vx * dt;
+  camera.offsetY += pigeon.vy * dt;
 
-  const maxX = canvas.width  * 0.28;
-  const maxY = canvas.height * 0.28;
-  pigeon.x = Math.max(-maxX, Math.min(maxX, pigeon.x));
-  pigeon.y = Math.max(-maxY, Math.min(maxY, pigeon.y));
+  const maxX     = canvas.width  * CAMERA_RANGE_X;
+  const maxYUp   = canvas.height * CAMERA_RANGE_Y_UP;
+  const maxYDown = canvas.height * CAMERA_RANGE_Y_DOWN;
+  camera.offsetX = Math.max(-maxX,    Math.min(maxX,    camera.offsetX));
+  camera.offsetY = Math.max(-maxYUp,  Math.min(maxYDown, camera.offsetY));
 
   pigeon.tilt = Math.max(-1, Math.min(1, pigeon.vx / MAX_VELOCITY));
 
@@ -84,8 +93,9 @@ export function updatePidgey(dt) {
 }
 
 export function drawPidgey(ctx) {
-  const sx = w2sx(pigeon.x);
-  const sy = w2sy(pigeon.y);
+  const drift = getPigeonScreenOffset();
+  const sx = w2sx(pigeon.x) + drift.dx;
+  const sy = w2sy(pigeon.y) + drift.dy;
 
   // ── PARPADEO durante invencibilidad (después del stun) ──
   if (pigeon.invincible > 0 && pigeon.stunned === 0) {

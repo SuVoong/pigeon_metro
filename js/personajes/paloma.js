@@ -2,11 +2,14 @@
 
 import { pigeon, STATE, canvas } from '../mecanica/estado.js';
 import { keys } from '../mecanica/input.js';
-import { w2sx, w2sy } from '../mecanica/camara.js';
+import {
+  w2sx, w2sy, camera, CAMERA_RANGE_X, CAMERA_RANGE_Y_UP, CAMERA_RANGE_Y_DOWN,
+  getPigeonScreenOffset, getPigeonVerticalOffset,
+} from '../mecanica/camara.js';
 
 const MAX_VELOCITY = 6;
 const EASING       = 0.15;
-const SPRITE_SCALE = 3;   // 32px diseño × 3 = 96px en pantalla
+const SPRITE_SCALE = 2.25;  // 32px diseño × 2.25 = 72px (reducido 25 % desde 3)
 
 // Paleta
 const PAL_PALOMA = {
@@ -39,19 +42,28 @@ export function updatePigeon(dt) {
   if (pigeon.stunned > 0)    pigeon.stunned--;
   if (pigeon.invincible > 0) pigeon.invincible--;
 
+  // ── Mecánica nueva ──
+  // La paloma queda anclada al centro de la pantalla (pigeon.x = pigeon.y = 0).
+  // Lo que se desplaza con el input es la CÁMARA — todo el escenario se
+  // mueve alrededor de la paloma. La velocidad sigue viviendo en pigeon.vx/vy
+  // por compatibilidad con tilt visual y el sistema de stun.
+  pigeon.x = 0;
+  pigeon.y = 0;
+
   // ── BLOQUEAR INPUT mientras está aturdida ──
   if (pigeon.stunned > 0) {
-    // Aplicar fricción: la paloma pierde velocidad lentamente
+    // Aplicar fricción: la cámara pierde velocidad lentamente
     pigeon.vx *= 0.85;
     pigeon.vy *= 0.85;
-    pigeon.x  += pigeon.vx * dt;
-    pigeon.y  += pigeon.vy * dt;
+    camera.offsetX += pigeon.vx * dt;
+    camera.offsetY += pigeon.vy * dt;
 
-    // Clampear a la zona central del canvas
-    const maxX = canvas.width  * 0.28;
-    const maxY = canvas.height * 0.28;
-    pigeon.x = Math.max(-maxX, Math.min(maxX, pigeon.x));
-    pigeon.y = Math.max(-maxY, Math.min(maxY, pigeon.y));
+    // Clampear el offset al rango de cámara (centralizado en camara.js)
+    const maxX     = canvas.width  * CAMERA_RANGE_X;
+    const maxYUp   = canvas.height * CAMERA_RANGE_Y_UP;
+    const maxYDown = canvas.height * CAMERA_RANGE_Y_DOWN;
+    camera.offsetX = Math.max(-maxX,    Math.min(maxX,    camera.offsetX));
+    camera.offsetY = Math.max(-maxYUp,  Math.min(maxYDown, camera.offsetY));
 
     // Actualizar ángulos de las estrellitas (rotación)
     pigeon.stunStars.forEach(s => {
@@ -66,7 +78,7 @@ export function updatePigeon(dt) {
     return;  // skip normal movement input
   }
 
-  // ── Movimiento normal (código original) ──
+  // ── Movimiento normal: input mueve la cámara, no la paloma ──
   let targetVx = 0, targetVy = 0;
   if (keys['ArrowLeft']  || keys['a']) targetVx -= MAX_VELOCITY;
   if (keys['ArrowRight'] || keys['d']) targetVx += MAX_VELOCITY;
@@ -77,17 +89,18 @@ export function updatePigeon(dt) {
   pigeon.vx += (targetVx - pigeon.vx) * EASING;
   pigeon.vy += (targetVy - pigeon.vy) * EASING;
 
-  // Aplicar velocidad escalada por dt
-  pigeon.x += pigeon.vx * dt;
-  pigeon.y += pigeon.vy * dt;
+  // Aplicar velocidad al OFFSET DE CÁMARA (la paloma queda quieta)
+  camera.offsetX += pigeon.vx * dt;
+  camera.offsetY += pigeon.vy * dt;
 
-  // Clampear a la zona central del canvas
-  const maxX = canvas.width  * 0.28;
-  const maxY = canvas.height * 0.28;
-  pigeon.x = Math.max(-maxX, Math.min(maxX, pigeon.x));
-  pigeon.y = Math.max(-maxY, Math.min(maxY, pigeon.y));
+  // Clampear el offset a la zona central del canvas
+  const maxX     = canvas.width  * CAMERA_RANGE_X;
+  const maxYUp   = canvas.height * CAMERA_RANGE_Y_UP;
+  const maxYDown = canvas.height * CAMERA_RANGE_Y_DOWN;
+  camera.offsetX = Math.max(-maxX,    Math.min(maxX,    camera.offsetX));
+  camera.offsetY = Math.max(-maxYUp,  Math.min(maxYDown, camera.offsetY));
 
-  // Inclinación visual
+  // Inclinación visual (basada en la velocidad de la cámara)
   pigeon.tilt = Math.max(-1, Math.min(1, pigeon.vx / MAX_VELOCITY));
 
   // Ciclo de alas: avanzar cada 7 frames
@@ -98,8 +111,13 @@ export function updatePigeon(dt) {
 }
 
 export function drawPigeon(ctx) {
-  const sx = w2sx(pigeon.x);
-  const sy = w2sy(pigeon.y);
+  // Posición visual = centro fijo + drift por offset de cámara. El drift
+  // permite que la paloma "vuele" hasta el techo o pique a los rieles
+  // cuando el jugador mantiene Up/Down al máximo. La hitbox sigue en
+  // (pigeon.x, pigeon.y) = (0, 0) world.
+  const drift = getPigeonScreenOffset();
+  const sx = w2sx(pigeon.x) + drift.dx;
+  const sy = w2sy(pigeon.y) + drift.dy + getPigeonVerticalOffset();
 
   // ── PARPADEO durante invencibilidad (después del stun) ──
   // Solo cuando NO está en stun (stun = 0) e invincible > 0
