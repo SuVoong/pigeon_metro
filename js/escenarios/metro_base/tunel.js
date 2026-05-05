@@ -122,10 +122,10 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   // superior del canvas. Subido a 0.28 las paredes se juntan más afuera
   // del VP, dejando MENOS espacio interior — el techo se "cierra" aún más
   // tras la reducción de maxR (sección ~25% más estrecha).
-  const TOP_RATIO   = 0.28;       // antes 0.20
+  const TOP_RATIO   = 0.20;       // antes 0.20
   const FLOOR_RATIO = 0.18;
-  const CTRL_RATIO  = 0.60;
-  const TOP_DIP     = 0.42;       // antes 0.30 — dip del techo, debe ser
+  const CTRL_RATIO  = 0.50;
+  const TOP_DIP     = 0.30;       // antes 0.30 — dip del techo, debe ser
                                   // mayor que TOP_RATIO para que la curva
                                   // baje al centro
 

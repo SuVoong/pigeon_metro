@@ -2,7 +2,7 @@
 
 import { canvas } from './estado.js';
 
-export const FOCAL = 400;  // distancia focal para proyección perspectiva
+export const FOCAL = 200;  // distancia focal para proyección perspectiva
 
 // ── Cámara móvil ─────────────────────────────────────────────────────────────
 // La paloma ya no se mueve por la pantalla: queda anclada al centro y todo el
