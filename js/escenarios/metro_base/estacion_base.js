@@ -53,18 +53,18 @@ const DEFAULT_CONFIG = {
   platformEdgeYellow: '#FFCC00',
 
   // ── Paredes ─────────────────────────────────────────────────────────────
-  wallColor:          '#F0F0F0',
-  wallStripeBlue:     '#1A3A8A',
+  wallColor:          '#EFEDE6',     // blanco hueso, levemente cálido
+  wallStripeBlue:     '#2F7A3A',     // VERDE (antes azul) — referencia foto
   wallStripeYellow:   '#FFCC00',
 
   // ── Techo ───────────────────────────────────────────────────────────────
-  ceilingColor:       '#222230',
-  ceilingBandTop:     '#0d1535',
+  ceilingColor:       '#9C9890',     // hormigón claro abovedado (antes #222230 oscuro)
+  ceilingBandTop:     '#7A766E',     // sombra superior del arco
 
   // ── Iluminación ─────────────────────────────────────────────────────────
-  fluorescentColor:   '#FFFBE6',
-  fluorescentGlow:    'rgba(255, 251, 230, 0.15)',
-  numFluorescents:    5,
+  fluorescentColor:   '#FFF8DC',     // amarillo cálido
+  fluorescentGlow:    'rgba(255, 248, 220, 0.45)',  // brillo más intenso (antes 0.15)
+  numFluorescents:    7,             // más tubos (antes 5) — sensación de pasillo iluminado
 
   // ── Carteles / pantalla LED ─────────────────────────────────────────────
   signBgColor:        '#1A3A8A',
@@ -314,30 +314,38 @@ export class EstacionBase {
     ctx.fill();
   }
 
-  // ── FLUORESCENTES (5 tubos paralelos al techo) ───────────────────────────
+  // ── FLUORESCENTES (N tubos paralelos al techo, hacia el VP) ─────────────
+  // Distribuidos uniformemente desde la esquina superior del canvas hasta el
+  // VP. Cada tubo dibuja una franja larga (líneas continuas) para evocar las
+  // tiras fluorescentes empotradas del techo de Metro.
   _drawFluorescents(ctx, W, H, vpX, vpY) {
-    const tubes = [
-      { x1: 0,        y1: 14, x2: vpX - 18, y2: vpY - 10 },
-      { x1: W * 0.25, y1: 8,  x2: vpX - 8,  y2: vpY - 10 },
-      { x1: vpX,      y1: 4,  x2: vpX,      y2: vpY - 10 },
-      { x1: W * 0.75, y1: 8,  x2: vpX + 8,  y2: vpY - 10 },
-      { x1: W,        y1: 14, x2: vpX + 18, y2: vpY - 10 },
-    ];
-    tubes.forEach((t, i) => {
-      const isOn = this._fluorState[i];
-      // Halo
+    const n = Math.max(1, this.cfg.numFluorescents | 0);
+    // Posiciones X equiespaciadas en el borde superior del canvas
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1 || 1);                // 0..1
+      const x1 = t * W;                          // arranque en el borde superior
+      const y1 = 12 + Math.abs(0.5 - t) * 8;     // ligero "plegado" hacia los extremos
+      // Convergencia hacia el VP: los tubos cercanos al centro convergen
+      // antes que los laterales (efecto perspectiva del techo abovedado).
+      const dx = (t - 0.5) * 2;                  // -1..1
+      const x2 = vpX + dx * 25;
+      const y2 = vpY - 10;
+
+      const isOn = this._fluorState[i] ?? true;
+
+      // Halo amplio
       ctx.strokeStyle = isOn ? this.cfg.fluorescentGlow : 'rgba(100,100,100,0.05)';
-      ctx.lineWidth   = 6;
+      ctx.lineWidth   = 9;
       ctx.beginPath();
-      ctx.moveTo(t.x1, t.y1); ctx.lineTo(t.x2, t.y2);
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
       ctx.stroke();
       // Tubo
       ctx.strokeStyle = isOn ? this.cfg.fluorescentColor : '#666';
-      ctx.lineWidth   = 1.5;
+      ctx.lineWidth   = 2.2;
       ctx.beginPath();
-      ctx.moveTo(t.x1, t.y1); ctx.lineTo(t.x2, t.y2);
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
       ctx.stroke();
-    });
+    }
   }
 
   // ── PAREDES laterales (trapecios) ────────────────────────────────────────
