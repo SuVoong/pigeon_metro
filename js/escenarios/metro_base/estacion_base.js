@@ -128,6 +128,19 @@ const DEFAULT_CONFIG = {
   isCheckpoint:       false,
 };
 
+// ── Helpers de color (módulo) ───────────────────────────────────────────────
+function _hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function _mixHex(hexA, hexB, t) {
+  const [aR, aG, aB] = _hexToRgb(hexA);
+  const [bR, bG, bB] = _hexToRgb(hexB);
+  const k = Math.max(0, Math.min(1, t));
+  return `rgb(${Math.round(aR + (bR - aR) * k)},${Math.round(aG + (bG - aG) * k)},${Math.round(aB + (bB - aB) * k)})`;
+}
+
 export class EstacionBase {
   constructor(configOverride = {}) {
     this.cfg              = { ...DEFAULT_CONFIG, ...configOverride };
@@ -292,26 +305,62 @@ export class EstacionBase {
   }
 
   // ── TECHO ─────────────────────────────────────────────────────────────────
+  // Bóveda abovedada: en lugar de un trapecio plano, dibujamos N strips
+  // radiales desde el VP hasta el borde superior del canvas. Cada strip se
+  // colorea con un gradiente que va de claro (centro de la bóveda) a oscuro
+  // (extremos donde la curva se "esconde" detrás de la pared) — el ojo lee
+  // la transición de tonos como curvatura cilíndrica de un túnel real.
   _drawCeiling(ctx, W, H, vpX, vpY) {
     const B = this._bounds;
-    ctx.fillStyle = this.cfg.ceilingColor;
-    ctx.beginPath();
-    ctx.moveTo(B.left,  B.top);
-    ctx.lineTo(B.right, B.top);
-    ctx.lineTo(vpX + 25, vpY - 10);
-    ctx.lineTo(vpX - 25, vpY - 10);
-    ctx.closePath();
-    ctx.fill();
+    const peakY  = B.top;            // altura máxima del arco
+    const apexY  = vpY - 10;         // donde converge en el VP
+    const N      = 24;               // strips — más = más suave (24 ya pixel-perfect)
+    const baseHex = this.cfg.ceilingColor;     // hormigón claro al centro
+    const edgeHex = this.cfg.ceilingBandTop;   // sombra hacia el alero
 
-    // Banda azul oscuro superior
-    ctx.fillStyle = this.cfg.ceilingBandTop;
+    // Ancho del techo en la base (todo el canvas) y en el VP (estrecho)
+    const baseLeft  = B.left,  baseRight  = B.right;
+    const apexLeft  = vpX - 25, apexRight = vpX + 25;
+
+    for (let i = 0; i < N; i++) {
+      // t va de 0 (extremo IZQ) a 1 (extremo DER)
+      const t1 = i       / N;
+      const t2 = (i + 1) / N;
+
+      // Coordenada X de cada strip en la base y en el VP
+      const xBase1 = baseLeft + (baseRight - baseLeft) * t1;
+      const xBase2 = baseLeft + (baseRight - baseLeft) * t2;
+      const xApex1 = apexLeft + (apexRight - apexLeft) * t1;
+      const xApex2 = apexLeft + (apexRight - apexLeft) * t2;
+
+      // Curvatura: |t-0.5|*2 ∈ [0,1]. 0=centro, 1=esquina.
+      // El centro es el PICO del arco; los lados se "doblan" a apexY+offset
+      const dCenter = Math.abs((t1 + t2) / 2 - 0.5) * 2;
+      // Al centro yPeak = peakY (más alto); a las esquinas baja un poco
+      const yEdge = peakY + dCenter * 18;
+
+      // Mezcla de color por curvatura (centro claro, lados oscuros)
+      const k = Math.pow(dCenter, 1.4);
+      ctx.fillStyle = _mixHex(baseHex, edgeHex, k);
+
+      ctx.beginPath();
+      ctx.moveTo(xBase1, yEdge);
+      ctx.lineTo(xBase2, yEdge);
+      ctx.lineTo(xApex2, apexY);
+      ctx.lineTo(xApex1, apexY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Línea de junta arco-pared (sutil, refuerza la silueta de la bóveda)
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(B.left,  B.top + 6);
-    ctx.lineTo(B.right, B.top + 6);
-    ctx.lineTo(vpX + 25, vpY - 12);
-    ctx.lineTo(vpX - 25, vpY - 12);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(B.left,  peakY + 18);
+    ctx.lineTo(apexLeft, apexY);
+    ctx.moveTo(B.right, peakY + 18);
+    ctx.lineTo(apexRight, apexY);
+    ctx.stroke();
   }
 
   // ── FLUORESCENTES (N tubos paralelos al techo, hacia el VP) ─────────────
