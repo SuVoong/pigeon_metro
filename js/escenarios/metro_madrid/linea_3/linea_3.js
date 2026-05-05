@@ -97,7 +97,7 @@ function _genericStop(name, idx, total) {
       durationSeconds:       tunelDur,
       trainSpawnInterval:    trainSpawn,
       obstacleSpawnInterval: obsSpawn,
-      obstacleTypes:         ['pipe'],
+      obstacleTypes:         [],
       trainLineVariant:      'linea_3',
       speed,
     },

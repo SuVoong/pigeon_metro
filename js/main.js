@@ -202,7 +202,6 @@ function update(dt) {
       CHARACTERS[STATE.selectedCharacter].update(dt);
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.update(dt);
-        updateCollectibles(dt);
         // Fin de línea: la paloma ha llegado al terminal de la dirección
         // elegida. Pasamos a LEVEL_COMPLETE para mostrar el popup de
         // "Dar la vuelta" / "Terminar".
@@ -302,7 +301,6 @@ function render() {
       applyCamera(ctx);
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.render(ctx);
-        drawCollectibles(ctx);
       } else {
         drawTunnel(ctx);
         drawObstacles(ctx);
@@ -319,7 +317,6 @@ function render() {
       applyCamera(ctx);
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.render(ctx);
-        drawCollectibles(ctx);
       } else {
         drawTunnel(ctx);
         drawObstacles(ctx);
@@ -338,7 +335,6 @@ function render() {
       applyCamera(ctx);
       if (STATE.selectedScenario === 'linea_3') {
         Linea3.render(ctx);
-        drawCollectibles(ctx);
       } else {
         drawTunnel(ctx);
         drawObstacles(ctx);

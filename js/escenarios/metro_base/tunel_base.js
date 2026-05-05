@@ -52,7 +52,7 @@ const DEFAULT_CONFIG = {
   // ── Gameplay ──────────────────────────────────────────────────────────────
   trainSpawnInterval: 140,       // frames entre trenes (~2.3s a 60fps — espacio para tren de 8 vagones)
   obstacleSpawnInterval: 110,    // frames entre obstáculos
-  obstacleTypes:      ['pipe'],
+  obstacleTypes:      [],        // sin tuberías por defecto — el túnel queda limpio (sólo trenes)
   trainLineVariant:   'linea_3',
   speed:              2,
   trainW:             180,
