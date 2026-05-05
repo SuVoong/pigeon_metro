@@ -363,37 +363,52 @@ export class EstacionBase {
     ctx.stroke();
   }
 
-  // ── FLUORESCENTES (N tubos paralelos al techo, hacia el VP) ─────────────
-  // Distribuidos uniformemente desde la esquina superior del canvas hasta el
-  // VP. Cada tubo dibuja una franja larga (líneas continuas) para evocar las
-  // tiras fluorescentes empotradas del techo de Metro.
+  // ── FLUORESCENTES (N tiras gruesas continuas a lo largo del techo) ──────
+  // Cada tira se compone de 3 capas:
+  //   · halo grueso difuso (luz que se "derrama" sobre la bóveda)
+  //   · tubo principal (línea brillante con grosor en perspectiva)
+  //   · alma central blanca (núcleo más caliente que sugiere el filamento)
+  // Las tiras convergen al VP siguiendo la curvatura de la bóveda.
   _drawFluorescents(ctx, W, H, vpX, vpY) {
     const n = Math.max(1, this.cfg.numFluorescents | 0);
-    // Posiciones X equiespaciadas en el borde superior del canvas
     for (let i = 0; i < n; i++) {
       const t = i / (n - 1 || 1);                // 0..1
       const x1 = t * W;                          // arranque en el borde superior
-      const y1 = 12 + Math.abs(0.5 - t) * 8;     // ligero "plegado" hacia los extremos
-      // Convergencia hacia el VP: los tubos cercanos al centro convergen
-      // antes que los laterales (efecto perspectiva del techo abovedado).
+      const y1 = 14 + Math.abs(0.5 - t) * 10;    // pliegue hacia los extremos
+      // Convergencia hacia el VP, ligeramente arqueada como la bóveda
       const dx = (t - 0.5) * 2;                  // -1..1
-      const x2 = vpX + dx * 25;
+      const x2 = vpX + dx * 30;
       const y2 = vpY - 10;
 
       const isOn = this._fluorState[i] ?? true;
 
-      // Halo amplio
+      // 1 ── Halo amplio (resplandor sobre la bóveda)
       ctx.strokeStyle = isOn ? this.cfg.fluorescentGlow : 'rgba(100,100,100,0.05)';
-      ctx.lineWidth   = 9;
+      ctx.lineWidth   = 14;
+      ctx.lineCap     = 'round';
       ctx.beginPath();
       ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
       ctx.stroke();
-      // Tubo
-      ctx.strokeStyle = isOn ? this.cfg.fluorescentColor : '#666';
-      ctx.lineWidth   = 2.2;
+
+      // 2 ── Cuerpo del tubo (más ancho cerca de cámara, fino al VP)
+      const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+      grad.addColorStop(0,    isOn ? this.cfg.fluorescentColor : '#555');
+      grad.addColorStop(0.6,  isOn ? this.cfg.fluorescentColor : '#555');
+      grad.addColorStop(1,    isOn ? '#FFFFFF' : '#888');
+      ctx.strokeStyle = grad;
+      ctx.lineWidth   = 4.5;
       ctx.beginPath();
       ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
       ctx.stroke();
+
+      // 3 ── Núcleo blanco caliente (filamento)
+      ctx.strokeStyle = isOn ? '#FFFFFF' : '#999';
+      ctx.lineWidth   = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      ctx.lineCap = 'butt';   // restaurar
     }
   }
 
