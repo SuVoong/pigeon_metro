@@ -397,36 +397,118 @@ export class EstacionBase {
     }
   }
 
-  // ── PAREDES laterales (trapecios) ────────────────────────────────────────
+  // ── PAREDES laterales (trapecios + patrón de azulejos) ─────────────────
   _drawWalls(ctx, W, H, vpX, vpY, G) {
     const B = this._bounds;
+
+    // Vertices de pared izquierda: trapecio (base + VP)
+    const Lwall = {
+      tlx: B.left, tly: B.top,
+      trx: G.pVL,  try_: vpY - 10,
+      brx: G.pVL,  bry: vpY + 5,
+      blx: B.left, bly: H * 0.55,
+    };
+    const Rwall = {
+      tlx: G.pVR,   tly: vpY - 10,
+      trx: B.right, try_: B.top,
+      brx: B.right, bry: H * 0.55,
+      blx: G.pVR,   bly: vpY + 5,
+    };
+
+    // 1 ── Relleno blanco hueso de cada pared
     ctx.fillStyle = this.cfg.wallColor;
-
-    // Pared izquierda — vértices del andén (base + VP)
     ctx.beginPath();
-    ctx.moveTo(B.left, B.top);
-    ctx.lineTo(G.pVL,  vpY - 10);
-    ctx.lineTo(G.pVL,  vpY + 5);
-    ctx.lineTo(B.left, H * 0.55);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(Lwall.tlx, Lwall.tly);
+    ctx.lineTo(Lwall.trx, Lwall.try_);
+    ctx.lineTo(Lwall.brx, Lwall.bry);
+    ctx.lineTo(Lwall.blx, Lwall.bly);
+    ctx.closePath(); ctx.fill();
 
-    // Pared derecha
     ctx.beginPath();
-    ctx.moveTo(B.right, B.top);
-    ctx.lineTo(G.pVR,   vpY - 10);
-    ctx.lineTo(G.pVR,   vpY + 5);
-    ctx.lineTo(B.right, H * 0.55);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(Rwall.tlx, Rwall.tly);
+    ctx.lineTo(Rwall.trx, Rwall.try_);
+    ctx.lineTo(Rwall.brx, Rwall.bry);
+    ctx.lineTo(Rwall.blx, Rwall.bly);
+    ctx.closePath(); ctx.fill();
 
-    // Franja decorativa azul (en perspectiva, converge al VP)
+    // 2 ── Patrón de azulejos: junta horizontal cada FILA filas + vertical
+    //      cada columna; las verticales convergen hacia el VP.
+    this._drawTilePattern(ctx, Lwall, true);
+    this._drawTilePattern(ctx, Rwall, false);
+
+    // 3 ── Franja decorativa VERDE (en perspectiva, converge al VP)
     ctx.strokeStyle = this.cfg.wallStripeBlue;
-    ctx.lineWidth   = 1.5;
+    ctx.lineWidth   = 3;
     ctx.beginPath();
     ctx.moveTo(B.left,  H * 0.30); ctx.lineTo(G.pVL, vpY - 5);
     ctx.moveTo(B.right, H * 0.30); ctx.lineTo(G.pVR, vpY - 5);
     ctx.stroke();
+    // Sombra fina debajo de la franja para darle volumen
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(B.left,  H * 0.30 + 3); ctx.lineTo(G.pVL, vpY - 5 + 0.5);
+    ctx.moveTo(B.right, H * 0.30 + 3); ctx.lineTo(G.pVR, vpY - 5 + 0.5);
+    ctx.stroke();
+  }
+
+  /** Dibuja la cuadrícula de azulejos (juntas) sobre el trapecio de pared.
+   *  - Horizontal: 6 filas equiespaciadas (las cercanas separadas, las
+   *    lejanas apretadas por perspectiva — interpolación lineal en t).
+   *  - Vertical: 8 columnas; cada vertical va de (xBaseN, yBaseN) a un
+   *    punto convergente cerca del VP — fuga natural.
+   *  isLeft cambia la orientación de los puntos. */
+  _drawTilePattern(ctx, w, isLeft) {
+    const ROWS = 6, COLS = 8;
+    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+    ctx.lineWidth   = 1;
+
+    // Líneas HORIZONTALES (junta superior de cada fila)
+    for (let r = 1; r < ROWS; r++) {
+      const t  = r / ROWS;
+      // Lado base (cerca cámara) — interpolar entre TL→BL
+      const xL = w.tlx + (w.blx - w.tlx) * t;
+      const yL = w.tly + (w.bly - w.tly) * t;
+      // Lado VP — interpolar entre TR→BR
+      const xR = w.trx + (w.brx - w.trx) * t;
+      const yR = w.try_ + (w.bry - w.try_) * t;
+      ctx.beginPath();
+      ctx.moveTo(xL, yL);
+      ctx.lineTo(xR, yR);
+      ctx.stroke();
+    }
+
+    // Líneas VERTICALES (junta entre azulejos contiguos en profundidad)
+    // En la base equiespaciadas, en el VP convergen al mismo punto.
+    for (let c = 1; c < COLS; c++) {
+      const t  = c / COLS;
+      // Posición X en la base
+      const xBaseN = w.tlx + (w.blx - w.tlx) * 0   // base side
+                     + (isLeft ? 1 : -1) * 0;
+      // Más simple: interpolar TL→BL en y, mantener X de la base de pared
+      // Como las paredes son trapecios delgados, las verticales van de
+      // un punto del lado de la BASE a un punto del lado del VP, ambos
+      // a la misma fracción t a lo largo de la altura del trapecio.
+      // Punto en lado BASE: a t a lo largo de TL→BL
+      const x1 = w.tlx + (w.blx - w.tlx) * t;
+      const y1 = w.tly + (w.bly - w.tly) * t;
+      // Punto en lado VP: a t a lo largo de TR→BR
+      const x2 = w.trx + (w.brx - w.trx) * t;
+      const y2 = w.try_ + (w.bry - w.try_) * t;
+      // Para pintar la "vertical" del azulejo (perpendicular al avance del
+      // pasillo) usamos en cambio puntos que avanzan en X de base a VP a
+      // la misma fracción t de la base.
+      // Reinterpretación: dividimos el TRAPECIO en columnas convergentes
+      // — cada columna va de (xBase, yBase) a (xVP, yVP) a la misma t.
+      const xb = w.tlx + (w.trx - w.tlx) * t;       // arriba: TL→TR
+      const yb = w.tly + (w.try_ - w.tly) * t;
+      const xa = w.blx + (w.brx - w.blx) * t;       // abajo: BL→BR
+      const ya = w.bly + (w.bry - w.bly) * t;
+      ctx.beginPath();
+      ctx.moveTo(xa, ya);
+      ctx.lineTo(xb, yb);
+      ctx.stroke();
+    }
   }
 
   // ── CARTELES "Estación · Andén N" ────────────────────────────────────────
