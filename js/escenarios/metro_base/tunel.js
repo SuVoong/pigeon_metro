@@ -80,6 +80,9 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   // 6b ── Aceras laterales de mantenimiento (banquetas con borde amarillo)
   _drawSideWalkways(ctx, vpX, vpY, archCY, maxR, cw, ch);
 
+  // 6c ── Cables multicolor a media altura de la pared
+  _drawSideCables(ctx, vpX, vpY, archCY, maxR, cw, ch);
+
   // 7 ── Conductos/cables en las paredes ────────────────────────────────────
   _drawConduits(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ);
 
@@ -578,6 +581,69 @@ function _drawSideWalkways(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   ctx.beginPath();
   ctx.moveTo(innerBaseR - 1, railBotY - 2);
   ctx.lineTo(innerVPR - 0.5, railTopY - 1);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── Cables multicolor a media altura de la pared (instalación eléctrica)
+// 4 cables (amarillo, rojo, negro, verde) corriendo por cada pared lateral
+// a la altura del torso, según la foto de referencia. Cada cable converge
+// al VP siguiendo una línea recta — la perspectiva los abrelluviada en
+// abanico hacia el espectador. Por encima de los cables, una bandeja
+// portacables negra (riel metálico que los sujeta).
+function _drawSideCables(ctx, vpX, vpY, archCY, maxR, cw, ch) {
+  // Y de arranque (cerca cámara, mitad inferior del canvas) y llegada (VP)
+  const baseY = vpY + (ch - vpY) * 0.40;     // 40 % bajo el VP
+  const farY  = vpY + 6;
+  // X de cada extremo (paredes a ±48 % en la base, ±2 % en el VP)
+  const baseLeftX  = vpX - cw * 0.48;
+  const baseRightX = vpX + cw * 0.48;
+  const farLeftX   = vpX - cw * 0.02;
+  const farRightX  = vpX + cw * 0.02;
+
+  // Cables apilados: dy es desplazamiento Y respecto a baseY (separa los cables)
+  const cables = [
+    { color: '#E8C400', dy: -8 },   // amarillo
+    { color: '#9A1A1A', dy: -3 },   // rojo
+    { color: '#1a1a1a', dy:  2 },   // negro grueso (alimentación)
+    { color: '#2A8038', dy:  7 },   // verde
+  ];
+
+  ctx.save();
+  // Bandeja portacables (riel oscuro que los sujeta — encima de todo)
+  ctx.strokeStyle = 'rgba(20,22,26,0.95)';
+  ctx.lineWidth   = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(baseLeftX, baseY - 12);
+  ctx.lineTo(farLeftX,  farY - 1.5);
+  ctx.moveTo(baseRightX, baseY - 12);
+  ctx.lineTo(farRightX,  farY - 1.5);
+  ctx.stroke();
+
+  // Cables (de oscuro a claro hacia delante)
+  cables.forEach(({ color, dy }) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 1.6;
+    // Izquierda
+    ctx.beginPath();
+    ctx.moveTo(baseLeftX, baseY + dy);
+    ctx.lineTo(farLeftX,  farY  + dy * 0.18);
+    ctx.stroke();
+    // Derecha
+    ctx.beginPath();
+    ctx.moveTo(baseRightX, baseY + dy);
+    ctx.lineTo(farRightX,  farY  + dy * 0.18);
+    ctx.stroke();
+  });
+
+  // Sombra debajo del paquete de cables (suelo de la bandeja)
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(baseLeftX, baseY + 11);
+  ctx.lineTo(farLeftX,  farY  + 2);
+  ctx.moveTo(baseRightX, baseY + 11);
+  ctx.lineTo(farRightX,  farY  + 2);
   ctx.stroke();
   ctx.restore();
 }
