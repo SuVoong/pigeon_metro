@@ -488,7 +488,11 @@ function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ, config = {}) {
   }
   ctx.restore();
 
-  // ── (Tercer carril amarillo eliminado a petición.) ──────────────────────
+  // ── Canal de drenaje central — rejilla metálica entre las dos vías ─────
+  // Tipo CONDUCTO CENTRAL del esquema técnico: cubierta rectangular larga
+  // con slots horizontales tipo rejilla. Animado con worldZ para que las
+  // ranuras avancen hacia la cámara.
+  _drawCentralDrain(ctx, vpX, railTopY, railBotY, cw, worldZ, config);
 
   // ── Carriles metálicos (4 carriles: 2 por vía) ──────────────────────────
   const railColor = '#8a8c94';
@@ -531,6 +535,66 @@ function _drawThirdRail(ctx, farX, topY, nearX, botY) {
   ctx.strokeStyle = 'rgba(255,255,210,0.85)';
   ctx.lineWidth   = 0.7;
   ctx.beginPath(); ctx.moveTo(farX, topY - 1.6); ctx.lineTo(nearX, botY - 2.8); ctx.stroke();
+  ctx.restore();
+}
+
+// ── Canal de drenaje central (rejilla con slots) ──────────────────────────
+// Banda trapezoidal en el corredor entre las dos vías, con ranuras
+// horizontales que se desplazan con worldZ. Sustituye la antigua banda
+// vacía por una pieza con detalle visual (CONDUCTO CENTRAL del diagrama).
+function _drawCentralDrain(ctx, vpX, topY, botY, cw, worldZ, config = {}) {
+  // Ancho del canal: ocupa el hueco entre los carriles interiores
+  // (TRACK_INNER_RATIO * 0.85 para dejar un pelín de margen).
+  const innerBase = (config.trackInnerRatio ?? TRACK_INNER_RATIO_BASE);
+  const innerVP   = TRACK_INNER_RATIO_VP;
+  const halfBase  = cw * innerBase * 0.80;
+  const halfVP    = cw * innerVP   * 0.80;
+
+  ctx.save();
+
+  // 1 ── Trapecio de la cubierta (placa metálica gris) — color concreto
+  //      lo bastante claro para que destaque sobre el negro del fondo.
+  ctx.fillStyle = '#3a3d44';
+  ctx.beginPath();
+  ctx.moveTo(vpX - halfVP,   topY);
+  ctx.lineTo(vpX + halfVP,   topY);
+  ctx.lineTo(vpX + halfBase, botY);
+  ctx.lineTo(vpX - halfBase, botY);
+  ctx.closePath();
+  ctx.fill();
+
+  // 2 ── Bordes laterales (relieve metálico claro)
+  ctx.strokeStyle = 'rgba(140,148,158,0.95)';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(vpX - halfVP,   topY); ctx.lineTo(vpX - halfBase, botY);
+  ctx.moveTo(vpX + halfVP,   topY); ctx.lineTo(vpX + halfBase, botY);
+  ctx.stroke();
+
+  // 3 ── Slots horizontales de la rejilla (animados con worldZ) ─────────
+  const numSlots = 28;
+  const slotOff  = ((worldZ * 0.0035) % (1 / numSlots) + (1 / numSlots)) % (1 / numSlots);
+  for (let i = 0; i < numSlots; i++) {
+    const baseT = i / (numSlots - 1);
+    const t = Math.pow(baseT + slotOff, 2);
+    if (t <= 0 || t >= 1) continue;
+
+    const sy     = (1 - t) * topY + t * botY;
+    const halfW  = (1 - t) * halfVP + t * halfBase;
+    const slotW  = halfW * 1.55;                  // slot ocupa ~75% del ancho
+    const slotH  = Math.max(1, t * 4.5);
+    const alpha  = Math.min(1, t * 1.5 + 0.2);
+
+    // Hueco NEGRO de la ranura (contraste fuerte sobre la placa gris)
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(1, alpha + 0.2)})`;
+    ctx.fillRect(vpX - slotW * 0.5, sy - slotH * 0.5, slotW, slotH);
+    // Borde superior de la barra entre ranuras (canto iluminado)
+    ctx.fillStyle = `rgba(160,168,178,${alpha * 0.85})`;
+    ctx.fillRect(vpX - slotW * 0.5, sy + slotH * 0.5, slotW, Math.max(1, slotH * 0.35));
+    // Sombra inferior de la ranura
+    ctx.fillStyle = `rgba(20,22,26,${alpha * 0.7})`;
+    ctx.fillRect(vpX - slotW * 0.5, sy + slotH * 0.5 + Math.max(1, slotH * 0.35), slotW, Math.max(1, slotH * 0.20));
+  }
   ctx.restore();
 }
 
