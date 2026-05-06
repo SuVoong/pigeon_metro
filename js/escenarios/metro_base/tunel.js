@@ -17,13 +17,13 @@ const _vpX        = () => canvas.width  / 2;
 // túnel ↔ estación mantiene el punto de fuga (y por tanto las vías) en la
 // misma posición vertical de la pantalla.
 const _defaultVpY        = () => canvas.height * (ENV_CFG?.vanishingPointY ?? 0.42);
-// Arco MUY APRETADO — el techo curva sobre los trenes dentro del canvas,
-// sin dejar el "V abierto" hacia las esquinas superiores. Sección reducida
-// otro −60 % respecto a la versión 0.30 (0.40 → 0.30 → 0.12) — la "boca"
-// del túnel queda muy estrecha, casi a la altura del tren al fondo.
-// archOffset = maxR mantiene la cresta del arco exactamente en vpY.
-const _defaultArchOffset = () => canvas.height * 0.12;
-const _defaultMaxR       = () => canvas.height * 0.12;
+// Arco GRANDE tipo dovelas de hormigón — la bóveda domina la mitad
+// superior del canvas (ref. foto del túnel real). maxR define el radio
+// del anillo más cercano al espectador; archOffset baja el centro del
+// círculo para que el arco quede sobre el VP y deje espacio inferior
+// para las vías y aceras de mantenimiento.
+const _defaultArchOffset = () => canvas.height * 0.18;
+const _defaultMaxR       = () => canvas.height * 0.45;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRY POINT
