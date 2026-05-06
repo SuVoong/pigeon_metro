@@ -75,7 +75,7 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   // 6 ── Raíles con durmientes ───────────────────────────────────────────────
   // Pasamos vpY explícito para que los raíles arranquen a la MISMA Y que en
   // EstacionBase (vpY + 8) y la transición túnel ↔ estación sea continua.
-  _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ);
+  _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ, config);
 
   // 6b ── (Aceras laterales de mantenimiento eliminadas a petición —
   //        los raíles se ven directamente sobre el balasto sin banqueta).
@@ -382,89 +382,120 @@ function _drawFloor(ctx, vpX, archCY, cw, ch) {
 //
 //   - Vía exterior  ±42 % W   (BASE)   → ±1.8 % W   (VP)
 //   - Vía interior  ± 2 % W   (BASE)   → ±1.5 % W   (VP)
-// 0.32/0.02 (antes 0.42/0.02) → cada vía ocupa ~30 % del canvas en la base.
-// Combinado con TRAIN_TO_TRACK_RATIO 0.85, los dos trenes juntos cubren
-// ~51 % del ancho — caben dentro del arco del túnel en lugar de
-// desbordarlo. Valores validados en mockup_tren.html.
-const TRACK_OUTER_RATIO_BASE = 0.32;
-const TRACK_INNER_RATIO_BASE = 0.02;
+// 0.255/0.03 (validado en mockup_tunel_render.html con sliders): vías un
+// 20 % más estrechas y separación central mayor → los carriles tienen
+// presencia 3D sin desbordar y queda hueco para el centro de la vía.
+// Si tocas estos números actualízalos también en tunel_base.js (los trenes
+// usan las mismas ratios para alinearse con los rieles).
+const TRACK_OUTER_RATIO_BASE = 0.255;
+const TRACK_INNER_RATIO_BASE = 0.03;
 const TRACK_OUTER_RATIO_VP   = 0.018;
 const TRACK_INNER_RATIO_VP   = 0.015;
 
-function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ) {
+function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ, config = {}) {
   // Las vías arrancan a vpY + 8 (igual que en EstacionBase) para que la
   // transición túnel ↔ estación sea visualmente continua. Antes usábamos
   // floorY = archCY que dejaba las vías sólo en el tercio inferior.
   const railTopY = vpY + 8;
   const railBotY = ch;
 
+  // Posiciones de carriles configurables desde config (los sliders del
+  // mockup las ajustan en vivo). Defaults coinciden con los valores
+  // históricos sincronizados con tunel_base.js / estacion_base.js.
+  const trackOuter = config.trackOuterRatio ?? TRACK_OUTER_RATIO_BASE;
+  const trackInner = config.trackInnerRatio ?? TRACK_INNER_RATIO_BASE;
+
   // Coordenadas X de las 8 esquinas (4 carriles × 2 puntos: VP/base).
-  const tOBL = vpX - cw * TRACK_OUTER_RATIO_BASE;
-  const tIBL = vpX - cw * TRACK_INNER_RATIO_BASE;
-  const tIBR = vpX + cw * TRACK_INNER_RATIO_BASE;
-  const tOBR = vpX + cw * TRACK_OUTER_RATIO_BASE;
+  const tOBL = vpX - cw * trackOuter;
+  const tIBL = vpX - cw * trackInner;
+  const tIBR = vpX + cw * trackInner;
+  const tOBR = vpX + cw * trackOuter;
   const tOVL = vpX - cw * TRACK_OUTER_RATIO_VP;
   const tIVL = vpX - cw * TRACK_INNER_RATIO_VP;
   const tIVR = vpX + cw * TRACK_INNER_RATIO_VP;
   const tOVR = vpX + cw * TRACK_OUTER_RATIO_VP;
 
-  // ── Durmientes (traviesas de hormigón) — UNA fila para cada vía ─────────
-  // Avanzamos por un parámetro lineal t (0 = VP, 1 = base) animado con worldZ
-  // para que las traviesas "vengan hacia la cámara" como antes.
-  const numSleepers = 22;
-  const slOffT      = ((worldZ * 0.0035) % (1 / numSleepers) + (1 / numSleepers)) % (1 / numSleepers);
+  // ── Anclajes individuales — un PAD de hormigón debajo de cada carril ──
+  // En vez de una traviesa continua de extremo a extremo de la vía, dibujamos
+  // 4 anclajes (uno por carril) por fila, con clips Pandrol (pestañas) a
+  // ambos lados del rail. El espacio interior entre carriles queda VACÍO,
+  // como en el sistema de fijación directa real (ver foto/diagrama).
+  const numSleepers     = config.sleeperCount     ?? 24;
+  const sleeperThickMul = config.sleeperThickness ?? 14;
+  // Ancho del pad (lateral) relativo al rail: 1.6 = pad 3.2× más ancho que
+  // el rail → deja ~0.8× a cada lado para clips visibles.
+  const padHalfWMul     = config.padHalfWidthMul ?? 1.8;
+  const baseWForPads    = (config && config.railWidth) || 7;
+  const slOffT = ((worldZ * 0.0035) % (1 / numSleepers) + (1 / numSleepers)) % (1 / numSleepers);
 
   ctx.save();
   for (let i = 0; i < numSleepers; i++) {
-    // Reparto cuadrático para que las traviesas se concentren al fondo
-    // (efecto realista de perspectiva — las cercanas se separan, las lejanas
-    // se apilan cerca del VP).
+    // Reparto cuadrático: anclajes concentrados al fondo (perspectiva).
     const baseT = i / (numSleepers - 1);
     const t = Math.pow(baseT + slOffT, 2);
     if (t <= 0 || t >= 1) continue;
 
     const sy = (1 - t) * railTopY + t * railBotY;
 
-    // Interpolación de las posiciones X (t=0 → VP, t=1 → base).
-    const tL1 = (1 - t) * tOVL + t * tOBL;
-    const tL2 = (1 - t) * tIVL + t * tIBL;
-    const tR1 = (1 - t) * tIVR + t * tIBR;
-    const tR2 = (1 - t) * tOVR + t * tOBR;
+    // X de cada uno de los 4 carriles a esta profundidad.
+    const railX = [
+      (1 - t) * tOVL + t * tOBL,   // L exterior
+      (1 - t) * tIVL + t * tIBL,   // L interior
+      (1 - t) * tIVR + t * tIBR,   // R interior
+      (1 - t) * tOVR + t * tOBR,   // R exterior
+    ];
 
-    const thickness = Math.max(1, t * 6);
+    const thickness = Math.max(1, t * sleeperThickMul);
     const alpha     = Math.min(1, t * 1.5 + 0.1);
+    // Ancho del pad escala con t (perspectiva) y con railWidth.
+    const padHalfW  = Math.max(2, baseWForPads * padHalfWMul * Math.max(0.35, t));
 
-    ctx.strokeStyle = `rgba(34,30,22,${alpha})`;
-    ctx.lineWidth   = thickness;
-    ctx.beginPath(); ctx.moveTo(tL1, sy); ctx.lineTo(tL2, sy); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(tR1, sy); ctx.lineTo(tR2, sy); ctx.stroke();
+    for (const rx of railX) {
+      // Cuerpo del anclaje — pad de hormigón gris.
+      ctx.fillStyle = `rgba(72,74,80,${alpha})`;
+      ctx.fillRect(rx - padHalfW, sy - thickness * 0.5, padHalfW * 2, thickness);
 
-    // Highlight superior del durmiente
-    ctx.strokeStyle = `rgba(55,50,38,${alpha * 0.6})`;
-    ctx.lineWidth   = Math.max(1, thickness * 0.3);
-    ctx.beginPath(); ctx.moveTo(tL1, sy - thickness * 0.35); ctx.lineTo(tL2, sy - thickness * 0.35); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(tR1, sy - thickness * 0.35); ctx.lineTo(tR2, sy - thickness * 0.35); ctx.stroke();
+      // Highlight canto superior (luz cenital del túnel sobre el pad).
+      const hlH = Math.max(1, thickness * 0.28);
+      ctx.fillStyle = `rgba(120,122,128,${alpha * 0.70})`;
+      ctx.fillRect(rx - padHalfW, sy - thickness * 0.5, padHalfW * 2, hlH);
 
-    // Tornillos AZULES en cada extremo de la traviesa (anclajes Pandrol).
-    // Sólo visibles en sleepers cercanos (t > 0.45).
-    if (t > 0.45) {
-      const boltSize = Math.max(1, thickness * 0.45);
-      ctx.fillStyle  = `rgba(60,90,170,${alpha})`;
-      // 4 tornillos por sleeper (2 izq, 2 der)
-      for (const bx of [tL1 + boltSize * 0.5, tL2 - boltSize * 0.5,
-                         tR1 + boltSize * 0.5, tR2 - boltSize * 0.5]) {
-        ctx.fillRect(bx - boltSize / 2, sy - boltSize / 2, boltSize, boltSize);
+      // Sombra canto inferior.
+      const shH = Math.max(1, thickness * 0.22);
+      ctx.fillStyle = `rgba(18,20,24,${alpha * 0.75})`;
+      ctx.fillRect(rx - padHalfW, sy + thickness * 0.5 - shH, padHalfW * 2, shH);
+
+      // Clips/pestañas Pandrol — bandas alargadas HORIZONTALMENTE (más
+      // anchas que altas) a cada lado del rail, ocupando casi todo el
+      // hueco entre el rail y el borde del pad.
+      if (t > 0.30) {
+        // clipW horizontal: prácticamente el ancho del hueco rail→borde pad
+        const clipW = Math.max(2, padHalfW - baseWForPads * 0.55);
+        const clipH = Math.max(1, thickness * 0.35);
+        ctx.fillStyle = `rgba(14,16,20,${alpha})`;
+        // Pestaña izquierda (entre borde izq del pad y rail)
+        const xL = rx - padHalfW + Math.max(0.5, baseWForPads * 0.10);
+        const xR = rx + baseWForPads * 0.55;
+        ctx.fillRect(xL, sy - clipH * 0.5, clipW, clipH);
+        // Pestaña derecha
+        ctx.fillRect(xR, sy - clipH * 0.5, clipW, clipH);
+        // Brillito metálico en el canto superior de cada pestaña
+        ctx.fillStyle = `rgba(110,115,122,${alpha * 0.75})`;
+        ctx.fillRect(xL, sy - clipH * 0.5, clipW, Math.max(1, clipH * 0.30));
+        ctx.fillRect(xR, sy - clipH * 0.5, clipW, Math.max(1, clipH * 0.30));
       }
     }
   }
   ctx.restore();
 
-  // ── (División central entre vías eliminada a petición — el gap entre
-  //     ambas vías queda al color del suelo, sin franja diferenciada.)
+  // ── (Tercer carril amarillo eliminado a petición.) ──────────────────────
 
   // ── Carriles metálicos (4 carriles: 2 por vía) ──────────────────────────
   const railColor = '#8a8c94';
-  const baseW     = 2.8;
+  // baseW configurable desde config.railWidth (default 7). Determina el
+  // grosor visual de cada carril; se escala internamente por las 6 capas
+  // del perfil 3D. 7 validado en mockup_tunel_render.html.
+  const baseW     = (config && config.railWidth) || 7;
   const rails = [
     { near: tOBL, far: tOVL },   // izq exterior
     { near: tIBL, far: tIVL },   // izq interior
@@ -474,32 +505,67 @@ function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ) {
   _drawRailLines(ctx, rails, railTopY, railBotY, railColor, baseW);
 }
 
+// ── Tercer carril electrificado (rail amarillo entre los dos plateados) ──
+// Réplica del 3er rail de los metros europeos: barra amarilla con sombra
+// inferior y un brillo superior. Más ancho que un carril normal porque
+// lleva la cubierta protectora.
+function _drawThirdRail(ctx, farX, topY, nearX, botY) {
+  ctx.save();
+  // Sombra proyectada
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+  ctx.lineWidth   = 7;
+  ctx.beginPath(); ctx.moveTo(farX, topY + 1.5); ctx.lineTo(nearX, botY + 2.5); ctx.stroke();
+  // Cuerpo amarillo (cubierta)
+  ctx.strokeStyle = '#d8a020';
+  ctx.lineWidth   = 5.5;
+  ctx.beginPath(); ctx.moveTo(farX, topY); ctx.lineTo(nearX, botY); ctx.stroke();
+  // Banda intermedia (color de referencia: amarillo más cálido)
+  ctx.strokeStyle = '#f0b830';
+  ctx.lineWidth   = 3.6;
+  ctx.beginPath(); ctx.moveTo(farX, topY - 0.5); ctx.lineTo(nearX, botY - 1); ctx.stroke();
+  // Brillo superior (canto iluminado)
+  ctx.strokeStyle = 'rgba(255,225,140,0.95)';
+  ctx.lineWidth   = 1.8;
+  ctx.beginPath(); ctx.moveTo(farX, topY - 1.2); ctx.lineTo(nearX, botY - 2.2); ctx.stroke();
+  // Hilo especular
+  ctx.strokeStyle = 'rgba(255,255,210,0.85)';
+  ctx.lineWidth   = 0.7;
+  ctx.beginPath(); ctx.moveTo(farX, topY - 1.6); ctx.lineTo(nearX, botY - 2.8); ctx.stroke();
+  ctx.restore();
+}
+
+// ── Raíl con sección 3D (perfil de viga) ──────────────────────────────────
+// Cada raíl se construye apilando 6 strokes paralelos a alturas distintas
+// para simular el perfil real (foot/web/head): sombra proyectada en
+// balasto → base oscura → alma media → cabeza clara → brillo metálico →
+// especular blanco. La gradación da volumen aunque el raíl siga siendo
+// una línea diagonal en perspectiva.
 function _drawRailLines(ctx, rails, topY, botY, color, baseW) {
+  // Cada capa: { offY, w, color }
+  //   offY  = desplazamiento Y respecto al baseline del raíl
+  //   w     = multiplicador del ancho (baseW)
+  // Ordenadas de la MÁS BAJA a la MÁS ALTA en pantalla (se pintan en ese
+  // orden para que las capas superiores tapen a las inferiores en la cima).
+  const layers = [
+    { offY: +2.0, w: 2.0, c: 'rgba(0,0,0,0.55)' },          // sombra en balasto
+    { offY: +1.0, w: 1.55, c: '#26282d' },                    // base/foot oscuro
+    { offY: 0,    w: 1.20, c: '#52555c' },                    // alma/web medio
+    { offY: -1.0, w: 1.05, c: '#888c95' },                    // cabeza inferior
+    { offY: -1.8, w: 0.85, c: '#b8bcc6' },                    // cabeza superior
+    { offY: -2.4, w: 0.45, c: 'rgba(225,230,240,0.95)' },     // brillo metálico
+    { offY: -2.8, w: 0.18, c: 'rgba(255,255,255,0.85)' },     // especular blanco
+  ];
+
   ctx.save();
   for (const rail of rails) {
-    // Cuerpo del raíl
-    ctx.strokeStyle = color;
-    ctx.lineWidth   = baseW;
-    ctx.beginPath();
-    ctx.moveTo(rail.far,  topY);
-    ctx.lineTo(rail.near, botY);
-    ctx.stroke();
-
-    // Brillo superior (efecto de pulido)
-    ctx.strokeStyle = 'rgba(200,205,215,0.50)';
-    ctx.lineWidth   = baseW * 0.35;
-    ctx.beginPath();
-    ctx.moveTo(rail.far,  topY - 1);
-    ctx.lineTo(rail.near, botY - 2);
-    ctx.stroke();
-
-    // Sombra inferior
-    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-    ctx.lineWidth   = baseW * 0.45;
-    ctx.beginPath();
-    ctx.moveTo(rail.far  + baseW * 0.3, topY + 1);
-    ctx.lineTo(rail.near + baseW * 0.3, botY);
-    ctx.stroke();
+    for (const L of layers) {
+      ctx.strokeStyle = L.c;
+      ctx.lineWidth   = Math.max(0.5, baseW * L.w);
+      ctx.beginPath();
+      ctx.moveTo(rail.far,  topY + L.offY);
+      ctx.lineTo(rail.near, botY + L.offY);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -688,8 +754,8 @@ function _drawCeilingLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config)
   // bóveda, ligeramente fuera del eje central. Coincide con la foto donde
   // los fluorescentes cuelgan en dos hileras paralelas.
   const sides = [
-    { xFrac: 0.34, yFrac: 0.10 },   // hilera izquierda (en la curva del techo)
-    { xFrac: 0.66, yFrac: 0.10 },   // hilera derecha
+    { xFrac: 0.20, yFrac: 0.40 },   // hilera izquierda (a media altura, mas cerca del suelo)
+    { xFrac: 0.80, yFrac: 0.40 },   // hilera derecha (a media altura, mas cerca del suelo)
   ];
 
   ctx.save();
