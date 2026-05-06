@@ -86,7 +86,7 @@ export function resetCamera() {
 //   Asimétrico: la paloma reposa alta y desciende ampliamente con el sprite
 //   visible en todo momento.
 export const CAMERA_RANGE_X      = 0.35;
-export const CAMERA_RANGE_Y_UP   = 0.10;
+export const CAMERA_RANGE_Y_UP   = 0.00;
 export const CAMERA_RANGE_Y_DOWN = 0.85;
 // Compatibilidad: máximo absoluto del eje Y, usado por getViewBounds para
 // dimensionar el overdraw de los escenarios.
@@ -98,7 +98,7 @@ export const CAMERA_RANGE_Y      = Math.max(CAMERA_RANGE_Y_UP, CAMERA_RANGE_Y_DO
 // borde inferior del canvas (100 %) sin salirse de pantalla.
 // Aplica tanto al render visual como a la hitbox para que la colisión
 // coincida con lo que se ve.
-export const PIGEON_VERTICAL_OFFSET_RATIO = -0.35;
+export const PIGEON_VERTICAL_OFFSET_RATIO = -0.05;
 export function getPigeonVerticalOffset() {
   return canvas.height * PIGEON_VERTICAL_OFFSET_RATIO;
 }
