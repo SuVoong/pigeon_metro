@@ -239,6 +239,7 @@ export class EstacionBase {
     this._drawCeiling      (ctx, W, H, vpX, vpY);
     this._drawFluorescents (ctx, W, H, vpX, vpY);
     this._drawWalls        (ctx, W, H, vpX, vpY, G);
+    this._drawWallCables   (ctx, W, H, vpX, vpY, G);
     this._drawEmergencyBoxes(ctx, W, H, vpX, vpY, G);
     this._drawSigns        (ctx, W, H, vpX, vpY);
     this._drawPlatforms    (ctx, W, H, vpX, vpY, G);
@@ -525,6 +526,53 @@ export class EstacionBase {
       ctx.lineTo(xb, yb);
       ctx.stroke();
     }
+  }
+
+  // ── CABLES AL PIE DE LA PARED ────────────────────────────────────────────
+  // Líneas paralelas que corren al pie de cada pared (entre el rodapié y el
+  // suelo del andén), converger al VP — cables eléctricos / canal de
+  // emergencia típicos de Metro.
+  _drawWallCables(ctx, W, H, vpX, vpY, G) {
+    const B = this._bounds;
+    // Y de arranque (cerca cámara) y llegada (VP) — ligeramente sobre el
+    // borde inferior de la pared (H*0.55) y vpY+5.
+    const baseYNear = H * 0.55 - 4;
+    const baseYFar  = vpY + 4;
+    // 3 cables apilados (verde, gris oscuro, rojo) — colores convencionales
+    const cables = [
+      { color: '#3DA040', dy: 0  },     // verde (señal/datos)
+      { color: '#3a3a3a', dy: 4  },     // negro grueso (alimentación)
+      { color: '#A82020', dy: 8  },     // rojo (emergencia)
+    ];
+
+    // IZQUIERDA
+    cables.forEach(({ color, dy }) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.moveTo(B.left,   baseYNear + dy);
+      ctx.lineTo(G.pVL,    baseYFar + dy * 0.18);
+      ctx.stroke();
+    });
+
+    // DERECHA
+    cables.forEach(({ color, dy }) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.moveTo(B.right,  baseYNear + dy);
+      ctx.lineTo(G.pVR,    baseYFar + dy * 0.18);
+      ctx.stroke();
+    });
+
+    // Bandeja portacables (línea oscura encima de los cables) — efecto
+    // sombra de la canal metálica que sujeta los cables.
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(B.left,  baseYNear - 2); ctx.lineTo(G.pVL, baseYFar - 0.4);
+    ctx.moveTo(B.right, baseYNear - 2); ctx.lineTo(G.pVR, baseYFar - 0.4);
+    ctx.stroke();
   }
 
   // ── CAJAS DE EMERGENCIA SOS (rojo) — montadas sobre la pared ─────────────
