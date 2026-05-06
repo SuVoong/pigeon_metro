@@ -81,13 +81,13 @@ export function resetCamera() {
 // que los escenarios sepan cuánto overdraw necesitan.
 //   X: ±35% — al moverse al borde lateral, la paloma "choca" con la pared
 //   Y_UP   = 0.40 → desde reposo (60 % canvas) hasta ~20 % (zona del techo)
-//   Y_DOWN = 0.35 → desde reposo hasta ~95 % canvas (la paloma queda
-//                   visible justo en el borde inferior, no se sale)
-//   Asimétrico: la paloma reposa cerca de los raíles. El límite inferior
-//   se calibra para que el sprite siga totalmente dentro del canvas.
+//   Y_DOWN = 0.75 → desde reposo (60 % canvas), la paloma desciende con
+//                   margen amplio hacia el borde inferior y por debajo.
+//   Asimétrico: la paloma reposa cerca de los raíles y necesita más
+//   recorrido hacia abajo (para "picar" bajo los trenes).
 export const CAMERA_RANGE_X      = 0.35;
 export const CAMERA_RANGE_Y_UP   = 0.40;
-export const CAMERA_RANGE_Y_DOWN = 0.35;
+export const CAMERA_RANGE_Y_DOWN = 0.75;
 // Compatibilidad: máximo absoluto del eje Y, usado por getViewBounds para
 // dimensionar el overdraw de los escenarios.
 export const CAMERA_RANGE_Y      = Math.max(CAMERA_RANGE_Y_UP, CAMERA_RANGE_Y_DOWN);
