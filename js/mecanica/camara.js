@@ -92,13 +92,13 @@ export const CAMERA_RANGE_Y_DOWN = 0.65;
 export const CAMERA_RANGE_Y      = Math.max(CAMERA_RANGE_Y_UP, CAMERA_RANGE_Y_DOWN);
 
 // Desplazamiento vertical de la paloma respecto a w2sy(0) = canvas/2.
-// −0.18 → la paloma reposa al ~32 % del canvas: en la zona oscura entre el
-// techo del túnel y los trenes (como pide el mockup). Con CAMERA_RANGE_Y
-// 0.45 puede descender hasta ~77 % del canvas → llega a la altura de los
-// raíles cuando el jugador mantiene Down al máximo.
+// +0.10 → la paloma reposa al ~60 % del canvas: cerca de los raíles, a la
+// altura aproximada a la que los trenes se acercan al espectador. Con
+// CAMERA_RANGE_Y_UP=0.30 puede subir hasta ~30 % canvas (zona del techo)
+// y con CAMERA_RANGE_Y_DOWN=0.65 alcanza el borde inferior (raíles base).
 // Aplica tanto al render visual como a la hitbox para que la colisión
 // coincida con lo que se ve.
-export const PIGEON_VERTICAL_OFFSET_RATIO = -0.18;
+export const PIGEON_VERTICAL_OFFSET_RATIO = 0.10;
 export function getPigeonVerticalOffset() {
   return canvas.height * PIGEON_VERTICAL_OFFSET_RATIO;
 }
