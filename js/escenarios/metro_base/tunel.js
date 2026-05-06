@@ -441,7 +441,37 @@ function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ) {
     ctx.lineWidth   = Math.max(1, thickness * 0.3);
     ctx.beginPath(); ctx.moveTo(tL1, sy - thickness * 0.35); ctx.lineTo(tL2, sy - thickness * 0.35); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(tR1, sy - thickness * 0.35); ctx.lineTo(tR2, sy - thickness * 0.35); ctx.stroke();
+
+    // Tornillos AZULES en cada extremo de la traviesa (anclajes Pandrol).
+    // Sólo visibles en sleepers cercanos (t > 0.45).
+    if (t > 0.45) {
+      const boltSize = Math.max(1, thickness * 0.45);
+      ctx.fillStyle  = `rgba(60,90,170,${alpha})`;
+      // 4 tornillos por sleeper (2 izq, 2 der)
+      for (const bx of [tL1 + boltSize * 0.5, tL2 - boltSize * 0.5,
+                         tR1 + boltSize * 0.5, tR2 - boltSize * 0.5]) {
+        ctx.fillRect(bx - boltSize / 2, sy - boltSize / 2, boltSize, boltSize);
+      }
+    }
   }
+  ctx.restore();
+
+  // ── Línea AMARILLA central de seguridad ─────────────────────────────────
+  // Banda continua entre las dos vías, desde el VP hasta la base. Marca el
+  // gap interior y refleja la señalización amarilla típica de los túneles.
+  const tCenterBaseL = vpX - cw * TRACK_INNER_RATIO_BASE * 0.6;
+  const tCenterBaseR = vpX + cw * TRACK_INNER_RATIO_BASE * 0.6;
+  const tCenterVPL   = vpX - cw * TRACK_INNER_RATIO_VP * 0.6;
+  const tCenterVPR   = vpX + cw * TRACK_INNER_RATIO_VP * 0.6;
+  ctx.save();
+  ctx.fillStyle = 'rgba(232,180,0,0.55)';
+  ctx.beginPath();
+  ctx.moveTo(tCenterVPL, railTopY);
+  ctx.lineTo(tCenterVPR, railTopY);
+  ctx.lineTo(tCenterBaseR, railBotY);
+  ctx.lineTo(tCenterBaseL, railBotY);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
 
   // ── Carriles metálicos (4 carriles: 2 por vía) ──────────────────────────
