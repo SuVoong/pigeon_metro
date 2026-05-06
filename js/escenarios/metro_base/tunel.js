@@ -86,8 +86,11 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   // 7 ── Conductos/cables en las paredes ────────────────────────────────────
   _drawConduits(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ);
 
-  // 8 ── Paneles de luz laterales ────────────────────────────────────────────
-  _drawWallLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config);
+  // 8 ── (Lámparas de pared con halo eliminadas a petición) ──────────────────
+  // _drawWallLights queda definida pero ya no se llama; conservamos la luz
+  // ambiente cenital que pintaba además del halo, así que ese resplandor de
+  // techo se mueve a una llamada simplificada inline si hace falta. Por
+  // ahora el túnel queda iluminado sólo por la niebla del fondo.
 
   // 9 ── Niebla de profundidad ───────────────────────────────────────────────
   _drawDepthFog(ctx, vpX, vpY, cw, ch);
