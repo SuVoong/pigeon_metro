@@ -77,6 +77,9 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   // EstacionBase (vpY + 8) y la transición túnel ↔ estación sea continua.
   _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ);
 
+  // 6b ── Aceras laterales de mantenimiento (banquetas con borde amarillo)
+  _drawSideWalkways(ctx, vpX, vpY, archCY, maxR, cw, ch);
+
   // 7 ── Conductos/cables en las paredes ────────────────────────────────────
   _drawConduits(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ);
 
@@ -477,6 +480,105 @@ function _drawRailLines(ctx, rails, topY, botY, color, baseW) {
     ctx.lineTo(rail.near + baseW * 0.3, botY);
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+// ── Aceras laterales (banquetas de mantenimiento) ─────────────────────────
+// Pasillos elevados de hormigón entre la pared y el carril exterior, con
+// franja amarilla de seguridad en el borde interior. Forma de trapecio
+// trapezoidal en perspectiva: ancha cerca de la cámara, fina en el VP.
+function _drawSideWalkways(ctx, vpX, vpY, archCY, maxR, cw, ch) {
+  // Los carriles exteriores están a ±32 % en la base y ±1.8 % en el VP
+  // (constantes TRACK_OUTER_RATIO_BASE/VP definidas más abajo). La acera
+  // ocupa el espacio entre la pared del túnel y el carril exterior.
+  const railTopY = vpY + 8;          // misma Y de inicio que los raíles
+  const railBotY = ch;
+  // Borde INTERIOR de la acera (pegado al carril exterior)
+  const innerBaseL = vpX - cw * 0.32;
+  const innerBaseR = vpX + cw * 0.32;
+  const innerVPL   = vpX - cw * 0.018;
+  const innerVPR   = vpX + cw * 0.018;
+  // Borde EXTERIOR de la acera (donde toca la pared) — sigue la curva del
+  // arco a la altura de las vías. Aproximamos con valores que casan con la
+  // base del arco (semicírculo de radio maxR alrededor de archCY).
+  const archHalfWidthAtFloor = Math.sqrt(Math.max(0, maxR * maxR - (railTopY - archCY) ** 2));
+  const outerBaseL = vpX - cw * 0.48;   // pegado al borde inferior del canvas
+  const outerBaseR = vpX + cw * 0.48;
+  const outerVPL   = vpX - archHalfWidthAtFloor * 0.5;   // donde el arco toca el suelo
+  const outerVPR   = vpX + archHalfWidthAtFloor * 0.5;
+
+  ctx.save();
+  // ── ACERA IZQUIERDA ──
+  // Suelo de hormigón
+  ctx.fillStyle = '#3a3a40';
+  ctx.beginPath();
+  ctx.moveTo(outerBaseL, railBotY);
+  ctx.lineTo(innerBaseL, railBotY);
+  ctx.lineTo(innerVPL,   railTopY);
+  ctx.lineTo(outerVPL,   railTopY);
+  ctx.closePath();
+  ctx.fill();
+  // Highlight superior (canto frontal de la acera, donde recibe luz)
+  const lgL = ctx.createLinearGradient(outerBaseL, railTopY, outerBaseL, railBotY);
+  lgL.addColorStop(0, 'rgba(120,120,128,0.45)');
+  lgL.addColorStop(0.3, 'rgba(80,80,86,0.18)');
+  lgL.addColorStop(1, 'rgba(0,0,0,0.5)');
+  ctx.fillStyle = lgL;
+  ctx.beginPath();
+  ctx.moveTo(outerBaseL, railBotY);
+  ctx.lineTo(innerBaseL, railBotY);
+  ctx.lineTo(innerVPL,   railTopY);
+  ctx.lineTo(outerVPL,   railTopY);
+  ctx.closePath();
+  ctx.fill();
+  // Franja amarilla de seguridad (borde interior)
+  ctx.strokeStyle = '#E8B400';
+  ctx.lineWidth   = 3;
+  ctx.beginPath();
+  ctx.moveTo(innerBaseL, railBotY);
+  ctx.lineTo(innerVPL,   railTopY);
+  ctx.stroke();
+  // Sombra negra debajo de la franja (realza el borde)
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(innerBaseL + 1, railBotY - 2);
+  ctx.lineTo(innerVPL + 0.5, railTopY - 1);
+  ctx.stroke();
+
+  // ── ACERA DERECHA ──
+  ctx.fillStyle = '#3a3a40';
+  ctx.beginPath();
+  ctx.moveTo(outerBaseR, railBotY);
+  ctx.lineTo(innerBaseR, railBotY);
+  ctx.lineTo(innerVPR,   railTopY);
+  ctx.lineTo(outerVPR,   railTopY);
+  ctx.closePath();
+  ctx.fill();
+  const lgR = ctx.createLinearGradient(outerBaseR, railTopY, outerBaseR, railBotY);
+  lgR.addColorStop(0, 'rgba(120,120,128,0.45)');
+  lgR.addColorStop(0.3, 'rgba(80,80,86,0.18)');
+  lgR.addColorStop(1, 'rgba(0,0,0,0.5)');
+  ctx.fillStyle = lgR;
+  ctx.beginPath();
+  ctx.moveTo(outerBaseR, railBotY);
+  ctx.lineTo(innerBaseR, railBotY);
+  ctx.lineTo(innerVPR,   railTopY);
+  ctx.lineTo(outerVPR,   railTopY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#E8B400';
+  ctx.lineWidth   = 3;
+  ctx.beginPath();
+  ctx.moveTo(innerBaseR, railBotY);
+  ctx.lineTo(innerVPR,   railTopY);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(innerBaseR - 1, railBotY - 2);
+  ctx.lineTo(innerVPR - 0.5, railTopY - 1);
+  ctx.stroke();
   ctx.restore();
 }
 
