@@ -215,10 +215,15 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   ctx.restore();
 }
 
-// ── Anillos del arco en perspectiva ──────────────────────────────────────
+// ── Anillos del arco en perspectiva (dovelas segmentadas) ──────────────
+// Cada anillo se compone de SEGMENTS paneles trapezoidales con juntas
+// radiales visibles — réplica de las dovelas de hormigón prefabricado de
+// los túneles modernos. Las juntas radiales convergen al centro del arco
+// (archCY a esa profundidad) y dividen el semicírculo en partes iguales.
 function _drawArchRings(ctx, vpX, archCY, maxR, cw, ch, worldZ) {
-  const ringGap = 100;
-  const offset  = ((worldZ * 1.8) % ringGap + ringGap) % ringGap;
+  const ringGap  = 100;
+  const SEGMENTS = 8;     // dovelas por anillo (semicírculo) — referencia foto
+  const offset   = ((worldZ * 1.8) % ringGap + ringGap) % ringGap;
 
   ctx.save();
   for (let z = 900; z >= 25; z -= ringGap) {
@@ -233,19 +238,53 @@ function _drawArchRings(ctx, vpX, archCY, maxR, cw, ch, worldZ) {
     const lum   = Math.round(28 + s * 22);
     const alpha = 0.55 + s * 0.35;
 
+    // 1 ── Junta circular del anillo (línea perpendicular al avance)
     ctx.strokeStyle = `rgba(${lum + 6},${lum + 6},${lum + 4},${alpha})`;
     ctx.lineWidth   = Math.max(0.5, s * 2.2);
     ctx.beginPath();
     ctx.arc(vpX, cy2, r, Math.PI, 0);
     ctx.stroke();
 
-    // Línea de sombra interna (junta oscura del panel)
+    // 2 ── Sombra interna (junta oscura del panel)
     if (s > 0.25) {
       ctx.strokeStyle = `rgba(0,0,0,${0.25 + (1 - s) * 0.2})`;
       ctx.lineWidth   = Math.max(0.5, s * 1.2);
       ctx.beginPath();
       ctx.arc(vpX, cy2 + s * 1.5, r * 0.985, Math.PI, 0);
       ctx.stroke();
+    }
+
+    // 3 ── Juntas RADIALES (entre dovelas) — sólo en anillos cercanos
+    //      donde el detalle es perceptible. En los lejanos quitarlas para
+    //      no saturar la imagen.
+    if (s > 0.30) {
+      const innerR = r * 0.92;     // las juntas no llegan al borde absoluto
+      ctx.strokeStyle = `rgba(0,0,0,${0.32 + s * 0.20})`;
+      ctx.lineWidth   = Math.max(0.5, s * 0.9);
+      for (let i = 1; i < SEGMENTS; i++) {
+        const ang = Math.PI + (Math.PI * i) / SEGMENTS;   // 180°→360° (semicírculo superior)
+        const x1 = vpX + Math.cos(ang) * innerR;
+        const y1 = cy2 + Math.sin(ang) * innerR;
+        const x2 = vpX + Math.cos(ang) * r;
+        const y2 = cy2 + Math.sin(ang) * r;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+
+      // Detalle: punto/perno cerca del centro de cada dovela en anillos
+      // muy próximos (s>0.55) — sugiere los anclajes de las prefabricadas.
+      if (s > 0.55) {
+        ctx.fillStyle = `rgba(${lum - 8},${lum - 8},${lum - 10},${alpha})`;
+        for (let i = 0; i < SEGMENTS; i++) {
+          const ang = Math.PI + (Math.PI * (i + 0.5)) / SEGMENTS;
+          const px = vpX + Math.cos(ang) * r * 0.95;
+          const py = cy2 + Math.sin(ang) * r * 0.95;
+          const sz = Math.max(1, s * 1.6);
+          ctx.fillRect(px - sz/2, py - sz/2, sz, sz);
+        }
+      }
     }
   }
   ctx.restore();
