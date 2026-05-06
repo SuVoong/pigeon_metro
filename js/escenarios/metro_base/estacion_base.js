@@ -684,6 +684,37 @@ export class EstacionBase {
     // 5. Suelo del arco — banda oscura por donde entra el balasto al túnel
     ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
     ctx.fillRect(vpX - innerHalf, baseY - 1, innerHalf * 2, 3);
+
+    // 6. Luces de señalización ferroviaria al fondo del túnel
+    //    (rojo a la izquierda + verde a la derecha — semáforos de vía)
+    //    Sólo visibles cuando la boca aún es pequeña; al ampliarse durante
+    //    la transición, las señales quedan fuera del marco visible.
+    if (animScale < 1.6) {
+      const sigR = Math.max(1.5, innerHalf * 0.10);
+      const sigY = baseY - sidesH * 0.55;
+      const sigOff = innerHalf * 0.45;
+      const drawSignal = (cx, color, glowColor) => {
+        // Halo difuso
+        const halo = ctx.createRadialGradient(cx, sigY, 0, cx, sigY, sigR * 4);
+        halo.addColorStop(0,   glowColor);
+        halo.addColorStop(0.5, glowColor.replace(/[\d.]+\)$/, '0.18)'));
+        halo.addColorStop(1,   glowColor.replace(/[\d.]+\)$/, '0)'));
+        ctx.fillStyle = halo;
+        ctx.fillRect(cx - sigR * 4, sigY - sigR * 4, sigR * 8, sigR * 8);
+        // Bombilla
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(cx, sigY, sigR, 0, Math.PI * 2);
+        ctx.fill();
+        // Brillo central
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.beginPath();
+        ctx.arc(cx - sigR * 0.25, sigY - sigR * 0.25, sigR * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      drawSignal(vpX - sigOff, '#FF2A2A', 'rgba(255,60,60,0.55)');
+      drawSignal(vpX + sigOff, '#22DD33', 'rgba(60,255,80,0.55)');
+    }
   }
 
   // ── PANTALLA LED COLGANTE (sentido del trayecto) ─────────────────────────
