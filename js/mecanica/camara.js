@@ -80,25 +80,25 @@ export function resetCamera() {
 // los updates de personaje (paloma/pidgey/angry_bird). Centralizado aquí para
 // que los escenarios sepan cuánto overdraw necesitan.
 //   X: ±35% — al moverse al borde lateral, la paloma "choca" con la pared
-//   Y_UP   = 0.30 → desde reposo (32 % canvas) hasta ~2 % (justo bajo el techo)
-//   Y_DOWN = 0.65 → desde reposo hasta ~97 % (la paloma toca los raíles)
-//   Asimétrico porque la paloma reposa alto y tiene poco recorrido hacia
-//   arriba pero mucho hacia abajo.
+//   Y_UP   = 0.40 → desde reposo (60 % canvas) hasta ~20 % (zona del techo)
+//   Y_DOWN = 0.85 → desde reposo (15 % canvas), la paloma alcanza el
+//                   borde inferior (100 % canvas) sin salirse de pantalla.
+//   Asimétrico: la paloma reposa alta y desciende ampliamente con el sprite
+//   visible en todo momento.
 export const CAMERA_RANGE_X      = 0.35;
-export const CAMERA_RANGE_Y_UP   = 0.30;
-export const CAMERA_RANGE_Y_DOWN = 0.65;
+export const CAMERA_RANGE_Y_UP   = 0.00;
+export const CAMERA_RANGE_Y_DOWN = 0.85;
 // Compatibilidad: máximo absoluto del eje Y, usado por getViewBounds para
 // dimensionar el overdraw de los escenarios.
 export const CAMERA_RANGE_Y      = Math.max(CAMERA_RANGE_Y_UP, CAMERA_RANGE_Y_DOWN);
 
 // Desplazamiento vertical de la paloma respecto a w2sy(0) = canvas/2.
-// −0.18 → la paloma reposa al ~32 % del canvas: en la zona oscura entre el
-// techo del túnel y los trenes (como pide el mockup). Con CAMERA_RANGE_Y
-// 0.45 puede descender hasta ~77 % del canvas → llega a la altura de los
-// raíles cuando el jugador mantiene Down al máximo.
+// −0.35 → la paloma reposa al ~15 % del canvas (zona alta del túnel).
+// Calibrado para que con CAMERA_RANGE_Y_DOWN = 0.85 la paloma alcance el
+// borde inferior del canvas (100 %) sin salirse de pantalla.
 // Aplica tanto al render visual como a la hitbox para que la colisión
 // coincida con lo que se ve.
-export const PIGEON_VERTICAL_OFFSET_RATIO = -0.18;
+export const PIGEON_VERTICAL_OFFSET_RATIO = -0.05;
 export function getPigeonVerticalOffset() {
   return canvas.height * PIGEON_VERTICAL_OFFSET_RATIO;
 }

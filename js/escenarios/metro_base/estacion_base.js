@@ -53,18 +53,18 @@ const DEFAULT_CONFIG = {
   platformEdgeYellow: '#FFCC00',
 
   // ── Paredes ─────────────────────────────────────────────────────────────
-  wallColor:          '#F0F0F0',
-  wallStripeBlue:     '#1A3A8A',
+  wallColor:          '#EFEDE6',     // blanco hueso, levemente cálido
+  wallStripeBlue:     '#2F7A3A',     // VERDE (antes azul) — referencia foto
   wallStripeYellow:   '#FFCC00',
 
   // ── Techo ───────────────────────────────────────────────────────────────
-  ceilingColor:       '#222230',
-  ceilingBandTop:     '#0d1535',
+  ceilingColor:       '#9C9890',     // hormigón claro abovedado (antes #222230 oscuro)
+  ceilingBandTop:     '#7A766E',     // sombra superior del arco
 
   // ── Iluminación ─────────────────────────────────────────────────────────
-  fluorescentColor:   '#FFFBE6',
-  fluorescentGlow:    'rgba(255, 251, 230, 0.15)',
-  numFluorescents:    5,
+  fluorescentColor:   '#FFF8DC',     // amarillo cálido
+  fluorescentGlow:    'rgba(255, 248, 220, 0.45)',  // brillo más intenso (antes 0.15)
+  numFluorescents:    7,             // más tubos (antes 5) — sensación de pasillo iluminado
 
   // ── Carteles / pantalla LED ─────────────────────────────────────────────
   signBgColor:        '#1A3A8A',
@@ -127,6 +127,19 @@ const DEFAULT_CONFIG = {
   tutorialMessage:    null,
   isCheckpoint:       false,
 };
+
+// ── Helpers de color (módulo) ───────────────────────────────────────────────
+function _hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function _mixHex(hexA, hexB, t) {
+  const [aR, aG, aB] = _hexToRgb(hexA);
+  const [bR, bG, bB] = _hexToRgb(hexB);
+  const k = Math.max(0, Math.min(1, t));
+  return `rgb(${Math.round(aR + (bR - aR) * k)},${Math.round(aG + (bG - aG) * k)},${Math.round(aB + (bB - aB) * k)})`;
+}
 
 export class EstacionBase {
   constructor(configOverride = {}) {
@@ -226,6 +239,8 @@ export class EstacionBase {
     this._drawCeiling      (ctx, W, H, vpX, vpY);
     this._drawFluorescents (ctx, W, H, vpX, vpY);
     this._drawWalls        (ctx, W, H, vpX, vpY, G);
+    this._drawWallCables   (ctx, W, H, vpX, vpY, G);
+    this._drawEmergencyBoxes(ctx, W, H, vpX, vpY, G);
     this._drawSigns        (ctx, W, H, vpX, vpY);
     this._drawPlatforms    (ctx, W, H, vpX, vpY, G);
     this._drawPlatformFront(ctx, W, H, vpX, vpY, G);
@@ -292,84 +307,318 @@ export class EstacionBase {
   }
 
   // ── TECHO ─────────────────────────────────────────────────────────────────
+  // Bóveda abovedada: en lugar de un trapecio plano, dibujamos N strips
+  // radiales desde el VP hasta el borde superior del canvas. Cada strip se
+  // colorea con un gradiente que va de claro (centro de la bóveda) a oscuro
+  // (extremos donde la curva se "esconde" detrás de la pared) — el ojo lee
+  // la transición de tonos como curvatura cilíndrica de un túnel real.
   _drawCeiling(ctx, W, H, vpX, vpY) {
     const B = this._bounds;
-    ctx.fillStyle = this.cfg.ceilingColor;
-    ctx.beginPath();
-    ctx.moveTo(B.left,  B.top);
-    ctx.lineTo(B.right, B.top);
-    ctx.lineTo(vpX + 25, vpY - 10);
-    ctx.lineTo(vpX - 25, vpY - 10);
-    ctx.closePath();
-    ctx.fill();
+    const peakY  = B.top;            // altura máxima del arco
+    const apexY  = vpY - 10;         // donde converge en el VP
+    const N      = 24;               // strips — más = más suave (24 ya pixel-perfect)
+    const baseHex = this.cfg.ceilingColor;     // hormigón claro al centro
+    const edgeHex = this.cfg.ceilingBandTop;   // sombra hacia el alero
 
-    // Banda azul oscuro superior
-    ctx.fillStyle = this.cfg.ceilingBandTop;
+    // Ancho del techo en la base (todo el canvas) y en el VP (estrecho)
+    const baseLeft  = B.left,  baseRight  = B.right;
+    const apexLeft  = vpX - 25, apexRight = vpX + 25;
+
+    for (let i = 0; i < N; i++) {
+      // t va de 0 (extremo IZQ) a 1 (extremo DER)
+      const t1 = i       / N;
+      const t2 = (i + 1) / N;
+
+      // Coordenada X de cada strip en la base y en el VP
+      const xBase1 = baseLeft + (baseRight - baseLeft) * t1;
+      const xBase2 = baseLeft + (baseRight - baseLeft) * t2;
+      const xApex1 = apexLeft + (apexRight - apexLeft) * t1;
+      const xApex2 = apexLeft + (apexRight - apexLeft) * t2;
+
+      // Curvatura: |t-0.5|*2 ∈ [0,1]. 0=centro, 1=esquina.
+      // El centro es el PICO del arco; los lados se "doblan" a apexY+offset
+      const dCenter = Math.abs((t1 + t2) / 2 - 0.5) * 2;
+      // Al centro yPeak = peakY (más alto); a las esquinas baja un poco
+      const yEdge = peakY + dCenter * 18;
+
+      // Mezcla de color por curvatura (centro claro, lados oscuros)
+      const k = Math.pow(dCenter, 1.4);
+      ctx.fillStyle = _mixHex(baseHex, edgeHex, k);
+
+      ctx.beginPath();
+      ctx.moveTo(xBase1, yEdge);
+      ctx.lineTo(xBase2, yEdge);
+      ctx.lineTo(xApex2, apexY);
+      ctx.lineTo(xApex1, apexY);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Línea de junta arco-pared (sutil, refuerza la silueta de la bóveda)
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(B.left,  B.top + 6);
-    ctx.lineTo(B.right, B.top + 6);
-    ctx.lineTo(vpX + 25, vpY - 12);
-    ctx.lineTo(vpX - 25, vpY - 12);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(B.left,  peakY + 18);
+    ctx.lineTo(apexLeft, apexY);
+    ctx.moveTo(B.right, peakY + 18);
+    ctx.lineTo(apexRight, apexY);
+    ctx.stroke();
   }
 
-  // ── FLUORESCENTES (5 tubos paralelos al techo) ───────────────────────────
+  // ── FLUORESCENTES (N tiras gruesas continuas a lo largo del techo) ──────
+  // Cada tira se compone de 3 capas:
+  //   · halo grueso difuso (luz que se "derrama" sobre la bóveda)
+  //   · tubo principal (línea brillante con grosor en perspectiva)
+  //   · alma central blanca (núcleo más caliente que sugiere el filamento)
+  // Las tiras convergen al VP siguiendo la curvatura de la bóveda.
   _drawFluorescents(ctx, W, H, vpX, vpY) {
-    const tubes = [
-      { x1: 0,        y1: 14, x2: vpX - 18, y2: vpY - 10 },
-      { x1: W * 0.25, y1: 8,  x2: vpX - 8,  y2: vpY - 10 },
-      { x1: vpX,      y1: 4,  x2: vpX,      y2: vpY - 10 },
-      { x1: W * 0.75, y1: 8,  x2: vpX + 8,  y2: vpY - 10 },
-      { x1: W,        y1: 14, x2: vpX + 18, y2: vpY - 10 },
-    ];
-    tubes.forEach((t, i) => {
-      const isOn = this._fluorState[i];
-      // Halo
+    const n = Math.max(1, this.cfg.numFluorescents | 0);
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1 || 1);                // 0..1
+      const x1 = t * W;                          // arranque en el borde superior
+      const y1 = 14 + Math.abs(0.5 - t) * 10;    // pliegue hacia los extremos
+      // Convergencia hacia el VP, ligeramente arqueada como la bóveda
+      const dx = (t - 0.5) * 2;                  // -1..1
+      const x2 = vpX + dx * 30;
+      const y2 = vpY - 10;
+
+      const isOn = this._fluorState[i] ?? true;
+
+      // 1 ── Halo amplio (resplandor sobre la bóveda)
       ctx.strokeStyle = isOn ? this.cfg.fluorescentGlow : 'rgba(100,100,100,0.05)';
-      ctx.lineWidth   = 6;
+      ctx.lineWidth   = 14;
+      ctx.lineCap     = 'round';
       ctx.beginPath();
-      ctx.moveTo(t.x1, t.y1); ctx.lineTo(t.x2, t.y2);
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
       ctx.stroke();
-      // Tubo
-      ctx.strokeStyle = isOn ? this.cfg.fluorescentColor : '#666';
-      ctx.lineWidth   = 1.5;
+
+      // 2 ── Cuerpo del tubo (más ancho cerca de cámara, fino al VP)
+      const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+      grad.addColorStop(0,    isOn ? this.cfg.fluorescentColor : '#555');
+      grad.addColorStop(0.6,  isOn ? this.cfg.fluorescentColor : '#555');
+      grad.addColorStop(1,    isOn ? '#FFFFFF' : '#888');
+      ctx.strokeStyle = grad;
+      ctx.lineWidth   = 4.5;
       ctx.beginPath();
-      ctx.moveTo(t.x1, t.y1); ctx.lineTo(t.x2, t.y2);
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
       ctx.stroke();
-    });
+
+      // 3 ── Núcleo blanco caliente (filamento)
+      ctx.strokeStyle = isOn ? '#FFFFFF' : '#999';
+      ctx.lineWidth   = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      ctx.lineCap = 'butt';   // restaurar
+    }
   }
 
-  // ── PAREDES laterales (trapecios) ────────────────────────────────────────
+  // ── PAREDES laterales (trapecios + patrón de azulejos) ─────────────────
   _drawWalls(ctx, W, H, vpX, vpY, G) {
     const B = this._bounds;
+
+    // Vertices de pared izquierda: trapecio (base + VP)
+    const Lwall = {
+      tlx: B.left, tly: B.top,
+      trx: G.pVL,  try_: vpY - 10,
+      brx: G.pVL,  bry: vpY + 5,
+      blx: B.left, bly: H * 0.55,
+    };
+    const Rwall = {
+      tlx: G.pVR,   tly: vpY - 10,
+      trx: B.right, try_: B.top,
+      brx: B.right, bry: H * 0.55,
+      blx: G.pVR,   bly: vpY + 5,
+    };
+
+    // 1 ── Relleno blanco hueso de cada pared
     ctx.fillStyle = this.cfg.wallColor;
-
-    // Pared izquierda — vértices del andén (base + VP)
     ctx.beginPath();
-    ctx.moveTo(B.left, B.top);
-    ctx.lineTo(G.pVL,  vpY - 10);
-    ctx.lineTo(G.pVL,  vpY + 5);
-    ctx.lineTo(B.left, H * 0.55);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(Lwall.tlx, Lwall.tly);
+    ctx.lineTo(Lwall.trx, Lwall.try_);
+    ctx.lineTo(Lwall.brx, Lwall.bry);
+    ctx.lineTo(Lwall.blx, Lwall.bly);
+    ctx.closePath(); ctx.fill();
 
-    // Pared derecha
     ctx.beginPath();
-    ctx.moveTo(B.right, B.top);
-    ctx.lineTo(G.pVR,   vpY - 10);
-    ctx.lineTo(G.pVR,   vpY + 5);
-    ctx.lineTo(B.right, H * 0.55);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(Rwall.tlx, Rwall.tly);
+    ctx.lineTo(Rwall.trx, Rwall.try_);
+    ctx.lineTo(Rwall.brx, Rwall.bry);
+    ctx.lineTo(Rwall.blx, Rwall.bly);
+    ctx.closePath(); ctx.fill();
 
-    // Franja decorativa azul (en perspectiva, converge al VP)
+    // 2 ── Patrón de azulejos: junta horizontal cada FILA filas + vertical
+    //      cada columna; las verticales convergen hacia el VP.
+    this._drawTilePattern(ctx, Lwall, true);
+    this._drawTilePattern(ctx, Rwall, false);
+
+    // 3 ── Franja decorativa VERDE (en perspectiva, converge al VP)
     ctx.strokeStyle = this.cfg.wallStripeBlue;
-    ctx.lineWidth   = 1.5;
+    ctx.lineWidth   = 3;
     ctx.beginPath();
     ctx.moveTo(B.left,  H * 0.30); ctx.lineTo(G.pVL, vpY - 5);
     ctx.moveTo(B.right, H * 0.30); ctx.lineTo(G.pVR, vpY - 5);
     ctx.stroke();
+    // Sombra fina debajo de la franja para darle volumen
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(B.left,  H * 0.30 + 3); ctx.lineTo(G.pVL, vpY - 5 + 0.5);
+    ctx.moveTo(B.right, H * 0.30 + 3); ctx.lineTo(G.pVR, vpY - 5 + 0.5);
+    ctx.stroke();
+  }
+
+  /** Dibuja la cuadrícula de azulejos (juntas) sobre el trapecio de pared.
+   *  - Horizontal: 6 filas equiespaciadas (las cercanas separadas, las
+   *    lejanas apretadas por perspectiva — interpolación lineal en t).
+   *  - Vertical: 8 columnas; cada vertical va de (xBaseN, yBaseN) a un
+   *    punto convergente cerca del VP — fuga natural.
+   *  isLeft cambia la orientación de los puntos. */
+  _drawTilePattern(ctx, w, isLeft) {
+    const ROWS = 6, COLS = 8;
+    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+    ctx.lineWidth   = 1;
+
+    // Líneas HORIZONTALES (junta superior de cada fila)
+    for (let r = 1; r < ROWS; r++) {
+      const t  = r / ROWS;
+      // Lado base (cerca cámara) — interpolar entre TL→BL
+      const xL = w.tlx + (w.blx - w.tlx) * t;
+      const yL = w.tly + (w.bly - w.tly) * t;
+      // Lado VP — interpolar entre TR→BR
+      const xR = w.trx + (w.brx - w.trx) * t;
+      const yR = w.try_ + (w.bry - w.try_) * t;
+      ctx.beginPath();
+      ctx.moveTo(xL, yL);
+      ctx.lineTo(xR, yR);
+      ctx.stroke();
+    }
+
+    // Líneas VERTICALES (junta entre azulejos contiguos en profundidad)
+    // En la base equiespaciadas, en el VP convergen al mismo punto.
+    for (let c = 1; c < COLS; c++) {
+      const t  = c / COLS;
+      // Posición X en la base
+      const xBaseN = w.tlx + (w.blx - w.tlx) * 0   // base side
+                     + (isLeft ? 1 : -1) * 0;
+      // Más simple: interpolar TL→BL en y, mantener X de la base de pared
+      // Como las paredes son trapecios delgados, las verticales van de
+      // un punto del lado de la BASE a un punto del lado del VP, ambos
+      // a la misma fracción t a lo largo de la altura del trapecio.
+      // Punto en lado BASE: a t a lo largo de TL→BL
+      const x1 = w.tlx + (w.blx - w.tlx) * t;
+      const y1 = w.tly + (w.bly - w.tly) * t;
+      // Punto en lado VP: a t a lo largo de TR→BR
+      const x2 = w.trx + (w.brx - w.trx) * t;
+      const y2 = w.try_ + (w.bry - w.try_) * t;
+      // Para pintar la "vertical" del azulejo (perpendicular al avance del
+      // pasillo) usamos en cambio puntos que avanzan en X de base a VP a
+      // la misma fracción t de la base.
+      // Reinterpretación: dividimos el TRAPECIO en columnas convergentes
+      // — cada columna va de (xBase, yBase) a (xVP, yVP) a la misma t.
+      const xb = w.tlx + (w.trx - w.tlx) * t;       // arriba: TL→TR
+      const yb = w.tly + (w.try_ - w.tly) * t;
+      const xa = w.blx + (w.brx - w.blx) * t;       // abajo: BL→BR
+      const ya = w.bly + (w.bry - w.bly) * t;
+      ctx.beginPath();
+      ctx.moveTo(xa, ya);
+      ctx.lineTo(xb, yb);
+      ctx.stroke();
+    }
+  }
+
+  // ── CABLES AL PIE DE LA PARED ────────────────────────────────────────────
+  // Líneas paralelas que corren al pie de cada pared (entre el rodapié y el
+  // suelo del andén), converger al VP — cables eléctricos / canal de
+  // emergencia típicos de Metro.
+  _drawWallCables(ctx, W, H, vpX, vpY, G) {
+    const B = this._bounds;
+    // Y de arranque (cerca cámara) y llegada (VP) — ligeramente sobre el
+    // borde inferior de la pared (H*0.55) y vpY+5.
+    const baseYNear = H * 0.55 - 4;
+    const baseYFar  = vpY + 4;
+    // 3 cables apilados (verde, gris oscuro, rojo) — colores convencionales
+    const cables = [
+      { color: '#3DA040', dy: 0  },     // verde (señal/datos)
+      { color: '#3a3a3a', dy: 4  },     // negro grueso (alimentación)
+      { color: '#A82020', dy: 8  },     // rojo (emergencia)
+    ];
+
+    // IZQUIERDA
+    cables.forEach(({ color, dy }) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.moveTo(B.left,   baseYNear + dy);
+      ctx.lineTo(G.pVL,    baseYFar + dy * 0.18);
+      ctx.stroke();
+    });
+
+    // DERECHA
+    cables.forEach(({ color, dy }) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.moveTo(B.right,  baseYNear + dy);
+      ctx.lineTo(G.pVR,    baseYFar + dy * 0.18);
+      ctx.stroke();
+    });
+
+    // Bandeja portacables (línea oscura encima de los cables) — efecto
+    // sombra de la canal metálica que sujeta los cables.
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(B.left,  baseYNear - 2); ctx.lineTo(G.pVL, baseYFar - 0.4);
+    ctx.moveTo(B.right, baseYNear - 2); ctx.lineTo(G.pVR, baseYFar - 0.4);
+    ctx.stroke();
+  }
+
+  // ── CAJAS DE EMERGENCIA SOS (rojo) — montadas sobre la pared ─────────────
+  // Cada lado coloca 2 cajas distribuidas en profundidad (cerca y media).
+  // El tamaño escala con la perspectiva: la del fondo es más pequeña.
+  _drawEmergencyBoxes(ctx, W, H, vpX, vpY, G) {
+    const B = this._bounds;
+    // Posiciones a lo largo del trapecio de pared, fracción 0=base 1=VP
+    const ts = [0.10, 0.50];
+    // Y de la caja sobre la pared (entre el techo y la franja verde)
+    const wallTopY = (t) => B.top + (vpY - 10 - B.top) * t;
+    const wallBotY = (t) => H * 0.55 + (vpY + 5 - H * 0.55) * t;
+
+    const drawBox = (cx, cy, size) => {
+      const w = size, h = size * 1.4;
+      // Sombra
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(cx - w/2 + 1, cy - h/2 + 1, w, h);
+      // Cuerpo rojo
+      ctx.fillStyle = '#C81313';
+      ctx.fillRect(cx - w/2, cy - h/2, w, h);
+      // Reborde brillante (luz superior izq)
+      ctx.fillStyle = '#FF4848';
+      ctx.fillRect(cx - w/2, cy - h/2, w, Math.max(1, h * 0.18));
+      ctx.fillRect(cx - w/2, cy - h/2, Math.max(1, w * 0.18), h);
+      // Sombra inferior
+      ctx.fillStyle = '#7A0808';
+      ctx.fillRect(cx - w/2, cy + h/2 - Math.max(1, h * 0.15), w, Math.max(1, h * 0.15));
+      // Cristal central (más oscuro)
+      if (size >= 8) {
+        ctx.fillStyle = '#3A0808';
+        const gx = cx - w * 0.30, gy = cy - h * 0.20;
+        ctx.fillRect(gx, gy, w * 0.60, h * 0.40);
+      }
+    };
+
+    for (const t of ts) {
+      const yMid = (wallTopY(t) + wallBotY(t)) / 2;
+      // Tamaño en perspectiva: cerca grande, lejos pequeño
+      const size = Math.max(4, 22 * (1 - t * 0.7));
+      // X izquierda: interpolación entre el borde del canvas y G.pVL
+      const xL = B.left + (G.pVL - B.left) * t + size * 0.7;
+      const xR = B.right + (G.pVR - B.right) * t - size * 0.7;
+      drawBox(xL, yMid + 4, size);
+      drawBox(xR, yMid + 4, size);
+    }
   }
 
   // ── CARTELES "Estación · Andén N" ────────────────────────────────────────
@@ -530,6 +779,37 @@ export class EstacionBase {
     // 5. Suelo del arco — banda oscura por donde entra el balasto al túnel
     ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
     ctx.fillRect(vpX - innerHalf, baseY - 1, innerHalf * 2, 3);
+
+    // 6. Luces de señalización ferroviaria al fondo del túnel
+    //    (rojo a la izquierda + verde a la derecha — semáforos de vía)
+    //    Sólo visibles cuando la boca aún es pequeña; al ampliarse durante
+    //    la transición, las señales quedan fuera del marco visible.
+    if (animScale < 1.6) {
+      const sigR = Math.max(1.5, innerHalf * 0.10);
+      const sigY = baseY - sidesH * 0.55;
+      const sigOff = innerHalf * 0.45;
+      const drawSignal = (cx, color, glowColor) => {
+        // Halo difuso
+        const halo = ctx.createRadialGradient(cx, sigY, 0, cx, sigY, sigR * 4);
+        halo.addColorStop(0,   glowColor);
+        halo.addColorStop(0.5, glowColor.replace(/[\d.]+\)$/, '0.18)'));
+        halo.addColorStop(1,   glowColor.replace(/[\d.]+\)$/, '0)'));
+        ctx.fillStyle = halo;
+        ctx.fillRect(cx - sigR * 4, sigY - sigR * 4, sigR * 8, sigR * 8);
+        // Bombilla
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(cx, sigY, sigR, 0, Math.PI * 2);
+        ctx.fill();
+        // Brillo central
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.beginPath();
+        ctx.arc(cx - sigR * 0.25, sigY - sigR * 0.25, sigR * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      drawSignal(vpX - sigOff, '#FF2A2A', 'rgba(255,60,60,0.55)');
+      drawSignal(vpX + sigOff, '#22DD33', 'rgba(60,255,80,0.55)');
+    }
   }
 
   // ── PANTALLA LED COLGANTE (sentido del trayecto) ─────────────────────────

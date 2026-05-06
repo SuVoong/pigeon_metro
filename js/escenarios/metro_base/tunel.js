@@ -17,13 +17,13 @@ const _vpX        = () => canvas.width  / 2;
 // túnel ↔ estación mantiene el punto de fuga (y por tanto las vías) en la
 // misma posición vertical de la pantalla.
 const _defaultVpY        = () => canvas.height * (ENV_CFG?.vanishingPointY ?? 0.42);
-// Arco MUY APRETADO — el techo curva sobre los trenes dentro del canvas,
-// sin dejar el "V abierto" hacia las esquinas superiores. Sección reducida
-// otro −60 % respecto a la versión 0.30 (0.40 → 0.30 → 0.12) — la "boca"
-// del túnel queda muy estrecha, casi a la altura del tren al fondo.
-// archOffset = maxR mantiene la cresta del arco exactamente en vpY.
-const _defaultArchOffset = () => canvas.height * 0.12;
-const _defaultMaxR       = () => canvas.height * 0.12;
+// Arco GRANDE tipo dovelas de hormigón — la bóveda domina la mitad
+// superior del canvas (ref. foto del túnel real). maxR define el radio
+// del anillo más cercano al espectador; archOffset baja el centro del
+// círculo para que el arco quede sobre el VP y deje espacio inferior
+// para las vías y aceras de mantenimiento.
+const _defaultArchOffset = () => canvas.height * 0.18;
+const _defaultMaxR       = () => canvas.height * 0.45;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRY POINT
@@ -77,11 +77,20 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   // EstacionBase (vpY + 8) y la transición túnel ↔ estación sea continua.
   _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ);
 
+  // 6b ── Aceras laterales de mantenimiento (banquetas con borde amarillo)
+  _drawSideWalkways(ctx, vpX, vpY, archCY, maxR, cw, ch);
+
+  // 6c ── Cables multicolor a media altura de la pared
+  _drawSideCables(ctx, vpX, vpY, archCY, maxR, cw, ch);
+
   // 7 ── Conductos/cables en las paredes ────────────────────────────────────
   _drawConduits(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ);
 
-  // 8 ── Paneles de luz laterales ────────────────────────────────────────────
-  _drawWallLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config);
+  // 8 ── (Lámparas de pared con halo eliminadas a petición) ──────────────────
+  // _drawWallLights queda definida pero ya no se llama; conservamos la luz
+  // ambiente cenital que pintaba además del halo, así que ese resplandor de
+  // techo se mueve a una llamada simplificada inline si hace falta. Por
+  // ahora el túnel queda iluminado sólo por la niebla del fondo.
 
   // 9 ── Niebla de profundidad ───────────────────────────────────────────────
   _drawDepthFog(ctx, vpX, vpY, cw, ch);
@@ -215,10 +224,15 @@ function _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   ctx.restore();
 }
 
-// ── Anillos del arco en perspectiva ──────────────────────────────────────
+// ── Anillos del arco en perspectiva (dovelas segmentadas) ──────────────
+// Cada anillo se compone de SEGMENTS paneles trapezoidales con juntas
+// radiales visibles — réplica de las dovelas de hormigón prefabricado de
+// los túneles modernos. Las juntas radiales convergen al centro del arco
+// (archCY a esa profundidad) y dividen el semicírculo en partes iguales.
 function _drawArchRings(ctx, vpX, archCY, maxR, cw, ch, worldZ) {
-  const ringGap = 100;
-  const offset  = ((worldZ * 1.8) % ringGap + ringGap) % ringGap;
+  const ringGap  = 100;
+  const SEGMENTS = 8;     // dovelas por anillo (semicírculo) — referencia foto
+  const offset   = ((worldZ * 1.8) % ringGap + ringGap) % ringGap;
 
   ctx.save();
   for (let z = 900; z >= 25; z -= ringGap) {
@@ -233,19 +247,53 @@ function _drawArchRings(ctx, vpX, archCY, maxR, cw, ch, worldZ) {
     const lum   = Math.round(28 + s * 22);
     const alpha = 0.55 + s * 0.35;
 
+    // 1 ── Junta circular del anillo (línea perpendicular al avance)
     ctx.strokeStyle = `rgba(${lum + 6},${lum + 6},${lum + 4},${alpha})`;
     ctx.lineWidth   = Math.max(0.5, s * 2.2);
     ctx.beginPath();
     ctx.arc(vpX, cy2, r, Math.PI, 0);
     ctx.stroke();
 
-    // Línea de sombra interna (junta oscura del panel)
+    // 2 ── Sombra interna (junta oscura del panel)
     if (s > 0.25) {
       ctx.strokeStyle = `rgba(0,0,0,${0.25 + (1 - s) * 0.2})`;
       ctx.lineWidth   = Math.max(0.5, s * 1.2);
       ctx.beginPath();
       ctx.arc(vpX, cy2 + s * 1.5, r * 0.985, Math.PI, 0);
       ctx.stroke();
+    }
+
+    // 3 ── Juntas RADIALES (entre dovelas) — sólo en anillos cercanos
+    //      donde el detalle es perceptible. En los lejanos quitarlas para
+    //      no saturar la imagen.
+    if (s > 0.30) {
+      const innerR = r * 0.92;     // las juntas no llegan al borde absoluto
+      ctx.strokeStyle = `rgba(0,0,0,${0.32 + s * 0.20})`;
+      ctx.lineWidth   = Math.max(0.5, s * 0.9);
+      for (let i = 1; i < SEGMENTS; i++) {
+        const ang = Math.PI + (Math.PI * i) / SEGMENTS;   // 180°→360° (semicírculo superior)
+        const x1 = vpX + Math.cos(ang) * innerR;
+        const y1 = cy2 + Math.sin(ang) * innerR;
+        const x2 = vpX + Math.cos(ang) * r;
+        const y2 = cy2 + Math.sin(ang) * r;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+
+      // Detalle: punto/perno cerca del centro de cada dovela en anillos
+      // muy próximos (s>0.55) — sugiere los anclajes de las prefabricadas.
+      if (s > 0.55) {
+        ctx.fillStyle = `rgba(${lum - 8},${lum - 8},${lum - 10},${alpha})`;
+        for (let i = 0; i < SEGMENTS; i++) {
+          const ang = Math.PI + (Math.PI * (i + 0.5)) / SEGMENTS;
+          const px = vpX + Math.cos(ang) * r * 0.95;
+          const py = cy2 + Math.sin(ang) * r * 0.95;
+          const sz = Math.max(1, s * 1.6);
+          ctx.fillRect(px - sz/2, py - sz/2, sz, sz);
+        }
+      }
     }
   }
   ctx.restore();
@@ -396,7 +444,37 @@ function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ) {
     ctx.lineWidth   = Math.max(1, thickness * 0.3);
     ctx.beginPath(); ctx.moveTo(tL1, sy - thickness * 0.35); ctx.lineTo(tL2, sy - thickness * 0.35); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(tR1, sy - thickness * 0.35); ctx.lineTo(tR2, sy - thickness * 0.35); ctx.stroke();
+
+    // Tornillos AZULES en cada extremo de la traviesa (anclajes Pandrol).
+    // Sólo visibles en sleepers cercanos (t > 0.45).
+    if (t > 0.45) {
+      const boltSize = Math.max(1, thickness * 0.45);
+      ctx.fillStyle  = `rgba(60,90,170,${alpha})`;
+      // 4 tornillos por sleeper (2 izq, 2 der)
+      for (const bx of [tL1 + boltSize * 0.5, tL2 - boltSize * 0.5,
+                         tR1 + boltSize * 0.5, tR2 - boltSize * 0.5]) {
+        ctx.fillRect(bx - boltSize / 2, sy - boltSize / 2, boltSize, boltSize);
+      }
+    }
   }
+  ctx.restore();
+
+  // ── Línea AMARILLA central de seguridad ─────────────────────────────────
+  // Banda continua entre las dos vías, desde el VP hasta la base. Marca el
+  // gap interior y refleja la señalización amarilla típica de los túneles.
+  const tCenterBaseL = vpX - cw * TRACK_INNER_RATIO_BASE * 0.6;
+  const tCenterBaseR = vpX + cw * TRACK_INNER_RATIO_BASE * 0.6;
+  const tCenterVPL   = vpX - cw * TRACK_INNER_RATIO_VP * 0.6;
+  const tCenterVPR   = vpX + cw * TRACK_INNER_RATIO_VP * 0.6;
+  ctx.save();
+  ctx.fillStyle = 'rgba(232,180,0,0.55)';
+  ctx.beginPath();
+  ctx.moveTo(tCenterVPL, railTopY);
+  ctx.lineTo(tCenterVPR, railTopY);
+  ctx.lineTo(tCenterBaseR, railBotY);
+  ctx.lineTo(tCenterBaseL, railBotY);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
 
   // ── Carriles metálicos (4 carriles: 2 por vía) ──────────────────────────
@@ -438,6 +516,168 @@ function _drawRailLines(ctx, rails, topY, botY, color, baseW) {
     ctx.lineTo(rail.near + baseW * 0.3, botY);
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+// ── Aceras laterales (banquetas de mantenimiento) ─────────────────────────
+// Pasillos elevados de hormigón entre la pared y el carril exterior, con
+// franja amarilla de seguridad en el borde interior. Forma de trapecio
+// trapezoidal en perspectiva: ancha cerca de la cámara, fina en el VP.
+function _drawSideWalkways(ctx, vpX, vpY, archCY, maxR, cw, ch) {
+  // Los carriles exteriores están a ±32 % en la base y ±1.8 % en el VP
+  // (constantes TRACK_OUTER_RATIO_BASE/VP definidas más abajo). La acera
+  // ocupa el espacio entre la pared del túnel y el carril exterior.
+  const railTopY = vpY + 8;          // misma Y de inicio que los raíles
+  const railBotY = ch;
+  // Borde INTERIOR de la acera (pegado al carril exterior)
+  const innerBaseL = vpX - cw * 0.32;
+  const innerBaseR = vpX + cw * 0.32;
+  const innerVPL   = vpX - cw * 0.018;
+  const innerVPR   = vpX + cw * 0.018;
+  // Borde EXTERIOR de la acera (donde toca la pared) — sigue la curva del
+  // arco a la altura de las vías. Aproximamos con valores que casan con la
+  // base del arco (semicírculo de radio maxR alrededor de archCY).
+  const archHalfWidthAtFloor = Math.sqrt(Math.max(0, maxR * maxR - (railTopY - archCY) ** 2));
+  const outerBaseL = vpX - cw * 0.48;   // pegado al borde inferior del canvas
+  const outerBaseR = vpX + cw * 0.48;
+  const outerVPL   = vpX - archHalfWidthAtFloor * 0.5;   // donde el arco toca el suelo
+  const outerVPR   = vpX + archHalfWidthAtFloor * 0.5;
+
+  ctx.save();
+  // ── ACERA IZQUIERDA ──
+  // Suelo de hormigón
+  ctx.fillStyle = '#3a3a40';
+  ctx.beginPath();
+  ctx.moveTo(outerBaseL, railBotY);
+  ctx.lineTo(innerBaseL, railBotY);
+  ctx.lineTo(innerVPL,   railTopY);
+  ctx.lineTo(outerVPL,   railTopY);
+  ctx.closePath();
+  ctx.fill();
+  // Highlight superior (canto frontal de la acera, donde recibe luz)
+  const lgL = ctx.createLinearGradient(outerBaseL, railTopY, outerBaseL, railBotY);
+  lgL.addColorStop(0, 'rgba(120,120,128,0.45)');
+  lgL.addColorStop(0.3, 'rgba(80,80,86,0.18)');
+  lgL.addColorStop(1, 'rgba(0,0,0,0.5)');
+  ctx.fillStyle = lgL;
+  ctx.beginPath();
+  ctx.moveTo(outerBaseL, railBotY);
+  ctx.lineTo(innerBaseL, railBotY);
+  ctx.lineTo(innerVPL,   railTopY);
+  ctx.lineTo(outerVPL,   railTopY);
+  ctx.closePath();
+  ctx.fill();
+  // Franja amarilla de seguridad (borde interior)
+  ctx.strokeStyle = '#E8B400';
+  ctx.lineWidth   = 3;
+  ctx.beginPath();
+  ctx.moveTo(innerBaseL, railBotY);
+  ctx.lineTo(innerVPL,   railTopY);
+  ctx.stroke();
+  // Sombra negra debajo de la franja (realza el borde)
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(innerBaseL + 1, railBotY - 2);
+  ctx.lineTo(innerVPL + 0.5, railTopY - 1);
+  ctx.stroke();
+
+  // ── ACERA DERECHA ──
+  ctx.fillStyle = '#3a3a40';
+  ctx.beginPath();
+  ctx.moveTo(outerBaseR, railBotY);
+  ctx.lineTo(innerBaseR, railBotY);
+  ctx.lineTo(innerVPR,   railTopY);
+  ctx.lineTo(outerVPR,   railTopY);
+  ctx.closePath();
+  ctx.fill();
+  const lgR = ctx.createLinearGradient(outerBaseR, railTopY, outerBaseR, railBotY);
+  lgR.addColorStop(0, 'rgba(120,120,128,0.45)');
+  lgR.addColorStop(0.3, 'rgba(80,80,86,0.18)');
+  lgR.addColorStop(1, 'rgba(0,0,0,0.5)');
+  ctx.fillStyle = lgR;
+  ctx.beginPath();
+  ctx.moveTo(outerBaseR, railBotY);
+  ctx.lineTo(innerBaseR, railBotY);
+  ctx.lineTo(innerVPR,   railTopY);
+  ctx.lineTo(outerVPR,   railTopY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#E8B400';
+  ctx.lineWidth   = 3;
+  ctx.beginPath();
+  ctx.moveTo(innerBaseR, railBotY);
+  ctx.lineTo(innerVPR,   railTopY);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(innerBaseR - 1, railBotY - 2);
+  ctx.lineTo(innerVPR - 0.5, railTopY - 1);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── Cables multicolor a media altura de la pared (instalación eléctrica)
+// 4 cables (amarillo, rojo, negro, verde) corriendo por cada pared lateral
+// a la altura del torso, según la foto de referencia. Cada cable converge
+// al VP siguiendo una línea recta — la perspectiva los abrelluviada en
+// abanico hacia el espectador. Por encima de los cables, una bandeja
+// portacables negra (riel metálico que los sujeta).
+function _drawSideCables(ctx, vpX, vpY, archCY, maxR, cw, ch) {
+  // Y de arranque (cerca cámara, mitad inferior del canvas) y llegada (VP)
+  const baseY = vpY + (ch - vpY) * 0.40;     // 40 % bajo el VP
+  const farY  = vpY + 6;
+  // X de cada extremo (paredes a ±48 % en la base, ±2 % en el VP)
+  const baseLeftX  = vpX - cw * 0.48;
+  const baseRightX = vpX + cw * 0.48;
+  const farLeftX   = vpX - cw * 0.02;
+  const farRightX  = vpX + cw * 0.02;
+
+  // Cables apilados: dy es desplazamiento Y respecto a baseY (separa los cables)
+  const cables = [
+    { color: '#E8C400', dy: -8 },   // amarillo
+    { color: '#9A1A1A', dy: -3 },   // rojo
+    { color: '#1a1a1a', dy:  2 },   // negro grueso (alimentación)
+    { color: '#2A8038', dy:  7 },   // verde
+  ];
+
+  ctx.save();
+  // Bandeja portacables (riel oscuro que los sujeta — encima de todo)
+  ctx.strokeStyle = 'rgba(20,22,26,0.95)';
+  ctx.lineWidth   = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(baseLeftX, baseY - 12);
+  ctx.lineTo(farLeftX,  farY - 1.5);
+  ctx.moveTo(baseRightX, baseY - 12);
+  ctx.lineTo(farRightX,  farY - 1.5);
+  ctx.stroke();
+
+  // Cables (de oscuro a claro hacia delante)
+  cables.forEach(({ color, dy }) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 1.6;
+    // Izquierda
+    ctx.beginPath();
+    ctx.moveTo(baseLeftX, baseY + dy);
+    ctx.lineTo(farLeftX,  farY  + dy * 0.18);
+    ctx.stroke();
+    // Derecha
+    ctx.beginPath();
+    ctx.moveTo(baseRightX, baseY + dy);
+    ctx.lineTo(farRightX,  farY  + dy * 0.18);
+    ctx.stroke();
+  });
+
+  // Sombra debajo del paquete de cables (suelo de la bandeja)
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(baseLeftX, baseY + 11);
+  ctx.lineTo(farLeftX,  farY  + 2);
+  ctx.moveTo(baseRightX, baseY + 11);
+  ctx.lineTo(farRightX,  farY  + 2);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -537,25 +777,36 @@ function _drawWallLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config) {
       const wx  = vpX + (cw * xFrac - vpX) * s;
       const wy  = vpY + (ch * yFrac - vpY) * s;
 
-      // Tamaño del panel según escala
-      const pw = Math.max(2, 18 * s);
-      const ph = Math.max(1,  7 * s);
+      // Tamaño del panel — INCREMENTADO (referencia foto: bombillas
+      // grandes con halo intenso en la pared). Era 18×7, ahora 28×14.
+      const pw = Math.max(3, 28 * s);
+      const ph = Math.max(2, 14 * s);
 
-      // Caja del panel (gris oscuro)
-      ctx.fillStyle = `rgba(30,32,36,${alpha})`;
+      // Halo BLANCO BRILLANTE muy amplio (mancha de luz que ilumina la
+      // pared de hormigón a su alrededor — efecto principal pedido)
+      const halo2 = ctx.createRadialGradient(wx, wy, 0, wx, wy, pw * 6);
+      halo2.addColorStop(0,   `rgba(255,250,230,${alpha * 0.55})`);
+      halo2.addColorStop(0.3, `rgba(255,240,200,${alpha * 0.30})`);
+      halo2.addColorStop(0.7, `rgba(255,225,160,${alpha * 0.08})`);
+      halo2.addColorStop(1,   'rgba(255,200,80,0)');
+      ctx.fillStyle = halo2;
+      ctx.fillRect(wx - pw * 6, wy - pw * 6, pw * 12, pw * 12);
+
+      // Caja oscura del aplique (montura)
+      ctx.fillStyle = `rgba(20,22,26,${alpha})`;
       ctx.fillRect(wx - pw * 0.6, wy - ph, pw * 1.2, ph * 2.2);
 
-      // Luz emitida (amarilla-naranja cálida)
-      ctx.fillStyle = `rgba(255,232,160,${alpha * 0.88})`;
+      // Bombilla / lente luminosa (núcleo blanco-amarillento)
+      const bulbGrad = ctx.createLinearGradient(wx, wy - ph / 2, wx, wy + ph / 2);
+      bulbGrad.addColorStop(0,   `rgba(255,255,235,${alpha})`);
+      bulbGrad.addColorStop(0.5, `rgba(255,248,220,${alpha})`);
+      bulbGrad.addColorStop(1,   `rgba(255,235,180,${alpha})`);
+      ctx.fillStyle = bulbGrad;
       ctx.fillRect(wx - pw / 2, wy - ph / 2, pw, ph);
 
-      // Halo difuso
-      const halo = ctx.createRadialGradient(wx, wy, 0, wx, wy, pw * 3.5);
-      halo.addColorStop(0,   `rgba(255,228,140,${alpha * 0.22})`);
-      halo.addColorStop(0.5, `rgba(255,215,100,${alpha * 0.08})`);
-      halo.addColorStop(1,   'rgba(255,200,80,0)');
-      ctx.fillStyle = halo;
-      ctx.fillRect(wx - pw * 4, wy - pw * 4, pw * 8, pw * 8);
+      // Núcleo blanco intenso en el centro (filamento)
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.fillRect(wx - pw * 0.25, wy - ph * 0.25, pw * 0.5, ph * 0.5);
     }
   }
 
