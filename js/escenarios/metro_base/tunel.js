@@ -678,25 +678,36 @@ function _drawWallLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config) {
       const wx  = vpX + (cw * xFrac - vpX) * s;
       const wy  = vpY + (ch * yFrac - vpY) * s;
 
-      // Tamaño del panel según escala
-      const pw = Math.max(2, 18 * s);
-      const ph = Math.max(1,  7 * s);
+      // Tamaño del panel — INCREMENTADO (referencia foto: bombillas
+      // grandes con halo intenso en la pared). Era 18×7, ahora 28×14.
+      const pw = Math.max(3, 28 * s);
+      const ph = Math.max(2, 14 * s);
 
-      // Caja del panel (gris oscuro)
-      ctx.fillStyle = `rgba(30,32,36,${alpha})`;
+      // Halo BLANCO BRILLANTE muy amplio (mancha de luz que ilumina la
+      // pared de hormigón a su alrededor — efecto principal pedido)
+      const halo2 = ctx.createRadialGradient(wx, wy, 0, wx, wy, pw * 6);
+      halo2.addColorStop(0,   `rgba(255,250,230,${alpha * 0.55})`);
+      halo2.addColorStop(0.3, `rgba(255,240,200,${alpha * 0.30})`);
+      halo2.addColorStop(0.7, `rgba(255,225,160,${alpha * 0.08})`);
+      halo2.addColorStop(1,   'rgba(255,200,80,0)');
+      ctx.fillStyle = halo2;
+      ctx.fillRect(wx - pw * 6, wy - pw * 6, pw * 12, pw * 12);
+
+      // Caja oscura del aplique (montura)
+      ctx.fillStyle = `rgba(20,22,26,${alpha})`;
       ctx.fillRect(wx - pw * 0.6, wy - ph, pw * 1.2, ph * 2.2);
 
-      // Luz emitida (amarilla-naranja cálida)
-      ctx.fillStyle = `rgba(255,232,160,${alpha * 0.88})`;
+      // Bombilla / lente luminosa (núcleo blanco-amarillento)
+      const bulbGrad = ctx.createLinearGradient(wx, wy - ph / 2, wx, wy + ph / 2);
+      bulbGrad.addColorStop(0,   `rgba(255,255,235,${alpha})`);
+      bulbGrad.addColorStop(0.5, `rgba(255,248,220,${alpha})`);
+      bulbGrad.addColorStop(1,   `rgba(255,235,180,${alpha})`);
+      ctx.fillStyle = bulbGrad;
       ctx.fillRect(wx - pw / 2, wy - ph / 2, pw, ph);
 
-      // Halo difuso
-      const halo = ctx.createRadialGradient(wx, wy, 0, wx, wy, pw * 3.5);
-      halo.addColorStop(0,   `rgba(255,228,140,${alpha * 0.22})`);
-      halo.addColorStop(0.5, `rgba(255,215,100,${alpha * 0.08})`);
-      halo.addColorStop(1,   'rgba(255,200,80,0)');
-      ctx.fillStyle = halo;
-      ctx.fillRect(wx - pw * 4, wy - pw * 4, pw * 8, pw * 8);
+      // Núcleo blanco intenso en el centro (filamento)
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.fillRect(wx - pw * 0.25, wy - ph * 0.25, pw * 0.5, ph * 0.5);
     }
   }
 
