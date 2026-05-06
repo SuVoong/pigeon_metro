@@ -60,8 +60,8 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   // 1 ── Fondo negro profundo ────────────────────────────────────────────────
   _drawBackground(ctx, vpX, vpY, cw, ch, config);
 
-  // 2 ── Relleno de las paredes (hormigón gris) ──────────────────────────────
-  _drawWallFills(ctx, vpX, vpY, archCY, maxR, cw, ch);
+  // 2 ── (Rellenos de pared y techo eliminados a petición — todo el fondo
+  //       queda en negro uniforme y la profundidad la dan sólo los anillos.)
 
   // 3 ── Anillos del arco en perspectiva ────────────────────────────────────
   _drawArchRings(ctx, vpX, archCY, maxR, cw, ch, worldZ);
@@ -69,28 +69,24 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   // 4 ── Juntas de los paneles de hormigón (horizontal + vertical) ──────────
   _drawPanelSeams(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ);
 
-  // 5 ── Suelo con balasto ───────────────────────────────────────────────────
-  _drawFloor(ctx, vpX, archCY, cw, ch);
+  // 5 ── (Suelo con balasto eliminado a petición — los raíles y durmientes
+  //       quedan dibujados directamente sobre el fondo negro.)
 
   // 6 ── Raíles con durmientes ───────────────────────────────────────────────
   // Pasamos vpY explícito para que los raíles arranquen a la MISMA Y que en
   // EstacionBase (vpY + 8) y la transición túnel ↔ estación sea continua.
   _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ);
 
-  // 6b ── Aceras laterales de mantenimiento (banquetas con borde amarillo)
-  _drawSideWalkways(ctx, vpX, vpY, archCY, maxR, cw, ch);
+  // 6b ── (Aceras laterales de mantenimiento eliminadas a petición —
+  //        los raíles se ven directamente sobre el balasto sin banqueta).
 
-  // 6c ── Cables multicolor a media altura de la pared
-  _drawSideCables(ctx, vpX, vpY, archCY, maxR, cw, ch);
+  // 7 ── Cables suspendidos del techo (2 diagonales que convergen al VP) ──
+  //       Sustituyen a los cables laterales multicolor: en la foto real los
+  //       cables eléctricos del catenario corren colgados de la bóveda.
+  _drawCeilingCables(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ);
 
-  // 7 ── Conductos/cables en las paredes ────────────────────────────────────
-  _drawConduits(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ);
-
-  // 8 ── (Lámparas de pared con halo eliminadas a petición) ──────────────────
-  // _drawWallLights queda definida pero ya no se llama; conservamos la luz
-  // ambiente cenital que pintaba además del halo, así que ese resplandor de
-  // techo se mueve a una llamada simplificada inline si hace falta. Por
-  // ahora el túnel queda iluminado sólo por la niebla del fondo.
+  // 7b ── Lámparas fluorescentes empotradas en el techo ─────────────────────
+  _drawCeilingLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config);
 
   // 9 ── Niebla de profundidad ───────────────────────────────────────────────
   _drawDepthFog(ctx, vpX, vpY, cw, ch);
@@ -247,19 +243,23 @@ function _drawArchRings(ctx, vpX, archCY, maxR, cw, ch, worldZ) {
     const lum   = Math.round(28 + s * 22);
     const alpha = 0.55 + s * 0.35;
 
-    // 1 ── Junta circular del anillo (línea perpendicular al avance)
+    // 1 ── Junta circular del anillo (anillo COMPLETO 360° para que la
+    //      sección del túnel sea un círculo cerrado, no un arco). La parte
+    //      inferior queda tapada por el suelo en los anillos cercanos, pero
+    //      en los lejanos se ve el círculo entero — efecto "tubo" como en
+    //      la foto de referencia.
     ctx.strokeStyle = `rgba(${lum + 6},${lum + 6},${lum + 4},${alpha})`;
     ctx.lineWidth   = Math.max(0.5, s * 2.2);
     ctx.beginPath();
-    ctx.arc(vpX, cy2, r, Math.PI, 0);
+    ctx.arc(vpX, cy2, r, 0, Math.PI * 2);
     ctx.stroke();
 
-    // 2 ── Sombra interna (junta oscura del panel)
+    // 2 ── Sombra interna (junta oscura del panel) — también círculo completo
     if (s > 0.25) {
       ctx.strokeStyle = `rgba(0,0,0,${0.25 + (1 - s) * 0.2})`;
       ctx.lineWidth   = Math.max(0.5, s * 1.2);
       ctx.beginPath();
-      ctx.arc(vpX, cy2 + s * 1.5, r * 0.985, Math.PI, 0);
+      ctx.arc(vpX, cy2 + s * 1.5, r * 0.985, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -459,23 +459,8 @@ function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ) {
   }
   ctx.restore();
 
-  // ── Línea AMARILLA central de seguridad ─────────────────────────────────
-  // Banda continua entre las dos vías, desde el VP hasta la base. Marca el
-  // gap interior y refleja la señalización amarilla típica de los túneles.
-  const tCenterBaseL = vpX - cw * TRACK_INNER_RATIO_BASE * 0.6;
-  const tCenterBaseR = vpX + cw * TRACK_INNER_RATIO_BASE * 0.6;
-  const tCenterVPL   = vpX - cw * TRACK_INNER_RATIO_VP * 0.6;
-  const tCenterVPR   = vpX + cw * TRACK_INNER_RATIO_VP * 0.6;
-  ctx.save();
-  ctx.fillStyle = 'rgba(232,180,0,0.55)';
-  ctx.beginPath();
-  ctx.moveTo(tCenterVPL, railTopY);
-  ctx.lineTo(tCenterVPR, railTopY);
-  ctx.lineTo(tCenterBaseR, railBotY);
-  ctx.lineTo(tCenterBaseL, railBotY);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+  // ── (División central entre vías eliminada a petición — el gap entre
+  //     ambas vías queda al color del suelo, sin franja diferenciada.)
 
   // ── Carriles metálicos (4 carriles: 2 por vía) ──────────────────────────
   const railColor = '#8a8c94';
@@ -567,19 +552,13 @@ function _drawSideWalkways(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   ctx.lineTo(outerVPL,   railTopY);
   ctx.closePath();
   ctx.fill();
-  // Franja amarilla de seguridad (borde interior)
-  ctx.strokeStyle = '#E8B400';
-  ctx.lineWidth   = 3;
+  // Borde interior oscuro de la acera (sin franja amarilla — coherente con
+  // el aspecto monocromático del túnel real de la referencia).
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.lineWidth   = 2;
   ctx.beginPath();
   ctx.moveTo(innerBaseL, railBotY);
   ctx.lineTo(innerVPL,   railTopY);
-  ctx.stroke();
-  // Sombra negra debajo de la franja (realza el borde)
-  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-  ctx.lineWidth   = 1;
-  ctx.beginPath();
-  ctx.moveTo(innerBaseL + 1, railBotY - 2);
-  ctx.lineTo(innerVPL + 0.5, railTopY - 1);
   ctx.stroke();
 
   // ── ACERA DERECHA ──
@@ -603,151 +582,159 @@ function _drawSideWalkways(ctx, vpX, vpY, archCY, maxR, cw, ch) {
   ctx.lineTo(outerVPR,   railTopY);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = '#E8B400';
-  ctx.lineWidth   = 3;
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.lineWidth   = 2;
   ctx.beginPath();
   ctx.moveTo(innerBaseR, railBotY);
   ctx.lineTo(innerVPR,   railTopY);
   ctx.stroke();
-  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-  ctx.lineWidth   = 1;
-  ctx.beginPath();
-  ctx.moveTo(innerBaseR - 1, railBotY - 2);
-  ctx.lineTo(innerVPR - 0.5, railTopY - 1);
-  ctx.stroke();
   ctx.restore();
 }
 
-// ── Cables multicolor a media altura de la pared (instalación eléctrica)
-// 4 cables (amarillo, rojo, negro, verde) corriendo por cada pared lateral
-// a la altura del torso, según la foto de referencia. Cada cable converge
-// al VP siguiendo una línea recta — la perspectiva los abrelluviada en
-// abanico hacia el espectador. Por encima de los cables, una bandeja
-// portacables negra (riel metálico que los sujeta).
-function _drawSideCables(ctx, vpX, vpY, archCY, maxR, cw, ch) {
-  // Y de arranque (cerca cámara, mitad inferior del canvas) y llegada (VP)
-  const baseY = vpY + (ch - vpY) * 0.40;     // 40 % bajo el VP
-  const farY  = vpY + 6;
-  // X de cada extremo (paredes a ±48 % en la base, ±2 % en el VP)
-  const baseLeftX  = vpX - cw * 0.48;
-  const baseRightX = vpX + cw * 0.48;
-  const farLeftX   = vpX - cw * 0.02;
-  const farRightX  = vpX + cw * 0.02;
-
-  // Cables apilados: dy es desplazamiento Y respecto a baseY (separa los cables)
-  const cables = [
-    { color: '#E8C400', dy: -8 },   // amarillo
-    { color: '#9A1A1A', dy: -3 },   // rojo
-    { color: '#1a1a1a', dy:  2 },   // negro grueso (alimentación)
-    { color: '#2A8038', dy:  7 },   // verde
-  ];
+// ── Cables suspendidos del techo + bandejas portacables ───────────────────
+// Réplica de la imagen de referencia: dos cables gruesos cuelgan del arco
+// y convergen hacia el punto de fuga formando una "V invertida" abierta.
+// A intervalos regulares aparecen ménsulas/colgadores que los sujetan al
+// techo. La animación de profundidad (worldZ) hace que los colgadores
+// "vengan hacia la cámara".
+function _drawCeilingCables(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ) {
+  // Los cables nacen en los bordes superiores del canvas y van al VP.
+  // X de partida: a ±25 % del centro (la bóveda en la base llega más
+  // afuera, pero el cable está colgado más adentro del techo).
+  const baseLeftX  = vpX - cw * 0.26;
+  const baseRightX = vpX + cw * 0.26;
+  const baseY      = ch * 0.04;          // arrancan cerca del borde superior
+  const farX       = vpX;                 // convergen exactos al VP
+  const farY       = vpY + 2;
 
   ctx.save();
-  // Bandeja portacables (riel oscuro que los sujeta — encima de todo)
-  ctx.strokeStyle = 'rgba(20,22,26,0.95)';
-  ctx.lineWidth   = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(baseLeftX, baseY - 12);
-  ctx.lineTo(farLeftX,  farY - 1.5);
-  ctx.moveTo(baseRightX, baseY - 12);
-  ctx.lineTo(farRightX,  farY - 1.5);
-  ctx.stroke();
-
-  // Cables (de oscuro a claro hacia delante)
-  cables.forEach(({ color, dy }) => {
-    ctx.strokeStyle = color;
-    ctx.lineWidth   = 1.6;
-    // Izquierda
-    ctx.beginPath();
-    ctx.moveTo(baseLeftX, baseY + dy);
-    ctx.lineTo(farLeftX,  farY  + dy * 0.18);
-    ctx.stroke();
-    // Derecha
-    ctx.beginPath();
-    ctx.moveTo(baseRightX, baseY + dy);
-    ctx.lineTo(farRightX,  farY  + dy * 0.18);
-    ctx.stroke();
-  });
-
-  // Sombra debajo del paquete de cables (suelo de la bandeja)
-  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+  // ── Cable IZQUIERDO ─────────────────────────────────────────────────────
+  // Sombra en bóveda (tono más oscuro a la izquierda)
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth   = 4;
+  ctx.beginPath(); ctx.moveTo(baseLeftX + 1, baseY + 2); ctx.lineTo(farX, farY); ctx.stroke();
+  // Cable principal
+  ctx.strokeStyle = '#0e0f12';
+  ctx.lineWidth   = 3;
+  ctx.beginPath(); ctx.moveTo(baseLeftX, baseY); ctx.lineTo(farX, farY); ctx.stroke();
+  // Reflejo metálico tenue
+  ctx.strokeStyle = 'rgba(120,130,140,0.25)';
   ctx.lineWidth   = 1;
-  ctx.beginPath();
-  ctx.moveTo(baseLeftX, baseY + 11);
-  ctx.lineTo(farLeftX,  farY  + 2);
-  ctx.moveTo(baseRightX, baseY + 11);
-  ctx.lineTo(farRightX,  farY  + 2);
-  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(baseLeftX - 0.5, baseY - 0.5); ctx.lineTo(farX, farY - 0.5); ctx.stroke();
+
+  // ── Cable DERECHO ───────────────────────────────────────────────────────
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth   = 4;
+  ctx.beginPath(); ctx.moveTo(baseRightX - 1, baseY + 2); ctx.lineTo(farX, farY); ctx.stroke();
+  ctx.strokeStyle = '#0e0f12';
+  ctx.lineWidth   = 3;
+  ctx.beginPath(); ctx.moveTo(baseRightX, baseY); ctx.lineTo(farX, farY); ctx.stroke();
+  ctx.strokeStyle = 'rgba(120,130,140,0.25)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath(); ctx.moveTo(baseRightX + 0.5, baseY - 0.5); ctx.lineTo(farX, farY - 0.5); ctx.stroke();
+
+  // ── Colgadores / ménsulas que sujetan los cables al techo ───────────────
+  // Distribuidos por profundidad Z y animados con worldZ.
+  const hangerGap = 130;
+  const offset    = ((worldZ * 1.8) % hangerGap + hangerGap) % hangerGap;
+  for (let z = 850; z >= 30; z -= hangerGap) {
+    const zOff = z - offset;
+    if (zOff <= 0) continue;
+    const s = _persp(zOff);
+    if (s < 0.05) continue;
+
+    // Posición del colgador en cada cable (interpolando del VP a la base)
+    const hxL = vpX + (baseLeftX  - vpX) * (1 - s);
+    const hyL = vpY + (baseY      - vpY) * (1 - s);
+    const hxR = vpX + (baseRightX - vpX) * (1 - s);
+    const hyR = vpY + (baseY      - vpY) * (1 - s);
+
+    // Tamaño del colgador escalado por perspectiva
+    const w = Math.max(1, 4 * s);
+    const h = Math.max(2, 14 * s);
+    const alpha = 0.55 + s * 0.40;
+
+    // Brazo vertical desde el techo al cable (izquierda)
+    ctx.strokeStyle = `rgba(18,20,24,${alpha})`;
+    ctx.lineWidth   = Math.max(1, s * 1.8);
+    ctx.beginPath();
+    ctx.moveTo(hxL, hyL - h);
+    ctx.lineTo(hxL, hyL);
+    ctx.stroke();
+    // Pieza horizontal (T) de fijación
+    ctx.fillStyle = `rgba(38,40,46,${alpha})`;
+    ctx.fillRect(hxL - w, hyL - 1, w * 2, Math.max(1, s * 2));
+    // Brazo + T (derecha)
+    ctx.strokeStyle = `rgba(18,20,24,${alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(hxR, hyR - h);
+    ctx.lineTo(hxR, hyR);
+    ctx.stroke();
+    ctx.fillStyle = `rgba(38,40,46,${alpha})`;
+    ctx.fillRect(hxR - w, hyR - 1, w * 2, Math.max(1, s * 2));
+  }
   ctx.restore();
 }
 
-// ── Conductos y cables en la parte alta del arco ──────────────────────────
-function _drawConduits(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ) {
-  // En los túneles reales, los cables corren en bandejas a ≈45° del arco.
-  // Aquí se representan como 2-3 líneas paralelas en cada lado.
-
-  // Fracción horizontal de la posición del conducto en el canvas
+// ── Lámparas fluorescentes empotradas en el techo ─────────────────────────
+// Paneles rectangulares mostrados por pares (izquierda/derecha del centro)
+// suspendidos del arco. Cada panel tiene un halo blanco-amarillento que
+// ilumina la bóveda a su alrededor. Animado con worldZ para que avancen
+// hacia la cámara junto con los anillos del arco.
+function _drawCeilingLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config) {
+  const lightGap = 220;
+  const offset   = ((worldZ * 1.8) % lightGap + lightGap) % lightGap;
+  // Posición angular en el techo (en fracciones del canvas) — sobre la
+  // bóveda, ligeramente fuera del eje central. Coincide con la foto donde
+  // los fluorescentes cuelgan en dos hileras paralelas.
   const sides = [
-    { xFrac: 0.14, yFrac: 0.36 },   // izquierdo
-    { xFrac: 0.86, yFrac: 0.36 },   // derecho
+    { xFrac: 0.34, yFrac: 0.10 },   // hilera izquierda (en la curva del techo)
+    { xFrac: 0.66, yFrac: 0.10 },   // hilera derecha
   ];
 
   ctx.save();
+  for (let z = 880; z >= 25; z -= lightGap) {
+    const zOff = z - offset;
+    if (zOff <= 0) continue;
+    const s     = _persp(zOff);
+    if (s < 0.04) continue;
+    const alpha = Math.min(1, s * 1.6) * 0.95;
 
-  for (const { xFrac, yFrac } of sides) {
-    const ex  = cw  * xFrac;   // extremo del conducto en pantalla
-    const ey  = ch  * yFrac;
+    for (const { xFrac, yFrac } of sides) {
+      // Posición en perspectiva: converge al VP cuando s → 0
+      const wx = vpX + (cw * xFrac - vpX) * s;
+      const wy = vpY + (ch * yFrac - vpY) * s;
 
-    // Los conductos van del punto de fuga (muy pequeños allí) hacia los extremos
-    const vx0 = vpX + (ex - vpX) * 0.04;
-    const vy0 = vpY + (ey - vpY) * 0.04;
+      // Tamaño del panel — alargado horizontalmente como un fluorescente
+      const pw = Math.max(3, 32 * s);
+      const ph = Math.max(2, 9  * s);
 
-    // Conducto principal (tubería/bandeja de cables)
-    ctx.strokeStyle = 'rgba(48,52,58,0.95)';
-    ctx.lineWidth   = 5;
-    ctx.beginPath();
-    ctx.moveTo(vx0, vy0);
-    ctx.lineTo(ex,  ey);
-    ctx.stroke();
+      // Halo MUY discreto sobre la bóveda (foto de referencia: el tubo
+      // brilla pero apenas tiñe el techo — un resplandor local y débil).
+      const halo = ctx.createRadialGradient(wx, wy, 0, wx, wy, pw * 1.4);
+      halo.addColorStop(0,   `rgba(240,235,210,${alpha * 0.18})`);
+      halo.addColorStop(0.6, `rgba(220,215,190,${alpha * 0.06})`);
+      halo.addColorStop(1,   'rgba(220,200,150,0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(wx - pw * 1.4, wy - pw * 1.4, pw * 2.8, pw * 2.8);
 
-    // Sombra debajo del conducto
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-    ctx.lineWidth   = 6;
-    ctx.beginPath();
-    ctx.moveTo(vx0, vy0 + 1.5);
-    ctx.lineTo(ex,  ey  + 3);
-    ctx.stroke();
+      // Soporte oscuro (carcasa del fluorescente)
+      ctx.fillStyle = `rgba(18,20,24,${alpha})`;
+      ctx.fillRect(wx - pw * 0.55, wy - ph * 0.6, pw * 1.10, ph * 1.6);
 
-    // Cable secundario (más fino, paralelo)
-    const sign = ex < vpX ? 1 : -1;
-    ctx.strokeStyle = 'rgba(38,42,48,0.8)';
-    ctx.lineWidth   = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(vx0 + sign * 2, vy0 + 6);
-    ctx.lineTo(ex  + sign * 8, ey  + 12);
-    ctx.stroke();
+      // Tubo luminoso (núcleo blanco)
+      const tubeGrad = ctx.createLinearGradient(wx, wy - ph / 2, wx, wy + ph / 2);
+      tubeGrad.addColorStop(0,   `rgba(255,255,240,${alpha})`);
+      tubeGrad.addColorStop(0.5, `rgba(255,255,255,${alpha})`);
+      tubeGrad.addColorStop(1,   `rgba(255,245,210,${alpha})`);
+      ctx.fillStyle = tubeGrad;
+      ctx.fillRect(wx - pw / 2, wy - ph / 2, pw, ph);
 
-    // Tercer cable (aún más fino)
-    ctx.strokeStyle = 'rgba(30,34,38,0.7)';
-    ctx.lineWidth   = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(vx0 + sign * 4,  vy0 + 11);
-    ctx.lineTo(ex  + sign * 14, ey  + 22);
-    ctx.stroke();
-
-    // Anclajes del conducto (clips metálicos cada cierta distancia)
-    const clipCount = 5;
-    for (let c = 0; c < clipCount; c++) {
-      const t   = (c + 1) / (clipCount + 1);
-      const cx2 = vx0 + (ex  - vx0) * t;
-      const cy2 = vy0 + (ey  - vy0) * t;
-      const cs  = Math.max(1, 4 * t);
-
-      ctx.fillStyle = 'rgba(58,62,70,0.9)';
-      ctx.fillRect(cx2 - cs, cy2 - cs * 0.5, cs * 2, cs);
+      // Brillo central intenso
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.fillRect(wx - pw * 0.30, wy - ph * 0.20, pw * 0.60, ph * 0.40);
     }
   }
-
   ctx.restore();
 }
 

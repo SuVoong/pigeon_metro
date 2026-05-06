@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Pigeon Metro – Túnel 3D + paloma</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #050508; color: #eee; font-family: monospace; }
+  body { display: flex; flex-direction: column; align-items: center; padding: 12px; }
+  h1 { font-size: 14px; margin: 0 0 6px; color: #f5c800; letter-spacing: 1px; }
+  .info { margin: 4px 0 8px; font-size: 11px; color: #888; max-width: 720px; text-align: center; line-height: 1.5; }
+  canvas#game { display: block; background: #000; image-rendering: pixelated; border: 1px solid #222; }
+  .ctrl { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .ctrl button { background: #1a1a22; color: #ccc; border: 1px solid #333; padding: 4px 10px; cursor: pointer; font-family: monospace; font-size: 11px; }
+  .ctrl button:hover { background: #2a2a32; color: #f5c800; }
+  .hud { font-size: 11px; color: #888; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <h1>Túnel 3D · paloma con movimiento de cámara</h1>
+  <div class="info">
+    Usa <b>flechas</b> o <b>WASD</b> para mover la paloma. La cámara desplaza el escenario y altera el VP — los anillos, raíles, cables y luces se inclinan en bloque dándole sensación 3D.
+    Botón <b>AUTO</b> ejecuta una órbita demostrativa.
+  </div>
+  <canvas id="game" width="960" height="540"></canvas>
+  <div class="ctrl">
+    <button id="bAuto">AUTO órbita</button>
+    <button id="bReset">RESET cámara</button>
+  </div>
+  <div class="hud" id="hud">offsetX: 0   offsetY: 0</div>
+  <script type="module">
+    import { drawTunel } from './js/escenarios/metro_base/tunel.js';
+    import { STATE, pigeon } from './js/mecanica/estado.js';
+    import { camera, CAMERA_RANGE_X, CAMERA_RANGE_Y_UP, CAMERA_RANGE_Y_DOWN, applyCamera, unapplyCamera } from './js/mecanica/camara.js';
+    import { drawPigeon } from './js/personajes/paloma.js';
+
+    const cv  = document.getElementById('game');
+    const ctx = cv.getContext('2d');
+    const hud = document.getElementById('hud');
+
+    // Inyectar el canvas que estado.js leyó como `null` (no había <canvas id="game">
+    // al ejecutar este módulo). Lo reasignamos en la propiedad del módulo.
+    // Como es `export const canvas`, los otros módulos ya lo recogieron como
+    // referencia → si era null al inicio fallaría. Confiamos en que el script
+    // `<canvas id="game">` está antes del `<script type="module">` y por tanto
+    // estado.js encontró el canvas ok.
+
+    window.window.auto = false;
+    let z = 0;
+    const keys = new Set();
+
+    addEventListener('keydown', e => keys.add(e.code));
+    addEventListener('keyup',   e => keys.delete(e.code));
+
+    document.getElementById('bAuto').onclick  = () => window.auto = !window.auto;
+    document.getElementById('bReset').onclick = () => { camera.offsetX = 0; camera.offsetY = 0; };
+
+    function loop(t) {
+      z += 1.5;
+      STATE.worldZ = z;
+      STATE.frame  = (STATE.frame || 0) + 1;
+      pigeon.x = 0; pigeon.y = 0; pigeon.tilt = 0; pigeon.wingFrame = (Math.floor(z/8) % 3);
+
+      // ── Input ──
+      const SPD = 6;
+      if (window.auto) {
+        const tt = t * 0.0008;
+        camera.offsetX = Math.sin(tt) * cv.width  * CAMERA_RANGE_X;
+        camera.offsetY = Math.max(0, -Math.cos(tt)) * cv.height * CAMERA_RANGE_Y_DOWN * 0.7
+                       + Math.min(0,  Math.cos(tt)) * cv.height * 0.0;
+      } else {
+        if (keys.has('ArrowLeft')  || keys.has('KeyA')) camera.offsetX -= SPD;
+        if (keys.has('ArrowRight') || keys.has('KeyD')) camera.offsetX += SPD;
+        if (keys.has('ArrowUp')    || keys.has('KeyW')) camera.offsetY -= SPD;
+        if (keys.has('ArrowDown')  || keys.has('KeyS')) camera.offsetY += SPD;
+      }
+      const maxX = cv.width  * CAMERA_RANGE_X;
+      const maxYU = cv.height * CAMERA_RANGE_Y_UP;
+      const maxYD = cv.height * CAMERA_RANGE_Y_DOWN;
+      camera.offsetX = Math.max(-maxX,  Math.min(maxX,  camera.offsetX));
+      camera.offsetY = Math.max(-maxYU, Math.min(maxYD, camera.offsetY));
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0,0,cv.width,cv.height);
+
+      // Escenario con cámara
+      applyCamera(ctx);
+      drawTunel(ctx, {
+        bgColor: '#050508',
+        lightColor: '#ffeebb',
+        vanishingPointY: 0.30,
+      }, z);
+      unapplyCamera(ctx);
+
+      // Paloma anclada (queda fuera del transform de cámara)
+      drawPigeon(ctx);
+
+      hud.textContent = `offsetX: ${camera.offsetX.toFixed(0).padStart(5)}   offsetY: ${camera.offsetY.toFixed(0).padStart(5)}   ${window.auto ? '· AUTO' : ''}`;
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
