@@ -69,8 +69,11 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   // 4 ── Juntas de los paneles de hormigón (horizontal + vertical) ──────────
   _drawPanelSeams(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ);
 
-  // 5 ── (Suelo con balasto eliminado a petición — los raíles y durmientes
-  //       quedan dibujados directamente sobre el fondo negro.)
+  // 5 ── Suelo de la vía (hormigón gris oscuro tipo modo oscuro) ───────────
+  //       Trapecio gris oscuro debajo de toda la zona de las dos vías,
+  //       limitado al ancho del corredor de los raíles para no invadir
+  //       el negro de las paredes.
+  _drawTrackFloor(ctx, vpX, vpY, cw, ch, config);
 
   // 6 ── Raíles con durmientes ───────────────────────────────────────────────
   // Pasamos vpY explícito para que los raíles arranquen a la MISMA Y que en
@@ -535,6 +538,39 @@ function _drawThirdRail(ctx, farX, topY, nearX, botY) {
   ctx.strokeStyle = 'rgba(255,255,210,0.85)';
   ctx.lineWidth   = 0.7;
   ctx.beginPath(); ctx.moveTo(farX, topY - 1.6); ctx.lineTo(nearX, botY - 2.8); ctx.stroke();
+  ctx.restore();
+}
+
+// ── Suelo de la vía — trapecio gris oscuro (modo oscuro) ──────────────────
+// Sólo cubre el corredor entre los carriles exteriores (no invade el negro
+// del fondo en los laterales del túnel). Color hormigón apagado, con un
+// gradiente de cerca→lejos para sugerir profundidad sin saturar.
+function _drawTrackFloor(ctx, vpX, vpY, cw, ch, config = {}) {
+  const railTopY = vpY + 8;
+  const railBotY = ch;
+  // Ancho cubierto: un poco más ancho que el carril exterior para que el
+  // suelo "abrace" los anclajes sin dejar negro entre rail y pad.
+  const outerBase = (config.trackOuterRatio ?? TRACK_OUTER_RATIO_BASE) * 1.18;
+  const outerVP   = TRACK_OUTER_RATIO_VP * 1.18;
+  const lBase = vpX - cw * outerBase;
+  const rBase = vpX + cw * outerBase;
+  const lVP   = vpX - cw * outerVP;
+  const rVP   = vpX + cw * outerVP;
+
+  ctx.save();
+  // Gradiente vertical (más oscuro hacia la cámara, ligero brillo central)
+  const grad = ctx.createLinearGradient(0, railTopY, 0, railBotY);
+  grad.addColorStop(0,   '#1c1f25');   // cerca del VP — gris oscuro suave
+  grad.addColorStop(0.5, '#171a20');   // intermedio
+  grad.addColorStop(1,   '#0d0f14');   // pegado a la cámara — más negro
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(lVP,   railTopY);
+  ctx.lineTo(rVP,   railTopY);
+  ctx.lineTo(rBase, railBotY);
+  ctx.lineTo(lBase, railBotY);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
 }
 
