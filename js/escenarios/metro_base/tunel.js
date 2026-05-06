@@ -574,22 +574,21 @@ function _drawTrackFloor(ctx, vpX, vpY, cw, ch, config = {}) {
   ctx.restore();
 }
 
-// ── Canal de drenaje central (rejilla con slots) ──────────────────────────
-// Banda trapezoidal en el corredor entre las dos vías, con ranuras
-// horizontales que se desplazan con worldZ. Sustituye la antigua banda
-// vacía por una pieza con detalle visual (CONDUCTO CENTRAL del diagrama).
+// ── Canal de drenaje central (rejilla cuadriculada metálica) ─────────────
+// Banda trapezoidal entre las dos vías SIN llegar a tocarlas. Cubierta
+// con malla cuadriculada (filas × columnas) que se desplaza con worldZ.
+// Tipo "trinchera con rejilla pisable" como en la foto de referencia.
 function _drawCentralDrain(ctx, vpX, topY, botY, cw, worldZ, config = {}) {
-  // Ancho del canal: ocupa el hueco entre los carriles interiores
-  // (TRACK_INNER_RATIO * 0.85 para dejar un pelín de margen).
+  // Ancho del canal: 55% del hueco entre carriles interiores → deja
+  // claramente espacio entre el borde del canal y el rail.
   const innerBase = (config.trackInnerRatio ?? TRACK_INNER_RATIO_BASE);
   const innerVP   = TRACK_INNER_RATIO_VP;
-  const halfBase  = cw * innerBase * 0.80;
-  const halfVP    = cw * innerVP   * 0.80;
+  const halfBase  = cw * innerBase * 0.55;
+  const halfVP    = cw * innerVP   * 0.55;
 
   ctx.save();
 
-  // 1 ── Trapecio de la cubierta (placa metálica gris) — color concreto
-  //      lo bastante claro para que destaque sobre el negro del fondo.
+  // 1 ── Placa base de la rejilla (metal medio claro)
   ctx.fillStyle = '#3a3d44';
   ctx.beginPath();
   ctx.moveTo(vpX - halfVP,   topY);
@@ -600,36 +599,56 @@ function _drawCentralDrain(ctx, vpX, topY, botY, cw, worldZ, config = {}) {
   ctx.fill();
 
   // 2 ── Bordes laterales (relieve metálico claro)
-  ctx.strokeStyle = 'rgba(140,148,158,0.95)';
+  ctx.strokeStyle = 'rgba(150,158,170,0.95)';
   ctx.lineWidth   = 1.5;
   ctx.beginPath();
   ctx.moveTo(vpX - halfVP,   topY); ctx.lineTo(vpX - halfBase, botY);
   ctx.moveTo(vpX + halfVP,   topY); ctx.lineTo(vpX + halfBase, botY);
   ctx.stroke();
 
-  // 3 ── Slots horizontales de la rejilla (animados con worldZ) ─────────
-  const numSlots = 28;
-  const slotOff  = ((worldZ * 0.0035) % (1 / numSlots) + (1 / numSlots)) % (1 / numSlots);
-  for (let i = 0; i < numSlots; i++) {
-    const baseT = i / (numSlots - 1);
-    const t = Math.pow(baseT + slotOff, 2);
+  // 3 ── Filas horizontales de huecos (animadas con worldZ) ─────────────
+  const numRows = 38;
+  const numCols = 3;                  // 3 columnas → barras verticales más anchas y visibles
+  const rowOff  = ((worldZ * 0.0035) % (1 / numRows) + (1 / numRows)) % (1 / numRows);
+
+  for (let i = 0; i < numRows; i++) {
+    const baseT = i / (numRows - 1);
+    const t = Math.pow(baseT + rowOff, 2);
     if (t <= 0 || t >= 1) continue;
 
-    const sy     = (1 - t) * topY + t * botY;
-    const halfW  = (1 - t) * halfVP + t * halfBase;
-    const slotW  = halfW * 1.55;                  // slot ocupa ~75% del ancho
-    const slotH  = Math.max(1, t * 4.5);
-    const alpha  = Math.min(1, t * 1.5 + 0.2);
+    const sy    = (1 - t) * topY + t * botY;
+    const halfW = (1 - t) * halfVP + t * halfBase;
+    const usableW = halfW * 2 * 0.86;
+    const startX  = vpX - usableW * 0.5;
+    const colW    = usableW / numCols;
+    const cellH   = Math.max(0.6, t * 3.4);
+    const holeH   = Math.max(0.6, cellH * 0.78);
+    const holeW   = Math.max(0.5, colW * 0.62);   // celdas más estrechas → barras visibles
+    const alpha   = Math.min(1, t * 1.5 + 0.2);
 
-    // Hueco NEGRO de la ranura (contraste fuerte sobre la placa gris)
-    ctx.fillStyle = `rgba(0,0,0,${Math.min(1, alpha + 0.2)})`;
-    ctx.fillRect(vpX - slotW * 0.5, sy - slotH * 0.5, slotW, slotH);
-    // Borde superior de la barra entre ranuras (canto iluminado)
-    ctx.fillStyle = `rgba(160,168,178,${alpha * 0.85})`;
-    ctx.fillRect(vpX - slotW * 0.5, sy + slotH * 0.5, slotW, Math.max(1, slotH * 0.35));
-    // Sombra inferior de la ranura
-    ctx.fillStyle = `rgba(20,22,26,${alpha * 0.7})`;
-    ctx.fillRect(vpX - slotW * 0.5, sy + slotH * 0.5 + Math.max(1, slotH * 0.35), slotW, Math.max(1, slotH * 0.20));
+    // Huecos oscuros (cells)
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(1, alpha + 0.25)})`;
+    for (let c = 0; c < numCols; c++) {
+      const cx = startX + colW * (c + 0.5);
+      ctx.fillRect(cx - holeW * 0.5, sy - holeH * 0.5, holeW, holeH);
+    }
+    // Borde iluminado superior de la barra horizontal
+    ctx.fillStyle = `rgba(180,188,200,${alpha * 0.75})`;
+    ctx.fillRect(startX, sy - cellH * 0.5 - Math.max(0.5, cellH * 0.20), usableW, Math.max(0.5, cellH * 0.20));
+  }
+
+  // 4 ── Barras VERTICALES explícitas (3 líneas internas + 2 flancos)
+  //      van del VP a la base con perspectiva, en color metálico claro.
+  ctx.strokeStyle = 'rgba(170,178,190,0.85)';
+  ctx.lineWidth   = 0.9;
+  for (let c = 1; c < numCols; c++) {
+    const fr = c / numCols;
+    const xVP   = (vpX - halfVP   * 0.86) + (halfVP   * 2 * 0.86) * fr;
+    const xBase = (vpX - halfBase * 0.86) + (halfBase * 2 * 0.86) * fr;
+    ctx.beginPath();
+    ctx.moveTo(xVP,   topY);
+    ctx.lineTo(xBase, botY);
+    ctx.stroke();
   }
   ctx.restore();
 }
