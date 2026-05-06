@@ -239,6 +239,7 @@ export class EstacionBase {
     this._drawCeiling      (ctx, W, H, vpX, vpY);
     this._drawFluorescents (ctx, W, H, vpX, vpY);
     this._drawWalls        (ctx, W, H, vpX, vpY, G);
+    this._drawEmergencyBoxes(ctx, W, H, vpX, vpY, G);
     this._drawSigns        (ctx, W, H, vpX, vpY);
     this._drawPlatforms    (ctx, W, H, vpX, vpY, G);
     this._drawPlatformFront(ctx, W, H, vpX, vpY, G);
@@ -523,6 +524,52 @@ export class EstacionBase {
       ctx.moveTo(xa, ya);
       ctx.lineTo(xb, yb);
       ctx.stroke();
+    }
+  }
+
+  // ── CAJAS DE EMERGENCIA SOS (rojo) — montadas sobre la pared ─────────────
+  // Cada lado coloca 2 cajas distribuidas en profundidad (cerca y media).
+  // El tamaño escala con la perspectiva: la del fondo es más pequeña.
+  _drawEmergencyBoxes(ctx, W, H, vpX, vpY, G) {
+    const B = this._bounds;
+    // Posiciones a lo largo del trapecio de pared, fracción 0=base 1=VP
+    const ts = [0.10, 0.50];
+    // Y de la caja sobre la pared (entre el techo y la franja verde)
+    const wallTopY = (t) => B.top + (vpY - 10 - B.top) * t;
+    const wallBotY = (t) => H * 0.55 + (vpY + 5 - H * 0.55) * t;
+
+    const drawBox = (cx, cy, size) => {
+      const w = size, h = size * 1.4;
+      // Sombra
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(cx - w/2 + 1, cy - h/2 + 1, w, h);
+      // Cuerpo rojo
+      ctx.fillStyle = '#C81313';
+      ctx.fillRect(cx - w/2, cy - h/2, w, h);
+      // Reborde brillante (luz superior izq)
+      ctx.fillStyle = '#FF4848';
+      ctx.fillRect(cx - w/2, cy - h/2, w, Math.max(1, h * 0.18));
+      ctx.fillRect(cx - w/2, cy - h/2, Math.max(1, w * 0.18), h);
+      // Sombra inferior
+      ctx.fillStyle = '#7A0808';
+      ctx.fillRect(cx - w/2, cy + h/2 - Math.max(1, h * 0.15), w, Math.max(1, h * 0.15));
+      // Cristal central (más oscuro)
+      if (size >= 8) {
+        ctx.fillStyle = '#3A0808';
+        const gx = cx - w * 0.30, gy = cy - h * 0.20;
+        ctx.fillRect(gx, gy, w * 0.60, h * 0.40);
+      }
+    };
+
+    for (const t of ts) {
+      const yMid = (wallTopY(t) + wallBotY(t)) / 2;
+      // Tamaño en perspectiva: cerca grande, lejos pequeño
+      const size = Math.max(4, 22 * (1 - t * 0.7));
+      // X izquierda: interpolación entre el borde del canvas y G.pVL
+      const xL = B.left + (G.pVL - B.left) * t + size * 0.7;
+      const xR = B.right + (G.pVR - B.right) * t - size * 0.7;
+      drawBox(xL, yMid + 4, size);
+      drawBox(xR, yMid + 4, size);
     }
   }
 
