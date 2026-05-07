@@ -319,13 +319,13 @@ function _drawPanelSeams(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ) {
 // Si tocas estos números actualízalos también en tunel_base.js (los trenes
 // usan las mismas ratios para alinearse con los rieles).
 const TRACK_OUTER_RATIO_BASE = 0.255;
-const TRACK_INNER_RATIO_BASE = 0.05;    // antes 0.03 — vías más separadas para
-                                        // dejar más zona de hormigón visible
-                                        // alrededor del canal central de drenaje.
+const TRACK_INNER_RATIO_BASE = 0.05;    // vías más separadas en la base.
 const TRACK_OUTER_RATIO_VP   = 0.018;
-const TRACK_INNER_RATIO_VP   = 0.020;   // antes 0.015 — proporcional al cambio
-                                        // de inner_base. Mantiene el trapecio
-                                        // del canal central a 2.5× (visible).
+const TRACK_INNER_RATIO_VP   = 0.010;   // DEBE ser < TRACK_OUTER_RATIO_VP
+                                        // (0.018) para que los dos rieles
+                                        // de cada vía no se crucen al VP.
+                                        // Gap exterior↔interior al VP =
+                                        // 0.008 × cw ≈ 6.4 px en canvas 800.
 
 function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ, config = {}) {
   // Las vías arrancan a vpY + 8 (igual que en EstacionBase) para que la
