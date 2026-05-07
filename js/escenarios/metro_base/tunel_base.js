@@ -29,9 +29,10 @@ import * as PM                from '../../editor/preset_manager.js';
 // 0.255/0.03 (validado en mockup_tunel_render.html): vías un 20 % más
 // estrechas, mayor separación central, raíles 3D más gruesos.
 const TRACK_OUTER_RATIO_BASE = 0.255;
-const TRACK_INNER_RATIO_BASE = 0.05;    // antes 0.03 — vías más separadas
+const TRACK_INNER_RATIO_BASE = 0.05;    // vías más separadas en la base
 const TRACK_OUTER_RATIO_VP   = 0.018;
-const TRACK_INNER_RATIO_VP   = 0.020;   // antes 0.015 — proporcional
+const TRACK_INNER_RATIO_VP   = 0.010;   // < OUTER_VP para que los rieles
+                                        // de cada vía no se crucen al VP
 const TUNEL_VPY_RATIO        = 0.42;   // coincide con _defaultVpY de tunel.js
 // 0.85 (antes 0.95): cada tren ocupa ~85 % del ancho de su vía → los dos
 // trenes juntos cubren ~51 % del canvas (la mitad pedida).
