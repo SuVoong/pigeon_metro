@@ -324,13 +324,8 @@ const TRACK_INNER_RATIO_BASE = 0.05;    // antes 0.03 — vías más separadas p
                                         // alrededor del canal central de drenaje.
 const TRACK_OUTER_RATIO_VP   = 0.018;
 const TRACK_INNER_RATIO_VP   = 0.020;   // antes 0.015 — proporcional al cambio
-                                        // de inner_base.
-
-// Ancho de la rejilla central de drenaje — FIJO, independiente del ratio
-// interior. Así al separar las vías la rejilla se mantiene del mismo
-// tamaño y queda más "zona" de hormigón visible a sus lados.
-const DRAIN_HALF_RATIO_BASE = 0.0165;   // = 0.03 × 0.55 (valor histórico)
-const DRAIN_HALF_RATIO_VP   = 0.00825;  // = 0.015 × 0.55
+                                        // de inner_base. Mantiene el trapecio
+                                        // del canal central a 2.5× (visible).
 
 function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ, config = {}) {
   // Las vías arrancan a vpY + 8 (igual que en EstacionBase) para que la
@@ -549,11 +544,15 @@ function _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config = {}) {
 // con malla cuadriculada (filas × columnas) que se desplaza con worldZ.
 // Tipo "trinchera con rejilla pisable" como en la foto de referencia.
 function _drawCentralDrain(ctx, vpX, topY, botY, cw, worldZ, config = {}) {
-  // Ancho del canal: FIJO (DRAIN_HALF_RATIO_*), no escala con el ratio
-  // interior de las vías. Así al separar las vías el drenaje conserva
-  // su tamaño y queda más zona de hormigón visible a sus lados.
-  const halfBase  = cw * DRAIN_HALF_RATIO_BASE;
-  const halfVP    = cw * DRAIN_HALF_RATIO_VP;
+  // Ancho del canal: 55 % del hueco entre carriles interiores. Escala con
+  // los ratios de las vías para que el trapecio del drenaje sea
+  // claramente visible (mismo factor de perspectiva 2.5× que el área
+  // central completa). Antes se fijaba a un valor absoluto pero quedaba
+  // como una línea recta sin perspectiva al separar las vías.
+  const innerBase = (config.trackInnerRatio ?? TRACK_INNER_RATIO_BASE);
+  const innerVP   = TRACK_INNER_RATIO_VP;
+  const halfBase  = cw * innerBase * 0.55;
+  const halfVP    = cw * innerVP   * 0.55;
 
   ctx.save();
 
