@@ -607,9 +607,14 @@ function _drawCentralDrain(ctx, vpX, topY, botY, cw, worldZ, config = {}) {
 function _drawRailLines(ctx, rails, topY, botY, color, baseW) {
   // Cada capa: { offY, w, color }
   //   offY  = desplazamiento Y respecto al baseline del raíl
-  //   w     = multiplicador del ancho (baseW)
-  // Ordenadas de la MÁS BAJA a la MÁS ALTA en pantalla (se pintan en ese
-  // orden para que las capas superiores tapen a las inferiores en la cima).
+  //   w     = multiplicador del ancho (baseW) en el extremo CERCANO
+  //
+  // Cada capa se dibuja como un trapecio: en la base (cerca de la cámara)
+  // tiene el ancho completo, en el VP (lejano) se estrecha al FAR_TAPER.
+  // Esto da la perspectiva natural de los raíles convergiendo a un punto
+  // en la distancia — antes eran strokes de ancho constante y se veía
+  // como si los raíles del fondo fueran igual de gruesos que los cercanos.
+  const FAR_TAPER = 0.18;   // 18 % del ancho cercano al llegar al VP
   const layers = [
     { offY: +2.4, w: 2.4, c: 'rgba(0,0,0,0.60)' },            // sombra en solera
     { offY: +1.6, w: 2.0, c: '#5a3220' },                     // pie del raíl (oxido oscuro)
@@ -624,12 +629,20 @@ function _drawRailLines(ctx, rails, topY, botY, color, baseW) {
   ctx.save();
   for (const rail of rails) {
     for (const L of layers) {
-      ctx.strokeStyle = L.c;
-      ctx.lineWidth   = Math.max(0.5, baseW * L.w);
+      const wNear = Math.max(0.5, baseW * L.w);
+      const wFar  = Math.max(0.3, wNear * FAR_TAPER);
+      const yFar  = topY + L.offY;
+      const yNear = botY + L.offY;
+
+      ctx.fillStyle = L.c;
       ctx.beginPath();
-      ctx.moveTo(rail.far,  topY + L.offY);
-      ctx.lineTo(rail.near, botY + L.offY);
-      ctx.stroke();
+      // Trapecio: vértices del lado FAR (estrecho) y del lado NEAR (ancho).
+      ctx.moveTo(rail.far  - wFar  / 2, yFar);
+      ctx.lineTo(rail.far  + wFar  / 2, yFar);
+      ctx.lineTo(rail.near + wNear / 2, yNear);
+      ctx.lineTo(rail.near - wNear / 2, yNear);
+      ctx.closePath();
+      ctx.fill();
     }
   }
   ctx.restore();
