@@ -146,14 +146,31 @@ function _drawArchRings(ctx, vpX, archCY, maxR, cw, ch, worldZ) {
 
   // 1 ── Pre-calcular todos los anillos visibles (de FAR a NEAR) ─────────
   // rings[0]   = más lejano (radio más pequeño)
-  // rings[n-1] = más cercano (radio más grande)
+  // rings[n-1] = más cercano (radio más grande, posiblemente mayor que maxR
+  //              si ya cruzó la cámara — ver loop con zOff < 0).
+  //
+  // El loop incluye anillos con zOff < 0 (pasaron el plano de la cámara)
+  // permitiendo que `s` crezca por encima de 1: el radio se hincha más allá
+  // de maxR hasta que el anillo sale por completo del canvas. Así la
+  // secuencia de arcos no se "corta" cuando uno cruza la cámara — el
+  // siguiente continúa expandiéndose hasta perderse de vista.
+  const VISIBLE_LIMIT = Math.max(cw, ch) * 1.4;   // radio máximo dibujable
   const rings = [];
-  for (let z = 900; z >= 25; z -= ringGap) {
+  for (let z = 900; z >= -400; z -= ringGap) {
     const zOff = z - offset;
-    if (zOff <= 0) continue;
-    const s   = _persp(zOff);
+    // Perspectiva SIN clamp en zOff > 0 (formula original con max(z,1))
+    // y permitiendo s > 1 cuando zOff <= 0. Para zOff <= -FOCAL la fórmula
+    // explota — saltamos esos.
+    if (zOff <= -FOCAL + 5) continue;
+    const sDen = (zOff > 1) ? FOCAL + zOff : Math.max(1, FOCAL + zOff);
+    const s   = FOCAL / sDen;
     const r   = maxR * s;
-    const cy2 = archCY * s + (archCY - maxR * 0.5) * (1 - s);
+    if (r > VISIBLE_LIMIT) continue;          // demasiado grande, fuera de vista
+    // cy2: para anillos cercanos (s ≥ 1) clampamos sCy2 al 1 para que el
+    // centro no baje por debajo de archCY (evita que el anillo "siga
+    // bajando" después de cruzar la cámara).
+    const sCy2 = Math.min(s, 1);
+    const cy2  = archCY * sCy2 + (archCY - maxR * 0.5) * (1 - sCy2);
     // Índice mundial del anillo: estable conforme worldZ avanza, así cada
     // anillo conserva su paridad mientras se acerca a la cámara.
     const worldRingIdx = Math.floor((worldZ * 1.8 + z) / ringGap);
