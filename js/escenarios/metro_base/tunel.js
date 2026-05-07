@@ -476,9 +476,13 @@ function _drawThirdRail(ctx, farX, topY, nearX, botY) {
 function _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config = {}) {
   const railTopY = vpY + 8;
   const railBotY = ch;
-  // Ancho cubierto en la BASE plana del suelo.
-  const outerBase = (config.trackOuterRatio ?? TRACK_OUTER_RATIO_BASE) * 1.18;
-  const outerVP   = TRACK_OUTER_RATIO_VP * 1.18;
+  // Ancho cubierto en la BASE plana del suelo. ANTES era 1.18 × outerRail,
+  // dejando los bordes laterales pegados a los canales. Ahora 1.03 ×
+  // (apenas cubre el raíl exterior + clip Pandrol) → el suelo se estrecha
+  // notablemente en los extremos, dejando más pared visible y haciendo
+  // que el bombeo central se sienta como un valle redondo.
+  const outerBase = (config.trackOuterRatio ?? TRACK_OUTER_RATIO_BASE) * 1.03;
+  const outerVP   = TRACK_OUTER_RATIO_VP * 1.03;
   const lBase = vpX - cw * outerBase;
   const rBase = vpX + cw * outerBase;
   const lVP   = vpX - cw * outerVP;
@@ -486,17 +490,13 @@ function _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config = {}) {
 
   // Punto de control de la curvatura lateral: a media altura entre VP y
   // base, desplazado hacia afuera siguiendo la mitad inferior del arco.
-  // ctrlX se calcula como la X del arco al y intermedio (aprox archCY)
-  // → la curva del suelo se "abre" hacia las paredes ahí.
+  // El control se acerca casi a la pared (0.95 × archHalfW) para que el
+  // CENTRO bombee fuerte y los lados (top/bottom) queden estrechos.
   const midY = (railTopY + railBotY) / 2;
-  // dy desde el centro vertical del arco a midY
   const dyMid = midY - archCY;
-  // X del arco a midY (mitad de la cuerda horizontal del semicírculo)
   const archHalfWAtMid = Math.sqrt(Math.max(0, maxR * maxR - dyMid * dyMid));
-  // El control queda un poco por DENTRO del arco para que el suelo no
-  // toque la pared (deja un pequeño hueco para los canales/aceras).
-  const ctrlR_x = vpX + archHalfWAtMid * 0.85;
-  const ctrlL_x = vpX - archHalfWAtMid * 0.85;
+  const ctrlR_x = vpX + archHalfWAtMid * 0.95;
+  const ctrlL_x = vpX - archHalfWAtMid * 0.95;
   const ctrlY  = midY;
 
   // Helper: dibuja el path del suelo redondeado (top recto, lados curvos).
