@@ -833,14 +833,27 @@ function _drawRigidCatenary(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config 
   const leftCenterVP    = vpX - cw * (TRACK_OUTER_RATIO_VP + TRACK_INNER_RATIO_VP) / 2;
   const rightCenterVP   = vpX + cw * (TRACK_OUTER_RATIO_VP + TRACK_INNER_RATIO_VP) / 2;
 
-  // Y de la barra: cerca del techo en la cámara, converge al VP.
-  const baseY = ch * 0.16;
-  const farY  = vpY + 2;
+  // Y de la barra a la altura de la cámara: tocando la curva del arco a la
+  // X de cada vía. Geometría del arco al s≈1 (anillo más cercano):
+  //   r = maxR, cy2 = archCY ⇒ archY = archCY - sqrt(maxR² - dx²)
+  // Pequeño offset (+2 px) para que la barra cuelgue de la cara interior
+  // del anillo en vez de superponerse al trazo.
+  const _archYAtX = (xBase) => {
+    const dx = xBase - vpX;
+    const dy = Math.sqrt(Math.max(0, maxR * maxR - dx * dx));
+    return archCY - dy + 2;
+  };
+  const leftBaseY  = _archYAtX(leftCenterBase);
+  const rightBaseY = _archYAtX(rightCenterBase);
+  const farY       = vpY + 2;
 
   ctx.save();
 
   // ── Las dos barras conductoras (rojo de catenaria) ──
-  for (const [farX, baseX] of [[leftCenterVP, leftCenterBase], [rightCenterVP, rightCenterBase]]) {
+  for (const [farX, baseX, baseY] of [
+    [leftCenterVP,  leftCenterBase,  leftBaseY],
+    [rightCenterVP, rightCenterBase, rightBaseY],
+  ]) {
     // Sombra proyectada en el techo (ligeramente desplazada hacia abajo)
     ctx.strokeStyle = 'rgba(0,0,0,0.6)';
     ctx.lineWidth   = 5;
@@ -862,9 +875,14 @@ function _drawRigidCatenary(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config 
     ctx.beginPath(); ctx.moveTo(farX, farY - 1.2); ctx.lineTo(baseX, baseY - 1.2); ctx.stroke();
   }
 
-  // ── Anclajes triangulares colgados del techo ──
+  // ── Anclajes triangulares colgados del techo curvo ──
   // Distribuidos por profundidad y animados con worldZ para que avancen
   // hacia la cámara junto con los anillos del arco.
+  // - ay (apex del triángulo, donde agarra la barra): Y de la barra al
+  //   depth s usando perspectiva normal (* s).
+  // - ceilingY (base del triángulo, sobre el arco): Y de la curva del arco
+  //   al depth s en la X de cada vía (geometría coincidente con
+  //   _drawArchRings).
   const anchorGap = 130;
   const offset    = ((worldZ * 1.8) % anchorGap + anchorGap) % anchorGap;
 
@@ -876,35 +894,37 @@ function _drawRigidCatenary(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config 
 
     const alpha = 0.55 + s * 0.40;
 
-    // Y de la barra a esta profundidad y Y del techo (Y=0 base).
-    const ay       = vpY + (baseY - vpY) * (1 - s);
-    const ceilingY = vpY + (0     - vpY) * (1 - s);
+    // Geometría del anillo del arco a esta profundidad (igual que
+    // _drawArchRings): centro (vpX, cy2_s) y radio r_s.
+    const r_s   = maxR * s;
+    const cy2_s = archCY * s + (archCY - maxR * 0.5) * (1 - s);
 
-    // X de cada barra a esta profundidad.
-    const lx = vpX + (leftCenterBase  - vpX) * (1 - s);
-    const rx = vpX + (rightCenterBase - vpX) * (1 - s);
+    for (const [xBaseSide, baseY] of [
+      [leftCenterBase,  leftBaseY],
+      [rightCenterBase, rightBaseY],
+    ]) {
+      // X de la barra a esta profundidad (perspectiva, * s).
+      const bx = vpX + (xBaseSide - vpX) * s;
+      // Y de la barra a esta profundidad (perspectiva, * s).
+      const ay = vpY + (baseY - vpY) * s;
+      // Y del techo del arco a esa misma X (sigue la curva en perspectiva).
+      const dx = bx - vpX;
+      const dy = Math.sqrt(Math.max(0, r_s * r_s - dx * dx));
+      const ceilingY = cy2_s - dy;
 
-    // (Sin travesaño horizontal en el techo — los anclajes triangulares
-    // arrancan directamente del techo curvo del túnel; el travesaño previo
-    // formaba un "semi-cuadrado" sobre la bóveda que rompía la silueta del
-    // arco.)
-
-    // Brazos triangulares por cada barra (dos diagonales que forman ▽).
-    for (const bx of [lx, rx]) {
+      // Brazos triangulares: dos diagonales del techo a la barra.
       const triHalfW = Math.max(2, 9 * s);
       ctx.strokeStyle = `rgba(40, 42, 48, ${alpha})`;
       ctx.lineWidth   = Math.max(1, s * 1.6);
-      // Brazo izquierdo del triángulo
       ctx.beginPath();
       ctx.moveTo(bx - triHalfW, ceilingY);
       ctx.lineTo(bx, ay);
       ctx.stroke();
-      // Brazo derecho del triángulo
       ctx.beginPath();
       ctx.moveTo(bx + triHalfW, ceilingY);
       ctx.lineTo(bx, ay);
       ctx.stroke();
-      // Pinza/aislador donde el triángulo agarra la barra (rojizo oscuro)
+      // Pinza/aislador donde el triángulo agarra la barra
       const clipW = Math.max(2, 5 * s);
       const clipH = Math.max(1, 2.5 * s);
       ctx.fillStyle = `rgba(60, 22, 18, ${alpha})`;
