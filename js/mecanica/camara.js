@@ -80,13 +80,16 @@ export function resetCamera() {
 // los updates de personaje (paloma/pidgey/angry_bird). Centralizado aquí para
 // que los escenarios sepan cuánto overdraw necesitan.
 //   X: ±35% — al moverse al borde lateral, la paloma "choca" con la pared
-//   Y_UP   = 0.40 → desde reposo (60 % canvas) hasta ~20 % (zona del techo)
+//   Y_UP   = 0.30 → desde reposo (~45 % canvas) hasta ~15 % (a la altura
+//                   de la catenaria, donde el aro del túnel se cierra
+//                   sobre el corredor de vuelo). Topa con la curvatura
+//                   superior del arco — la paloma no atraviesa la bóveda.
 //   Y_DOWN = 0.85 → desde reposo (15 % canvas), la paloma alcanza el
 //                   borde inferior (100 % canvas) sin salirse de pantalla.
 //   Asimétrico: la paloma reposa alta y desciende ampliamente con el sprite
 //   visible en todo momento.
 export const CAMERA_RANGE_X      = 0.35;
-export const CAMERA_RANGE_Y_UP   = 0.00;
+export const CAMERA_RANGE_Y_UP   = 0.30;
 export const CAMERA_RANGE_Y_DOWN = 0.85;
 // Compatibilidad: máximo absoluto del eje Y, usado por getViewBounds para
 // dimensionar el overdraw de los escenarios.
