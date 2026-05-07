@@ -79,7 +79,7 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   //       Trapecio gris oscuro debajo de toda la zona de las dos vías,
   //       limitado al ancho del corredor de los raíles para no invadir
   //       el negro de las paredes.
-  _drawTrackFloor(ctx, vpX, vpY, cw, ch, config);
+  _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config);
 
   // 6 ── Raíles con durmientes ───────────────────────────────────────────────
   // Pasamos vpY explícito para que los raíles arranquen a la MISMA Y que en
@@ -451,21 +451,49 @@ function _drawThirdRail(ctx, farX, topY, nearX, botY) {
   ctx.restore();
 }
 
-// ── Suelo de la vía — trapecio gris oscuro (modo oscuro) ──────────────────
-// Sólo cubre el corredor entre los carriles exteriores (no invade el negro
-// del fondo en los laterales del túnel). Color hormigón apagado, con un
-// gradiente de cerca→lejos para sugerir profundidad sin saturar.
-function _drawTrackFloor(ctx, vpX, vpY, cw, ch, config = {}) {
+// ── Suelo de la vía — trapecio con bordes laterales curvados ─────────────
+// Cubre el corredor entre los carriles exteriores. Los bordes laterales se
+// curvan HACIA AFUERA (siguiendo aproximadamente la curvatura del arco)
+// para dar sensación de túnel redondo en vez de trapecio rígido. El centro
+// queda plano para que las traviesas y rieles sigan tumbados como deben.
+function _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config = {}) {
   const railTopY = vpY + 8;
   const railBotY = ch;
-  // Ancho cubierto: un poco más ancho que el carril exterior para que el
-  // suelo "abrace" los anclajes sin dejar negro entre rail y pad.
+  // Ancho cubierto en la BASE plana del suelo.
   const outerBase = (config.trackOuterRatio ?? TRACK_OUTER_RATIO_BASE) * 1.18;
   const outerVP   = TRACK_OUTER_RATIO_VP * 1.18;
   const lBase = vpX - cw * outerBase;
   const rBase = vpX + cw * outerBase;
   const lVP   = vpX - cw * outerVP;
   const rVP   = vpX + cw * outerVP;
+
+  // Punto de control de la curvatura lateral: a media altura entre VP y
+  // base, desplazado hacia afuera siguiendo la mitad inferior del arco.
+  // ctrlX se calcula como la X del arco al y intermedio (aprox archCY)
+  // → la curva del suelo se "abre" hacia las paredes ahí.
+  const midY = (railTopY + railBotY) / 2;
+  // dy desde el centro vertical del arco a midY
+  const dyMid = midY - archCY;
+  // X del arco a midY (mitad de la cuerda horizontal del semicírculo)
+  const archHalfWAtMid = Math.sqrt(Math.max(0, maxR * maxR - dyMid * dyMid));
+  // El control queda un poco por DENTRO del arco para que el suelo no
+  // toque la pared (deja un pequeño hueco para los canales/aceras).
+  const ctrlR_x = vpX + archHalfWAtMid * 0.85;
+  const ctrlL_x = vpX - archHalfWAtMid * 0.85;
+  const ctrlY  = midY;
+
+  // Helper: dibuja el path del suelo redondeado (top recto, lados curvos).
+  const _floorPath = () => {
+    ctx.beginPath();
+    ctx.moveTo(lVP, railTopY);
+    ctx.lineTo(rVP, railTopY);
+    // Borde DERECHO curvado hacia la pared
+    ctx.quadraticCurveTo(ctrlR_x, ctrlY, rBase, railBotY);
+    ctx.lineTo(lBase, railBotY);
+    // Borde IZQUIERDO curvado hacia la pared
+    ctx.quadraticCurveTo(ctrlL_x, ctrlY, lVP, railTopY);
+    ctx.closePath();
+  };
 
   ctx.save();
   // Gradiente vertical (más oscuro hacia la cámara, ligero brillo central)
@@ -474,31 +502,18 @@ function _drawTrackFloor(ctx, vpX, vpY, cw, ch, config = {}) {
   grad.addColorStop(0.5, '#171a20');   // intermedio
   grad.addColorStop(1,   '#0d0f14');   // pegado a la cámara — más negro
   ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.moveTo(lVP,   railTopY);
-  ctx.lineTo(rVP,   railTopY);
-  ctx.lineTo(rBase, railBotY);
-  ctx.lineTo(lBase, railBotY);
-  ctx.closePath();
+  _floorPath();
   ctx.fill();
 
   // ── Pendiente transversal del 2 % hacia los canales ──
-  // El plano marca una pendiente del 2 % de la solera hacia los canales
-  // laterales. Se sugiere visualmente con un degradado horizontal
-  // asimétrico: el centro queda ligeramente más claro (cresta) y los
-  // bordes (donde estarían los canales) más oscuros — efecto sutil de
-  // valle hacia los lados.
-  const slopeGrad = ctx.createLinearGradient(lBase, 0, rBase, 0);
-  slopeGrad.addColorStop(0.00, 'rgba(0,0,0,0.30)');    // borde izq → más oscuro
-  slopeGrad.addColorStop(0.50, 'rgba(255,255,255,0.04)'); // cresta central → leve highlight
-  slopeGrad.addColorStop(1.00, 'rgba(0,0,0,0.30)');    // borde der → más oscuro
+  // Degradado horizontal asimétrico: la cresta central queda más clara,
+  // los bordes (donde están los canales) más oscuros.
+  const slopeGrad = ctx.createLinearGradient(ctrlL_x, 0, ctrlR_x, 0);
+  slopeGrad.addColorStop(0.00, 'rgba(0,0,0,0.30)');
+  slopeGrad.addColorStop(0.50, 'rgba(255,255,255,0.04)');
+  slopeGrad.addColorStop(1.00, 'rgba(0,0,0,0.30)');
   ctx.fillStyle = slopeGrad;
-  ctx.beginPath();
-  ctx.moveTo(lVP,   railTopY);
-  ctx.lineTo(rVP,   railTopY);
-  ctx.lineTo(rBase, railBotY);
-  ctx.lineTo(lBase, railBotY);
-  ctx.closePath();
+  _floorPath();
   ctx.fill();
   ctx.restore();
 }
