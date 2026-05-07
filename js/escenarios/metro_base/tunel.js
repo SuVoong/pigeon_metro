@@ -544,15 +544,18 @@ function _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config = {}) {
 // con malla cuadriculada (filas × columnas) que se desplaza con worldZ.
 // Tipo "trinchera con rejilla pisable" como en la foto de referencia.
 function _drawCentralDrain(ctx, vpX, topY, botY, cw, worldZ, config = {}) {
-  // Ancho del canal: 55 % del hueco entre carriles interiores. Escala con
-  // los ratios de las vías para que el trapecio del drenaje sea
-  // claramente visible (mismo factor de perspectiva 2.5× que el área
-  // central completa). Antes se fijaba a un valor absoluto pero quedaba
-  // como una línea recta sin perspectiva al separar las vías.
+  // Ancho del canal en TRAPECIO MARCADO: usamos multiplicadores diferentes
+  // en BASE y VP para que el extremo del VP sea claramente más afilado.
+  //   - 0.40 en la BASE (antes 0.55) → drenaje un poco más estrecho cerca.
+  //   - 0.20 en el VP   (antes 0.55) → drenaje muy afilado al fondo.
+  // Ratio resultante (canvas 800, ratios 0.05/0.020):
+  //   halfBase = 16 px,  halfVP = 3.2 px  → bottom 32, top 6.4 → 5×
+  // Eso hace al drenaje notablemente trapezoidal y deja más hormigón a sus
+  // lados visible en la parte cercana del túnel.
   const innerBase = (config.trackInnerRatio ?? TRACK_INNER_RATIO_BASE);
   const innerVP   = TRACK_INNER_RATIO_VP;
-  const halfBase  = cw * innerBase * 0.55;
-  const halfVP    = cw * innerVP   * 0.55;
+  const halfBase  = cw * innerBase * 0.40;
+  const halfVP    = cw * innerVP   * 0.20;
 
   ctx.save();
 
@@ -635,10 +638,10 @@ function _drawRailLines(ctx, rails, topY, botY, color, baseW) {
   //
   // Cada capa se dibuja como un trapecio: en la base (cerca de la cámara)
   // tiene el ancho completo, en el VP (lejano) se estrecha al FAR_TAPER.
-  // Esto da la perspectiva natural de los raíles convergiendo a un punto
-  // en la distancia — antes eran strokes de ancho constante y se veía
-  // como si los raíles del fondo fueran igual de gruesos que los cercanos.
-  const FAR_TAPER = 0.18;   // 18 % del ancho cercano al llegar al VP
+  // 0.30 (antes 0.18): el extremo VP queda ligeramente más ancho para que
+  // los rieles del fondo se vean con un mínimo de cuerpo visible (no se
+  // confundan con líneas finas casi invisibles).
+  const FAR_TAPER = 0.30;
   const layers = [
     { offY: +2.4, w: 2.4, c: 'rgba(0,0,0,0.60)' },            // sombra en solera
     { offY: +1.6, w: 2.0, c: '#5a3220' },                     // pie del raíl (oxido oscuro)
