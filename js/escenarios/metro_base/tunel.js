@@ -921,6 +921,11 @@ function _drawRigidCatenary(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config 
 // aparece anclada a la misma estructura del techo que sostiene la
 // catenaria). Comparte cadencia (lightGap = anchorGap = 130) y posición
 // angular con _drawRigidCatenary para quedar perfectamente alineados.
+//
+// IMPORTANTE: La Y de cada luminaria se calcula a partir de la GEOMETRÍA
+// del arco (curva circular de radio maxR centrada en archCY) en la X y la
+// profundidad concretas, así el panel siempre toca la cara interior del
+// anillo — no flota a media altura.
 function _drawCeilingLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config = {}) {
   // Mismas Z y mismo offset que la catenaria → cada luminaria queda
   // exactamente sobre un anclaje. Si se cambia el gap de la catenaria,
@@ -932,11 +937,9 @@ function _drawCeilingLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config 
   // las dos barras de la catenaria (centro de cada vía).
   const trackOuter = config.trackOuterRatio ?? TRACK_OUTER_RATIO_BASE;
   const trackInner = config.trackInnerRatio ?? TRACK_INNER_RATIO_BASE;
-  // Y de las luminarias: muy cerca del techo (yFrac ≈ 0.13, justo encima
-  // de la barra de catenaria que está en 0.16).
   const sides = [
-    { xBase: vpX - cw * (trackOuter + trackInner) / 2, yFrac: 0.13 },
-    { xBase: vpX + cw * (trackOuter + trackInner) / 2, yFrac: 0.13 },
+    { xBase: vpX - cw * (trackOuter + trackInner) / 2 },
+    { xBase: vpX + cw * (trackOuter + trackInner) / 2 },
   ];
 
   ctx.save();
@@ -947,10 +950,23 @@ function _drawCeilingLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config 
     if (s < 0.05) continue;
     const alpha = Math.min(1, s * 1.6) * 0.95;
 
-    for (const { xBase, yFrac } of sides) {
+    // Geometría del anillo del arco a esta profundidad — coincide con
+    // _drawArchRings (mismo r y cy2). La luminaria se monta colgada de la
+    // cara interior del arco a la X de cada vía.
+    const r   = maxR * s;
+    const cy2 = archCY * s + (archCY - maxR * 0.5) * (1 - s);
+
+    for (const { xBase } of sides) {
       // Posición en perspectiva: converge al VP cuando s → 0
-      const wx = vpX + (xBase    - vpX) * s;
-      const wy = vpY + (ch * yFrac - vpY) * s;
+      const wx = vpX + (xBase - vpX) * s;
+      const dx = wx - vpX;
+      // Y exactamente sobre la curva del arco a esa X (parte superior del
+      // semicírculo). Si dx se sale del radio se clampa al borde.
+      const dy = Math.sqrt(Math.max(0, r * r - dx * dx));
+      // Pequeño offset hacia abajo (1.5 px escalado por s) para que el
+      // panel quede "colgando" de la chapa interior del anillo en vez de
+      // flotar exactamente sobre el trazo.
+      const wy = cy2 - dy + Math.max(1, 1.5 * s);
 
       // Tamaño del panel — alargado horizontalmente como un fluorescente
       const pw = Math.max(3, 32 * s);
