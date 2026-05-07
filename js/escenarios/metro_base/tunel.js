@@ -193,18 +193,20 @@ function _drawArchRings(ctx, vpX, archCY, maxR, cw, ch, worldZ) {
     const lum   = Math.round(28 + s * 22);
     const alpha = 0.55 + s * 0.35;
 
-    // Trazo principal del anillo — grosor para que las dovelas se sientan
-    // como hormigón macizo.
+    // Trazo principal del anillo — grosor pesado para que las dovelas se
+    // sientan claramente como bloques de hormigón macizo (antes 4.5,
+    // ahora 7.5 → ~67 % más anchas en pantalla).
     ctx.strokeStyle = `rgba(${lum + 6},${lum + 6},${lum + 4},${alpha})`;
-    ctx.lineWidth   = Math.max(1, s * 4.5);
+    ctx.lineWidth   = Math.max(1.5, s * 7.5);
     ctx.beginPath();
     ctx.arc(vpX, cy2, r, 0, Math.PI * 2);
     ctx.stroke();
 
     // Sombra interna (junta oscura del panel) — refuerza profundidad.
+    // También engrosada para que la junta sea visible junto al anillo grueso.
     if (s > 0.25) {
       ctx.strokeStyle = `rgba(0,0,0,${0.32 + (1 - s) * 0.2})`;
-      ctx.lineWidth   = Math.max(0.8, s * 2.4);
+      ctx.lineWidth   = Math.max(1.2, s * 3.8);
       ctx.beginPath();
       ctx.arc(vpX, cy2 + s * 1.5, r * 0.985, 0, Math.PI * 2);
       ctx.stroke();
