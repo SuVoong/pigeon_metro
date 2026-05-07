@@ -27,7 +27,7 @@ const DEFAULT_CONFIG = {
   // Esto produce un trapecio fuerte: las vías ocupan ~64% del ancho en la
   // base (cerca de la cámara) y se cierran al ~3% en el punto de fuga.
   trackOuterOffset:   25.5,    // % de W desde el centro al carril exterior (BASE) — sincronizado con tunel.js
-  trackInnerOffset:   5,       // % de W al carril interior (BASE) — sincronizado con tunel.js
+  trackInnerOffset:   3,       // % de W al carril interior (BASE) — sincronizado con tunel.js
   trackOuterOffsetVP: 1.8,     // % de W al carril exterior (VP)
   trackInnerOffsetVP: 1.0,     // % de W al carril interior (VP) — DEBE ser
                                 // < trackOuterOffsetVP para que los dos

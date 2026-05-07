@@ -94,12 +94,11 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   // 6b ── (Aceras laterales de mantenimiento eliminadas a petición —
   //        los raíles se ven directamente sobre el balasto sin banqueta).
 
-  // 7 ── Catenaria rígida (alimentación eléctrica) ──────────────────────────
-  //       Dos barras horizontales rojas, una sobre el centro de cada vía,
-  //       suspendidas del techo mediante anclajes triangulares — réplica
-  //       del sistema de catenaria rígida del plano técnico (sustituye a
-  //       los cables diagonales en V que había antes).
-  _drawRigidCatenary(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config);
+  // 7 ── Catenaria rígida ELIMINADA a petición — sólo quedan las luces LED
+  //       montadas en la cara interior del arco. Si se quiere reactivar,
+  //       descomentar la siguiente línea (la función _drawRigidCatenary
+  //       sigue definida más abajo).
+  // _drawRigidCatenary(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config);
 
   // 7b ── Lámparas fluorescentes empotradas en el techo ─────────────────────
   _drawCeilingLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config);
@@ -319,13 +318,20 @@ function _drawPanelSeams(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ) {
 // Si tocas estos números actualízalos también en tunel_base.js (los trenes
 // usan las mismas ratios para alinearse con los rieles).
 const TRACK_OUTER_RATIO_BASE = 0.255;
-const TRACK_INNER_RATIO_BASE = 0.05;    // vías más separadas en la base.
+const TRACK_INNER_RATIO_BASE = 0.03;    // valor original — sin separación
+                                        // extra entre rieles interiores y
+                                        // canal de drenaje central.
 const TRACK_OUTER_RATIO_VP   = 0.018;
-const TRACK_INNER_RATIO_VP   = 0.010;   // DEBE ser < TRACK_OUTER_RATIO_VP
-                                        // (0.018) para que los dos rieles
-                                        // de cada vía no se crucen al VP.
-                                        // Gap exterior↔interior al VP =
-                                        // 0.008 × cw ≈ 6.4 px en canvas 800.
+const TRACK_INNER_RATIO_VP   = 0.010;   // < TRACK_OUTER_RATIO_VP para que
+                                        // los dos rieles de cada vía no
+                                        // se crucen al VP.
+
+// Posición de la CATENARIA RÍGIDA y las LUMINARIAS LED — INDEPENDIENTE
+// de los ratios de las vías. Si se ajustan TRACK_*_RATIO_*, las barras
+// rojas y los LEDs no se mueven con ellas. Modifica estos valores
+// directamente si quieres cambiar la posición de la catenaria/luces.
+const CATENARY_OFFSET_BASE   = 0.1425;  // X (cw frac) del centro de cada barra
+const CATENARY_OFFSET_VP     = 0.014;   // X (cw frac) en el VP
 
 function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ, config = {}) {
   // Las vías arrancan a vpY + 8 (igual que en EstacionBase) para que la
@@ -480,39 +486,24 @@ function _drawThirdRail(ctx, farX, topY, nearX, botY) {
 function _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config = {}) {
   const railTopY = vpY + 8;
   const railBotY = ch;
-  // Ancho cubierto en la BASE plana del suelo. ANTES era 1.18 × outerRail,
-  // dejando los bordes laterales pegados a los canales. Ahora 1.03 ×
-  // (apenas cubre el raíl exterior + clip Pandrol) → el suelo se estrecha
-  // notablemente en los extremos, dejando más pared visible y haciendo
-  // que el bombeo central se sienta como un valle redondo.
-  const outerBase = (config.trackOuterRatio ?? TRACK_OUTER_RATIO_BASE) * 1.03;
-  const outerVP   = TRACK_OUTER_RATIO_VP * 1.03;
+  // Ancho cubierto en la BASE plana del suelo.
+  const outerBase = (config.trackOuterRatio ?? TRACK_OUTER_RATIO_BASE) * 1.18;
+  const outerVP   = TRACK_OUTER_RATIO_VP * 1.18;
   const lBase = vpX - cw * outerBase;
   const rBase = vpX + cw * outerBase;
   const lVP   = vpX - cw * outerVP;
   const rVP   = vpX + cw * outerVP;
 
-  // Punto de control de la curvatura lateral: a media altura entre VP y
-  // base, desplazado hacia afuera siguiendo la mitad inferior del arco.
-  // El control se acerca casi a la pared (0.95 × archHalfW) para que el
-  // CENTRO bombee fuerte y los lados (top/bottom) queden estrechos.
-  const midY = (railTopY + railBotY) / 2;
-  const dyMid = midY - archCY;
-  const archHalfWAtMid = Math.sqrt(Math.max(0, maxR * maxR - dyMid * dyMid));
-  const ctrlR_x = vpX + archHalfWAtMid * 0.95;
-  const ctrlL_x = vpX - archHalfWAtMid * 0.95;
-  const ctrlY  = midY;
-
-  // Helper: dibuja el path del suelo redondeado (top recto, lados curvos).
+  // Helper: dibuja el path del suelo como TRAPECIO RECTO (sin bombeo).
+  // Bordes laterales en línea recta para que coincidan exactamente con el
+  // borde interior del canal lateral (también una línea recta) — sin
+  // que la curva del suelo asome por fuera del canal.
   const _floorPath = () => {
     ctx.beginPath();
     ctx.moveTo(lVP, railTopY);
     ctx.lineTo(rVP, railTopY);
-    // Borde DERECHO curvado hacia la pared
-    ctx.quadraticCurveTo(ctrlR_x, ctrlY, rBase, railBotY);
+    ctx.lineTo(rBase, railBotY);
     ctx.lineTo(lBase, railBotY);
-    // Borde IZQUIERDO curvado hacia la pared
-    ctx.quadraticCurveTo(ctrlL_x, ctrlY, lVP, railTopY);
     ctx.closePath();
   };
 
@@ -529,7 +520,7 @@ function _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config = {}) {
   // ── Pendiente transversal del 2 % hacia los canales ──
   // Degradado horizontal asimétrico: la cresta central queda más clara,
   // los bordes (donde están los canales) más oscuros.
-  const slopeGrad = ctx.createLinearGradient(ctrlL_x, 0, ctrlR_x, 0);
+  const slopeGrad = ctx.createLinearGradient(lBase, 0, rBase, 0);
   slopeGrad.addColorStop(0.00, 'rgba(0,0,0,0.30)');
   slopeGrad.addColorStop(0.50, 'rgba(255,255,255,0.04)');
   slopeGrad.addColorStop(1.00, 'rgba(0,0,0,0.30)');
@@ -691,11 +682,12 @@ function _drawSideDrains(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config = {
   // fuera del raíl exterior (TRACK_OUTER_RATIO_VP).
   const trackOuter = config.trackOuterRatio ?? TRACK_OUTER_RATIO_BASE;
 
-  // Borde INTERIOR del canal (pegado al raíl exterior)
-  const innerLBase = vpX - cw * trackOuter * 1.20;   // 20 % más hacia fuera
-  const innerRBase = vpX + cw * trackOuter * 1.20;
-  const innerLVP   = vpX - cw * TRACK_OUTER_RATIO_VP * 1.20;
-  const innerRVP   = vpX + cw * TRACK_OUTER_RATIO_VP * 1.20;
+  // Borde INTERIOR del canal — sincronizado con el ancho del trackFloor
+  // (1.18 × outerRail) para que no quede hueco entre suelo y canal.
+  const innerLBase = vpX - cw * trackOuter * 1.18;
+  const innerRBase = vpX + cw * trackOuter * 1.18;
+  const innerLVP   = vpX - cw * TRACK_OUTER_RATIO_VP * 1.18;
+  const innerRVP   = vpX + cw * TRACK_OUTER_RATIO_VP * 1.18;
   // Borde EXTERIOR del canal (pegado a la pared)
   const outerLBase = cw * 0.04;
   const outerRBase = cw * 0.96;
@@ -879,14 +871,14 @@ function _drawSideCableTrays(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ) {
 //   - Barra roja paralela a las vías, ligeramente por debajo del techo,
 //     centrada sobre el pantógrafo del tren.
 function _drawRigidCatenary(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config = {}) {
-  const trackOuter = config.trackOuterRatio ?? TRACK_OUTER_RATIO_BASE;
-  const trackInner = config.trackInnerRatio ?? TRACK_INNER_RATIO_BASE;
-
-  // Centro de cada vía (donde el pantógrafo del tren toca la barra).
-  const leftCenterBase  = vpX - cw * (trackOuter + trackInner) / 2;
-  const rightCenterBase = vpX + cw * (trackOuter + trackInner) / 2;
-  const leftCenterVP    = vpX - cw * (TRACK_OUTER_RATIO_VP + TRACK_INNER_RATIO_VP) / 2;
-  const rightCenterVP   = vpX + cw * (TRACK_OUTER_RATIO_VP + TRACK_INNER_RATIO_VP) / 2;
+  // Posición de cada barra: independiente de los ratios de las vías.
+  // CATENARY_OFFSET_* fija dónde quedan las barras y NO se mueve si se
+  // tocan TRACK_*_RATIO_*. Para reposicionar la catenaria, edita esas
+  // constantes directamente.
+  const leftCenterBase  = vpX - cw * CATENARY_OFFSET_BASE;
+  const rightCenterBase = vpX + cw * CATENARY_OFFSET_BASE;
+  const leftCenterVP    = vpX - cw * CATENARY_OFFSET_VP;
+  const rightCenterVP   = vpX + cw * CATENARY_OFFSET_VP;
 
   // Y de la barra a la altura de la cámara: tocando la curva del arco a la
   // X de cada vía. Geometría del arco al s≈1 (anillo más cercano):
@@ -1008,13 +1000,12 @@ function _drawCeilingLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config 
   const lightGap = 130;
   const offset   = ((worldZ * 1.8) % lightGap + lightGap) % lightGap;
 
-  // Las luminarias se sitúan a ambos lados del eje del túnel, alineadas con
-  // las dos barras de la catenaria (centro de cada vía).
-  const trackOuter = config.trackOuterRatio ?? TRACK_OUTER_RATIO_BASE;
-  const trackInner = config.trackInnerRatio ?? TRACK_INNER_RATIO_BASE;
+  // Las luminarias se sitúan a ambos lados del eje del túnel, alineadas
+  // con las dos barras de la catenaria. Posición INDEPENDIENTE de los
+  // ratios de las vías — usa CATENARY_OFFSET_BASE igual que la catenaria.
   const sides = [
-    { xBase: vpX - cw * (trackOuter + trackInner) / 2 },
-    { xBase: vpX + cw * (trackOuter + trackInner) / 2 },
+    { xBase: vpX - cw * CATENARY_OFFSET_BASE },
+    { xBase: vpX + cw * CATENARY_OFFSET_BASE },
   ];
 
   ctx.save();
