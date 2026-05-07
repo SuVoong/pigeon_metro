@@ -133,39 +133,75 @@ function _drawBackground(ctx, vpX, vpY, cw, ch, config) {
 // radiales visibles — réplica de las dovelas de hormigón prefabricado de
 // los túneles modernos. Las juntas radiales convergen al centro del arco
 // (archCY a esa profundidad) y dividen el semicírculo en partes iguales.
+//
+// Las BANDAS entre anillos consecutivos alternan color: gris oscuro / fondo
+// natural / gris oscuro / fondo natural ... El color se ata a un índice de
+// "anillo de mundo" que se mantiene estable cuando worldZ avanza, así un
+// anillo que se acerca conserva su tono (no parpadea entre dark/light al
+// cruzar la frontera de wrap del offset).
 function _drawArchRings(ctx, vpX, archCY, maxR, cw, ch, worldZ) {
   const ringGap  = 100;
   const SEGMENTS = 8;     // dovelas por anillo (semicírculo) — referencia foto
   const offset   = ((worldZ * 1.8) % ringGap + ringGap) % ringGap;
 
-  ctx.save();
+  // 1 ── Pre-calcular todos los anillos visibles (de FAR a NEAR) ─────────
+  // rings[0]   = más lejano (radio más pequeño)
+  // rings[n-1] = más cercano (radio más grande)
+  const rings = [];
   for (let z = 900; z >= 25; z -= ringGap) {
     const zOff = z - offset;
     if (zOff <= 0) continue;
-
     const s   = _persp(zOff);
     const r   = maxR * s;
     const cy2 = archCY * s + (archCY - maxR * 0.5) * (1 - s);
+    // Índice mundial del anillo: estable conforme worldZ avanza, así cada
+    // anillo conserva su paridad mientras se acerca a la cámara.
+    const worldRingIdx = Math.floor((worldZ * 1.8 + z) / ringGap);
+    rings.push({ z, zOff, s, r, cy2, idx: worldRingIdx });
+  }
+
+  ctx.save();
+
+  // 2 ── Bandas anulares alternadas entre anillos consecutivos ──────────
+  // Para cada par (interior, exterior), si el índice del interior es par
+  // se rellena la banda con gris oscuro (claramente visible sobre el
+  // fondo casi-negro del túnel #08080d); si es impar se deja el fondo
+  // natural mostrarse. Resultado: dark-gray / bg / dark-gray / bg ...
+  // El RGB elegido (38,42,52) es ~4× más claro que el bg pero sigue
+  // siendo gris oscuro — contraste visible sin romper la atmósfera.
+  const BAND_DARK = 'rgba(38, 42, 52, ALPHA)';
+  for (let i = 0; i < rings.length - 1; i++) {
+    const inner = rings[i];
+    const outer = rings[i + 1];
+    if ((inner.idx % 2) !== 0) continue;       // banda "clara" → fondo natural
+
+    const alpha = 0.78 + outer.s * 0.20;       // más opaca cerca del observador
+    ctx.fillStyle = BAND_DARK.replace('ALPHA', alpha.toFixed(2));
+    ctx.beginPath();
+    // Disco exterior (sentido normal) + disco interior (sentido inverso)
+    // → fill('evenodd') rellena solamente el área anular entre ambos.
+    ctx.arc(vpX, outer.cy2, outer.r, 0, Math.PI * 2, false);
+    ctx.arc(vpX, inner.cy2, inner.r, 0, Math.PI * 2, true);
+    ctx.fill('evenodd');
+  }
+
+  // 3 ── Strokes de los anillos (juntas circulares, sombras y dovelas) ──
+  for (const ring of rings) {
+    const { s, r, cy2 } = ring;
 
     // Brillo proporcional a la cercanía
     const lum   = Math.round(28 + s * 22);
     const alpha = 0.55 + s * 0.35;
 
-    // 1 ── Junta circular del anillo (anillo COMPLETO 360° para que la
-    //      sección del túnel sea un círculo cerrado, no un arco). La parte
-    //      inferior queda tapada por el suelo en los anillos cercanos, pero
-    //      en los lejanos se ve el círculo entero — efecto "tubo" como en
-    //      la foto de referencia.
-    // Trazo principal del anillo — grosor aumentado para que las dovelas
-    // se "sientan" como hormigón macizo (antes 2.2, ahora 4.5).
+    // Trazo principal del anillo — grosor para que las dovelas se sientan
+    // como hormigón macizo.
     ctx.strokeStyle = `rgba(${lum + 6},${lum + 6},${lum + 4},${alpha})`;
     ctx.lineWidth   = Math.max(1, s * 4.5);
     ctx.beginPath();
     ctx.arc(vpX, cy2, r, 0, Math.PI * 2);
     ctx.stroke();
 
-    // 2 ── Sombra interna (junta oscura del panel) — también círculo completo
-    //      Más gruesa para reforzar la sensación de profundidad de la junta.
+    // Sombra interna (junta oscura del panel) — refuerza profundidad.
     if (s > 0.25) {
       ctx.strokeStyle = `rgba(0,0,0,${0.32 + (1 - s) * 0.2})`;
       ctx.lineWidth   = Math.max(0.8, s * 2.4);
@@ -174,15 +210,13 @@ function _drawArchRings(ctx, vpX, archCY, maxR, cw, ch, worldZ) {
       ctx.stroke();
     }
 
-    // 3 ── Juntas RADIALES (entre dovelas) — sólo en anillos cercanos
-    //      donde el detalle es perceptible. En los lejanos quitarlas para
-    //      no saturar la imagen.
+    // Juntas RADIALES (entre dovelas) — sólo en anillos cercanos.
     if (s > 0.30) {
       const innerR = r * 0.92;     // las juntas no llegan al borde absoluto
       ctx.strokeStyle = `rgba(0,0,0,${0.32 + s * 0.20})`;
       ctx.lineWidth   = Math.max(0.5, s * 0.9);
-      for (let i = 1; i < SEGMENTS; i++) {
-        const ang = Math.PI + (Math.PI * i) / SEGMENTS;   // 180°→360° (semicírculo superior)
+      for (let k = 1; k < SEGMENTS; k++) {
+        const ang = Math.PI + (Math.PI * k) / SEGMENTS;   // 180°→360° (semicírculo superior)
         const x1 = vpX + Math.cos(ang) * innerR;
         const y1 = cy2 + Math.sin(ang) * innerR;
         const x2 = vpX + Math.cos(ang) * r;
@@ -197,8 +231,8 @@ function _drawArchRings(ctx, vpX, archCY, maxR, cw, ch, worldZ) {
       // muy próximos (s>0.55) — sugiere los anclajes de las prefabricadas.
       if (s > 0.55) {
         ctx.fillStyle = `rgba(${lum - 8},${lum - 8},${lum - 10},${alpha})`;
-        for (let i = 0; i < SEGMENTS; i++) {
-          const ang = Math.PI + (Math.PI * (i + 0.5)) / SEGMENTS;
+        for (let k = 0; k < SEGMENTS; k++) {
+          const ang = Math.PI + (Math.PI * (k + 0.5)) / SEGMENTS;
           const px = vpX + Math.cos(ang) * r * 0.95;
           const py = cy2 + Math.sin(ang) * r * 0.95;
           const sz = Math.max(1, s * 1.6);
