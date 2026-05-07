@@ -304,7 +304,7 @@ function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ, config = {}) {
   // Ancho del pad (lateral) relativo al rail: 1.8 = pad ~3.6× el ancho del
   // raíl → deja hueco generoso a cada lado para que las pestañas se vean.
   const padHalfWMul     = config.padHalfWidthMul ?? 1.8;
-  const baseWForPads    = (config && config.railWidth) || 7;
+  const baseWForPads    = (config && config.railWidth) || 10;
   const slOffT = ((worldZ * 0.0035) % (1 / numSleepers) + (1 / numSleepers)) % (1 / numSleepers);
 
   ctx.save();
@@ -373,10 +373,10 @@ function _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ, config = {}) {
 
   // ── Carriles metálicos (4 carriles: 2 por vía) ──────────────────────────
   const railColor = '#8a8c94';
-  // baseW configurable desde config.railWidth (default 7). Determina el
-  // grosor visual de cada carril; se escala internamente por las 6 capas
-  // del perfil 3D. 7 validado en mockup_tunel_render.html.
-  const baseW     = (config && config.railWidth) || 7;
+  // baseW configurable desde config.railWidth (default 10). Determina el
+  // grosor visual de cada carril; se escala internamente por las capas del
+  // perfil 3D del UIC 60 (pie ancho marrón → cabeza pulida plateada).
+  const baseW     = (config && config.railWidth) || 10;
   const rails = [
     { near: tOBL, far: tOVL },   // izq exterior
     { near: tIBL, far: tIVL },   // izq interior
