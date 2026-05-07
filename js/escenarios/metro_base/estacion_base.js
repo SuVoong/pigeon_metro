@@ -27,9 +27,9 @@ const DEFAULT_CONFIG = {
   // Esto produce un trapecio fuerte: las vías ocupan ~64% del ancho en la
   // base (cerca de la cámara) y se cierran al ~3% en el punto de fuga.
   trackOuterOffset:   25.5,    // % de W desde el centro al carril exterior (BASE) — sincronizado con tunel.js
-  trackInnerOffset:   3,       // % de W al carril interior (BASE) — sincronizado con tunel.js
+  trackInnerOffset:   5,       // % de W al carril interior (BASE) — sincronizado con tunel.js
   trackOuterOffsetVP: 1.8,     // % de W al carril exterior (VP)
-  trackInnerOffsetVP: 1.5,     // % de W al carril interior (VP)
+  trackInnerOffsetVP: 2,       // % de W al carril interior (VP)
   // Borde del andén (donde el suelo gris se corta y empieza el foso de la vía)
   platformEdgeOffset:   34,    // % de W desde centro al borde inferior del andén
   platformEdgeOffsetVP: 1.95,  // % de W al borde del andén en el VP
