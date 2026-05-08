@@ -103,8 +103,13 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   // 7b ── Lámparas fluorescentes empotradas en el techo ─────────────────────
   _drawCeilingLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config);
 
-  // 9 ── Niebla de profundidad ───────────────────────────────────────────────
+  // 8 ── Niebla de profundidad ───────────────────────────────────────────────
   _drawDepthFog(ctx, vpX, vpY, cw, ch);
+
+  // La BOCA de la siguiente estación al fondo del túnel ya NO se dibuja
+  // aquí — la pinta `TunelBase._drawDestinationFront` para poder recortar
+  // el contorno y meter dentro la EstacionBase destino real (no un
+  // gradiente). Ver `tunel_base.js`.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1077,3 +1082,4 @@ function _drawDepthFog(ctx, vpX, vpY, cw, ch) {
   ctx.fillStyle = fog;
   ctx.fillRect(0, 0, cw, ch);
 }
+
