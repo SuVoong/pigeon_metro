@@ -14,7 +14,7 @@
 import { canvas, STATE, pigeon } from '../../mecanica/estado.js';
 import { perspective, getViewBounds, getCameraVpY, camera, CAMERA_RANGE_X } from '../../mecanica/camara.js';
 import { drawTrenFrontal, setTrenLED } from '../../elementos/tren.js';
-import { drawRailProfile, RAIL_LAYERS_STATION } from './tunel.js';
+import { drawRailProfile, RAIL_LAYERS_TUNNEL } from './tunel.js';
 
 const DEFAULT_CONFIG = {
   // ── Geometría ───────────────────────────────────────────────────────────
@@ -1212,11 +1212,11 @@ export class EstacionBase {
                    Math.round(rightX2 - rightX1), 1);
     }
 
-    // 3. CARRILES METÁLICOS (perfil 3D multicapa, idéntico al del túnel
-    //    pero con paleta `RAIL_LAYERS_STATION` — ligeramente más claros
-    //    porque el andén está bien iluminado. La forma exacta y la
-    //    geometría son las mismas, así el recorrido se percibe como una
-    //    única vía continua entre el andén y el túnel.
+    // 3. CARRILES METÁLICOS — perfil 3D multicapa IDÉNTICO al del túnel
+    //    (`RAIL_LAYERS_TUNNEL`). Usar la misma paleta garantiza que el
+    //    recorrido se vea como un único trazado continuo al cruzar la
+    //    boca de interconexión: no hay diferencia de tono entre el riel
+    //    en el andén y el riel en el túnel.
     const rails = [
       // Vía izquierda  (near=BASE, far=VP)
       { near: G.tOBL, far: G.tOVL },
@@ -1225,7 +1225,7 @@ export class EstacionBase {
       { near: G.tIBR, far: G.tIVR },
       { near: G.tOBR, far: G.tOVR },
     ];
-    drawRailProfile(ctx, rails, vpY + 8, H, 7, RAIL_LAYERS_STATION);
+    drawRailProfile(ctx, rails, vpY + 8, H, 7, RAIL_LAYERS_TUNNEL);
 
     // 4. SUJECIONES (puntos negros donde el carril toca cada traviesa)
     for (let i = 0; i < N; i += 2) {
