@@ -75,21 +75,19 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   //        del plano técnico (sección transversal).
   _drawSideCableTrays(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ);
 
-  // 5 ── Suelo de la vía (hormigón gris oscuro tipo modo oscuro) ───────────
-  //       Trapecio gris oscuro debajo de toda la zona de las dos vías,
-  //       limitado al ancho del corredor de los raíles para no invadir
-  //       el negro de las paredes.
-  _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config);
-
-  // 6 ── Raíles con durmientes ───────────────────────────────────────────────
-  // Pasamos vpY explícito para que los raíles arranquen a la MISMA Y que en
-  // EstacionBase (vpY + 8) y la transición túnel ↔ estación sea continua.
-  _drawRails(ctx, vpX, vpY, archCY, cw, ch, worldZ, config);
-
-  // 6c ── Canales laterales (drenaje + cableado) en esquinas pared↔suelo ──
-  //        Réplica del CANAL LATERAL del plano: perfil en L con rejilla,
-  //        ubicado en la esquina inferior de cada pared del túnel.
-  _drawSideDrains(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config);
+  // 5–6c ── CAPA DE LA VÍA (suelo + raíles + canales laterales) ─────────────
+  //   Bloque agrupado para poder OMITIRLO con `config.skipRails: true`. Esto
+  //   permite a TunelBase pintar primero el "fondo" del túnel (paredes,
+  //   bóveda, luces) sin la capa de vía, luego renderizar la BOCA de la
+  //   siguiente estación con el escenario destino recortado dentro, y
+  //   FINALMENTE pintar los raíles encima — así los raíles cruzan la boca
+  //   sin recorte y se perciben como un único trazado continuo entre el
+  //   túnel actual y la estación destino.
+  if (!config.skipRails) {
+    _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config);
+    _drawRails    (ctx, vpX, vpY, archCY, cw, ch, worldZ, config);
+    _drawSideDrains(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config);
+  }
 
   // 6b ── (Aceras laterales de mantenimiento eliminadas a petición —
   //        los raíles se ven directamente sobre el balasto sin banqueta).
@@ -103,8 +101,44 @@ export function drawTunel(ctx, config = {}, worldZ = STATE.worldZ) {
   // 7b ── Lámparas fluorescentes empotradas en el techo ─────────────────────
   _drawCeilingLights(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config);
 
-  // 9 ── Niebla de profundidad ───────────────────────────────────────────────
+  // 8 ── Niebla de profundidad ───────────────────────────────────────────────
   _drawDepthFog(ctx, vpX, vpY, cw, ch);
+
+  // La BOCA de la siguiente estación al fondo del túnel ya NO se dibuja
+  // aquí — la pinta `TunelBase._drawDestinationFront` para poder recortar
+  // el contorno y meter dentro la EstacionBase destino real (no un
+  // gradiente). Ver `tunel_base.js`.
+}
+
+/**
+ * Pinta sólo la CAPA DE LA VÍA (suelo + raíles + canales laterales)
+ * usando la misma geometría que `drawTunel`. Pensado para llamarse
+ * DESPUÉS de pintar la boca de la siguiente estación: así los raíles
+ * cruzan la boca sin verse cortados — el jugador percibe un único
+ * trazado continuo de túnel a estación.
+ *
+ * Comparte 100 % de los cálculos de geometría con `drawTunel` para que
+ * los raíles encajen exactamente con el resto del escenario, tanto si
+ * la cámara está al nivel base como desplazada (camera.offsetY).
+ */
+export function drawTunelTrackLayer(ctx, config = {}, worldZ = STATE.worldZ) {
+  const cw    = canvas.width;
+  const ch    = canvas.height;
+  const vpX   = _vpX();
+  const _baseVpY = config.vanishingPointY != null
+    ? ch * config.vanishingPointY
+    : _defaultVpY();
+  const vpY = getCameraVpY(_baseVpY);
+  const maxR   = config.archRadiusRatio != null
+    ? ch * config.archRadiusRatio
+    : _defaultMaxR();
+  const archCY = vpY + (config.archCenterOffsetRatio != null
+    ? ch * config.archCenterOffsetRatio
+    : _defaultArchOffset());
+
+  _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config);
+  _drawRails    (ctx, vpX, vpY, archCY, cw, ch, worldZ, config);
+  _drawSideDrains(ctx, vpX, vpY, archCY, maxR, cw, ch, worldZ, config);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1077,3 +1111,4 @@ function _drawDepthFog(ctx, vpX, vpY, cw, ch) {
   ctx.fillStyle = fog;
   ctx.fillRect(0, 0, cw, ch);
 }
+

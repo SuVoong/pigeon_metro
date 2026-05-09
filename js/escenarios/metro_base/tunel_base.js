@@ -15,7 +15,7 @@
 
 import { canvas, STATE }      from '../../mecanica/estado.js';
 import { w2sx, w2sy, perspective, getCameraVpY } from '../../mecanica/camara.js';
-import { drawTunel }          from './tunel.js';
+import { drawTunel, drawTunelTrackLayer } from './tunel.js';
 import { OBSTACULOS }         from '../../elementos/obstaculos.js';
 import { getTrenVariante }    from '../../elementos/tren_config.js';
 import { TRAIN_CFG }          from '../../editor/train_config.js';
@@ -59,6 +59,11 @@ const DEFAULT_CONFIG = {
   trainH:             110,
   // ── Duración de la sección ────────────────────────────────────────────────
   durationSeconds:    18,
+  // Segundos finales del túnel durante los que la boca de la próxima
+  // estación crece (acercamiento por perspectiva). Al cumplirse
+  // `durationSeconds`, la boca llena el cuadro y la siguiente
+  // EstacionBase carga sin corte percibido.
+  approachSeconds:    1.5,
 };
 
 const SPAWN_Z = 800;
@@ -140,24 +145,163 @@ export class TunelBase {
     }
   }
 
-  /** Render: túnel + obstáculos + trenes alineados con las vías.
-   *  Las transiciones entrada/salida las gestiona MetroBase con un
-   *  cross-fade circular desde el punto de fuga; aquí no añadimos
-   *  overlays de oscurecimiento ni "luz al final del túnel" — taparían
-   *  la siguiente escena dentro del recorte circular. */
+  /** Render: túnel + boca de la próxima estación + raíles continuos + trenes.
+   *
+   *  Orden deliberado:
+   *    1. Túnel SIN raíles (paredes, bóveda, luces, niebla).
+   *    2. BOCA con la siguiente EstacionBase RECORTADA dentro del arco
+   *       (también sin raíles — sólo paredes/techo/andén destino).
+   *    3. RAÍLES encima de TODO — atraviesan la boca sin recorte y se
+   *       perciben como un único trazado continuo entre el túnel actual
+   *       y la estación destino.
+   *    4. Trenes y obstáculos del túnel.
+   *
+   *  Durante los últimos `cfg.approachSeconds` segundos la boca CRECE
+   *  por perspectiva. Como los raíles van encima, el jugador ve la
+   *  estación destino aproximarse mientras los raíles siguen tendidos
+   *  hasta sus pies. */
   render(ctx) {
+    // 1. Fondo del túnel SIN raíles
     drawTunel(ctx, {
       bgColor:               this.cfg.bgColor,
       lightColor:            this.cfg.lightColor,
       vanishingPointY:       this.cfg.vanishingPointY,
       archRadiusRatio:       this.cfg.archRadiusRatio,
       archCenterOffsetRatio: this.cfg.archCenterOffsetRatio,
+      skipRails:             true,
     }, STATE.worldZ);
-    this._renderObstacles(ctx);
 
+    // 2. Boca con la EstacionBase destino recortada dentro
+    this._drawDestinationFront(ctx);
+
+    // 3. Raíles encima — continuos a través de la boca
+    drawTunelTrackLayer(ctx, {
+      vanishingPointY:       this.cfg.vanishingPointY,
+      archRadiusRatio:       this.cfg.archRadiusRatio,
+      archCenterOffsetRatio: this.cfg.archCenterOffsetRatio,
+    }, STATE.worldZ);
+
+    // 4. Obstáculos y trenes
+    this._renderObstacles(ctx);
     const variante   = getTrenVariante(this.cfg.trainLineVariant);
     const trainColor = variante.stripeColor ?? '#F39200';
     this._drawTrainsExtruded(ctx, { stripeColor: trainColor });
+  }
+
+  /** Render simplificado para usar como CONTENIDO dentro de la boca de
+   *  otra escena. SIN raíles — los raíles los pinta encima la escena
+   *  exterior, así son continuos a través de la boca. */
+  _renderForPreview(ctx) {
+    drawTunel(ctx, {
+      bgColor:               this.cfg.bgColor,
+      lightColor:            this.cfg.lightColor,
+      vanishingPointY:       this.cfg.vanishingPointY,
+      archRadiusRatio:       this.cfg.archRadiusRatio,
+      archCenterOffsetRatio: this.cfg.archCenterOffsetRatio,
+      skipRails:             true,
+    }, STATE.worldZ);
+  }
+
+  /** Dibuja la boca de la siguiente estación al fondo del túnel.
+   *
+   *  IMPORTANTE: la boca SÓLO se dibuja durante la fase de aproximación
+   *  final (`approach > 0`, último `cfg.approachSeconds`). En el grueso
+   *  del túnel `approach=0` y la función sale temprano — el jugador ve
+   *  un túnel oscuro normal, sin un punto luminoso al fondo. La boca
+   *  aparece y crece justo antes del cambio de escena, dando sensación
+   *  de que la próxima estación se "asoma" al final del recorrido.
+   *
+   *  El INTERIOR del arco renderiza la siguiente EstacionBase
+   *  (`this._destinationScene._renderForPreview`) recortada al contorno
+   *  del arco — el jugador ve realmente el andén destino al fondo. Si no
+   *  hay destination disponible, fallback a gradiente cálido. */
+  _drawDestinationFront(ctx) {
+    const approach = this._computeStationMouthApproach();
+    if (approach <= 0) return;   // boca oculta hasta entrar en aproximación
+    const eased    = approach * approach;
+
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const vpX = cw / 2;
+    const vpY = getCameraVpY(ch * (this.cfg.vanishingPointY ?? 0.42));
+
+    // Geometría del arco — idéntica a `_drawNextStationMouth` en tunel.js
+    // pero gestionada aquí para poder usar `_destinationScene`.
+    const baseY0   = vpY + 8;
+    const halfW0   = Math.max(28, cw * 0.075) * 0.45;
+    const maxHalfW = Math.hypot(cw, ch) * 1.05;
+    const halfW    = halfW0 + (maxHalfW - halfW0) * eased;
+    const sidesH   = halfW * 0.85;
+    const baseY    = baseY0 + (ch + 80 - baseY0) * eased;
+    const frameW   = Math.max(3, halfW * 0.10);
+
+    const archPath = (hw, sh, btm) => {
+      ctx.beginPath();
+      ctx.moveTo(vpX - hw, btm);
+      ctx.lineTo(vpX - hw, baseY - sh);
+      ctx.arc(vpX, baseY - sh, hw, Math.PI, 0, false);
+      ctx.lineTo(vpX + hw, btm);
+      ctx.closePath();
+    };
+
+    // 1. Marco de hormigón (umbral del andén)
+    ctx.fillStyle = this.cfg.stationMouthFrame ?? '#777780';
+    archPath(halfW + frameW, sidesH + frameW, baseY + frameW);
+    ctx.fill();
+
+    // 2. Interior — recortar al contorno y RENDERIZAR la siguiente
+    //    EstacionBase. Al ver el andén destino dentro de la boca, el
+    //    jugador percibe continuación real, no un fundido a color.
+    ctx.save();
+    archPath(halfW, sidesH, baseY);
+    ctx.clip();
+    if (this._destinationScene && this._destinationScene._renderForPreview) {
+      this._destinationScene._renderForPreview(ctx);
+    } else {
+      // Fallback: gradiente cálido (sólo si no hay destination preview)
+      const grad = ctx.createRadialGradient(
+        vpX, baseY - sidesH * 0.55, 1,
+        vpX, baseY - sidesH * 0.55, halfW * 1.4,
+      );
+      grad.addColorStop(0,   'rgba(255, 244, 210, 1)');
+      grad.addColorStop(0.5, 'rgba(248, 232, 188, 0.97)');
+      grad.addColorStop(1,   'rgba(210, 192, 150, 0.92)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, cw, ch);
+    }
+    ctx.restore();
+
+    // 3. Filo superior brillante del marco
+    ctx.strokeStyle = 'rgba(255, 248, 220, 0.85)';
+    ctx.lineWidth   = 1.2;
+    ctx.beginPath();
+    ctx.arc(vpX, baseY - sidesH, halfW + frameW, Math.PI, 0, false);
+    ctx.stroke();
+
+    // 4. Filo INTERIOR oscuro del marco
+    ctx.strokeStyle = 'rgba(60, 40, 20, 0.55)';
+    ctx.lineWidth   = 0.8;
+    archPath(halfW, sidesH, baseY);
+    ctx.stroke();
+
+    // 5. Banda oscura sobre el suelo (sólo cuando la boca está pequeña)
+    if (approach < 0.3) {
+      ctx.fillStyle = `rgba(0, 0, 0, ${0.85 * (1 - approach / 0.3)})`;
+      ctx.fillRect(vpX - halfW, baseY - 1, halfW * 2, 2);
+    }
+  }
+
+  /** Aproximación 0–1 a la boca de la siguiente estación.
+   *  Vale 0 hasta los últimos `approachSeconds` segundos del túnel; en
+   *  ese tramo crece linealmente hasta 1 (boca llenando el cuadro). */
+  _computeStationMouthApproach() {
+    const approachSec = this.cfg.approachSeconds ?? 1.5;
+    const dur = this.cfg.durationSeconds;
+    if (!dur || dur <= approachSec) return 0;
+    const elapsed = this._frame / 60;
+    const startAt = dur - approachSec;
+    if (elapsed <= startAt) return 0;
+    return Math.min(1, (elapsed - startAt) / approachSec);
   }
 
   /**

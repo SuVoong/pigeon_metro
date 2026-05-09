@@ -118,6 +118,11 @@ const DEFAULT_CONFIG = {
 
   // ── Duración ────────────────────────────────────────────────────────────
   durationSeconds:    8,
+  // Segundos finales del andén durante los que la boca de túnel crece
+  // (acercamiento por perspectiva). Al cumplirse `durationSeconds`, la
+  // boca llena el cuadro y la siguiente TunelBase carga sin corte
+  // percibido.
+  approachSeconds:    1.5,
 
   // ── Texto de carteles ───────────────────────────────────────────────────
   stationName:        'Estación',
@@ -237,6 +242,10 @@ export class EstacionBase {
     // de cercanía); en el VP convergen casi a un punto.
     const G = this._computeTrackGeom(W, vpX);
 
+    // 1. Fondo del andén SIN raíles ni trenes (paredes, techo, andén,
+    //    fluorescentes, etc.). Los raíles van más adelante para poder
+    //    pasar por encima de la boca y crear continuidad con el túnel
+    //    destino.
     this._drawBackground   (ctx, W, H);
     this._drawCeiling      (ctx, W, H, vpX, vpY);
     this._drawFluorescents (ctx, W, H, vpX, vpY);
@@ -248,28 +257,62 @@ export class EstacionBase {
     this._drawPlatformFront(ctx, W, H, vpX, vpY, G);
     this._drawBenches      (ctx, W, H, vpX, vpY, G);
     this._drawPlatformTactile(ctx, W, H, vpX, vpY, G);
+
+    // 2. Boca del túnel con el siguiente TunelBase RECORTADO dentro del
+    //    arco. Es punto de interconexión + ventana al túnel destino.
+    this._drawTunnelMouth  (ctx, W, H, vpX, vpY, G);
+
+    // 3. Raíles + trenes ENCIMA de todo: cruzan la boca sin recorte y
+    //    el jugador percibe un único trazado continuo entre el andén
+    //    actual y el túnel destino.
     this._drawTracks       (ctx, W, H, vpX, vpY, G);
     this._drawSafetyLines  (ctx, W, H, vpX, vpY, G);
     this._drawPassengers   (ctx, W, H);
     this._drawTrains       (ctx, W, H, vpX, vpY, G);
-    // Boca de túnel: se dibuja DESPUÉS de las vías y los trenes para que
-    // los trenes parezcan SALIR del túnel (los pequeños del fondo quedan
-    // tapados por la boca, los grandes que se acercan la sobrepasan).
-    this._drawTunnelMouth  (ctx, W, H, vpX, vpY, G);
-    // LED y logo Metro encima del arco (cuelgan del techo / pared frontal)
-    this._drawLEDScreen    (ctx, W, H, vpX, vpY);
-    this._drawMetroLogo    (ctx, W, H, vpX, vpY);
-    // Carteles colgantes de destino sobre cada andén — al final para que
-    // queden por encima de las paredes pero tapados por trenes cercanos.
-    this._drawHangingSigns (ctx, W, H, vpX, vpY);
-    // Las transiciones entrada/salida las gestiona MetroBase con un
-    // cross-fade circular desde el punto de fuga; no añadimos overlays
-    // de flash blanco ni oscurecimiento aquí — taparían la escena
-    // entrante/saliente dentro del recorte circular.
+    // LED, logo Metro y carteles colgantes — sólo cuando NO estamos
+    // entrando al túnel (approach=0): durante la aproximación final, el
+    // arco oscuro debe llenar el cuadro y estos elementos quedarían
+    // flotando incoherentemente sobre la oscuridad.
+    if (this._tunnelMouthApproach() < 0.05) {
+      this._drawLEDScreen    (ctx, W, H, vpX, vpY);
+      this._drawMetroLogo    (ctx, W, H, vpX, vpY);
+      this._drawHangingSigns (ctx, W, H, vpX, vpY);
+    }
+    // El cambio andén → túnel es un corte limpio en MetroBase; el punto
+    // de interconexión es la BOCA DEL TÚNEL ya pintada al fondo del andén
+    // por `_drawTunnelMouth` (ver más abajo). No hace falta overlay aquí.
 
     // Overlays opcionales (heredados del API previo)
     if (this.cfg.tutorialMessage) this._drawTutorialBanner(ctx, this.cfg.tutorialMessage);
     if (this.cfg.isCheckpoint)    this._drawCheckpointBadge(ctx);
+  }
+
+  /** Render simplificado para usar como CONTENIDO dentro de la boca de
+   *  otra escena (típicamente el túnel previo). Pinta el andén SIN:
+   *    · La propia boca de túnel (sería una boca dentro de otra boca).
+   *    · Los raíles/trenes/pasajeros — los raíles los pinta ENCIMA la
+   *      escena exterior, así son continuos a través de la boca.
+   *    · LED/logo/carteles/overlays — fuera de escala vistos por la boca.
+   *  Sólo paredes, bóveda, fluorescentes, suelo del andén, bancos. */
+  _renderForPreview(ctx) {
+    const W   = canvas.width;
+    const H   = canvas.height;
+    const vpX = W / 2;
+    const vpY = getCameraVpY(H * this.cfg.vanishingPointY);
+    this._bounds = getViewBounds();
+    const G = this._computeTrackGeom(W, vpX);
+
+    this._drawBackground   (ctx, W, H);
+    this._drawCeiling      (ctx, W, H, vpX, vpY);
+    this._drawFluorescents (ctx, W, H, vpX, vpY);
+    this._drawWalls        (ctx, W, H, vpX, vpY, G);
+    this._drawWallCables   (ctx, W, H, vpX, vpY, G);
+    this._drawEmergencyBoxes(ctx, W, H, vpX, vpY, G);
+    this._drawSigns        (ctx, W, H, vpX, vpY);
+    this._drawPlatforms    (ctx, W, H, vpX, vpY, G);
+    this._drawPlatformFront(ctx, W, H, vpX, vpY, G);
+    this._drawBenches      (ctx, W, H, vpX, vpY, G);
+    this._drawPlatformTactile(ctx, W, H, vpX, vpY, G);
   }
 
   // ── Geometría de las vías y andenes (trapecios en perspectiva) ──────────
@@ -684,82 +727,95 @@ export class EstacionBase {
     ctx.fillRect(x + W - s(3), y - s(7), s(1), s(7));
   }
 
-  // ── Escala de animación de la boca de túnel ─────────────────────────────
-  // Curva temporal en función de la fracción _elapsed/durationSeconds:
-  //   · t = 0    → 0.50:  VISTA ESTABLE de la estación (arco pequeño al fondo)
-  //   · t = 0.50 → 1.00:  ACERCAMIENTO EXPONENCIAL al siguiente túnel
-  //                       — el arco se expande para sugerir movimiento hacia
-  //                       el siguiente túnel, justo antes del cross-fade
-  //                       circular que orquesta MetroBase.
+  // ── Aproximación a la boca de túnel ──────────────────────────────────────
+  // Devuelve un valor 0–1 que representa cuánto se ha "acercado" la cámara
+  // a la boca de túnel al fondo del andén:
+  //   · 0 → boca estática en el VP (vista normal del andén).
+  //   · 1 → boca que ya llena el cuadro (la cámara está atravesándola, es
+  //        el último frame antes de que MetroBase cargue el TunelBase).
   //
-  // Devuelve un multiplicador positivo (1.0 = tamaño base, sin animación).
-  _tunnelMouthAnimScale() {
+  // Vale 0 hasta los últimos `approachSeconds` segundos del andén; en ese
+  // tramo crece linealmente hasta 1, dando la sensación de que la cámara
+  // entra físicamente al túnel sin necesidad de una escena de transición.
+  _tunnelMouthApproach() {
+    const approachSec = this.cfg.approachSeconds ?? 1.5;
     const dur = this.cfg.durationSeconds;
-    if (!dur || dur <= 0) return 1;
-    const t = Math.min(1, Math.max(0, this._elapsed / dur));
-
-    // ── Fase 1: estación visible (estable a 1.0) ──────────────────────────
-    if (t < 0.50) {
-      return 1.0;
-    }
-    // ── Fase 2: ACERCAMIENTO EXPONENCIAL al siguiente túnel ───────────────
-    // Escala máxima reducida (1.0 → 4.5) para que el cambio de transición
-    // se vea más contenido, sin que el arco invada toda la pantalla.
-    const local = (t - 0.50) / 0.50;
-    const eased = Math.pow(local, 3);
-    return 1.0 + 3.5 * eased;
+    if (!dur || dur <= approachSec) return 0;
+    const startAt = dur - approachSec;
+    if (this._elapsed <= startAt) return 0;
+    return Math.min(1, (this._elapsed - startAt) / approachSec);
   }
 
   // ── BOCA DE TÚNEL (arco oscuro al fondo) ─────────────────────────────────
-  // Donde acaba el andén, las vías se adentran en el siguiente túnel. Esta
-  // boca da el "punto de ruptura" entre la estación iluminada y el túnel
-  // oscuro — replica lo que se ve en estaciones reales del Metro de Madrid.
+  // Donde acaba el andén, las vías se adentran en el siguiente túnel.
   //
-  // Forma: rectángulo con la parte superior redondeada (semicírculo) — un
-  // arco clásico de túnel. Centrado horizontalmente en el VP, sentado sobre
-  // la línea de las vías (vpY + 8) por abajo.
+  // IMPORTANTE: la boca SÓLO se dibuja durante la fase de aproximación
+  // final (`approach > 0`, último `cfg.approachSeconds`). En el grueso del
+  // andén `approach=0` y la función sale temprano — el jugador ve el
+  // andén sin un arco oscuro al fondo, sólo las vías que se pierden en
+  // el VP. La boca aparece y crece justo antes del cambio de escena,
+  // dando sensación de "me acerco al túnel para irme".
+  //
+  // Forma: rectángulo con la parte superior redondeada (semicírculo).
   _drawTunnelMouth(ctx, W, H, vpX, vpY, G) {
-    const cfg       = this.cfg;
-    const baseY     = vpY + 8;
-    // Forma "boca de túnel" REAL — paredes verticales claramente visibles +
-    // semicírculo arriba. Mismas proporciones EXACTAS que el arco del
-    // TunelBase para que estación y túnel estén interconectados visualmente.
-    const BASE_SCALE = 0.45;
-    const animScale = this._tunnelMouthAnimScale();
-    const scale     = BASE_SCALE * animScale;
-    // Dimensiones unificadas con TunelBase (mismos números):
-    const innerHalf = Math.max(28, W * 0.075) * scale;   // semianchura interior
-    const sidesH    = innerHalf * 0.85;                  // sides ~85% del radio
-    const frameW    = Math.max(3, innerHalf * 0.10);     // marco ~10% del radio
+    const cfg = this.cfg;
+    const approach = this._tunnelMouthApproach();
+    if (approach <= 0) return;   // boca oculta hasta entrar en aproximación
+    // Curva ease-in: el crecimiento se acelera al final.
+    const eased = approach * approach;
 
-    // Helper: crea el path de un arco (rectángulo con techo en semicírculo).
-    const archPath = (halfW, h) => {
+    // Geometría base ESTÁTICA (cuando approach=0): boca pequeña en el VP
+    // con la base apoyada en el suelo de las vías.
+    const baseY0     = vpY + 8;
+    const innerHalf0 = Math.max(28, W * 0.075) * 0.45;
+    // Tamaño máximo (approach=1): boca cubre todo el cuadro.
+    const maxHalf    = Math.hypot(W, H) * 1.05;
+
+    const innerHalf = innerHalf0 + (maxHalf - innerHalf0) * eased;
+    const sidesH    = innerHalf * 0.85;
+    // El borde inferior baja conforme la cámara se acerca — sin esto, la
+    // mitad inferior de la pantalla se quedaría con el suelo del andén
+    // hasta el último frame y se notaría el corte.
+    const baseY     = baseY0 + (H + 80 - baseY0) * eased;
+    const frameW    = Math.max(3, innerHalf * 0.10);
+
+    // Helper: crea el path del arco (rectángulo con techo semicircular).
+    const archPath = (halfW, sh, btm) => {
       ctx.beginPath();
-      ctx.moveTo(vpX - halfW, baseY);
-      ctx.lineTo(vpX - halfW, baseY - h);
-      ctx.arc(vpX, baseY - h, halfW, Math.PI, 0, false);
-      ctx.lineTo(vpX + halfW, baseY);
+      ctx.moveTo(vpX - halfW, btm);
+      ctx.lineTo(vpX - halfW, baseY - sh);
+      ctx.arc(vpX, baseY - sh, halfW, Math.PI, 0, false);
+      ctx.lineTo(vpX + halfW, btm);
       ctx.closePath();
     };
 
-    // 1. MARCO del arco — gris medio (#555). Se distingue tanto contra la
-    //    pared clara (a los lados, gris oscuro sobre claro) como contra el
-    //    fondo negro central (gris claro sobre oscuro). Cubre la pared con
-    //    una "moldura de hormigón" alrededor de la boca del túnel.
+    // 1. MARCO del arco — gris medio (#555). Cubre la pared con una
+    //    "moldura de hormigón" alrededor de la boca del túnel.
     ctx.fillStyle = cfg.tunnelMouthFrame ?? '#555560';
-    archPath(innerHalf + frameW, sidesH + frameW);
+    archPath(innerHalf + frameW, sidesH + frameW, baseY + frameW);
     ctx.fill();
 
-    // 2. INTERIOR del túnel — negro casi puro con ligero gradiente
-    //    azulado: sugiere profundidad infinita más allá.
-    const grad = ctx.createRadialGradient(vpX, baseY - sidesH * 0.5, 1,
-                                           vpX, baseY - sidesH * 0.5, innerHalf * 1.3);
-    grad.addColorStop(0,   'rgba(10, 12, 20, 1)');
-    grad.addColorStop(0.6, 'rgba(2, 3, 6, 1)');
-    grad.addColorStop(1,   'rgba(0, 0, 0, 1)');
-    ctx.fillStyle = grad;
-    archPath(innerHalf, sidesH);
-    ctx.fill();
+    // 2. INTERIOR — RECORTAR al contorno y dibujar la siguiente TunelBase
+    //    (`this._destinationScene._renderForPreview`) si la hay. Así el
+    //    jugador ve realmente el túnel destino al fondo del andén, no un
+    //    gradiente plano. Fallback a gradiente azulado si no hay preview.
+    ctx.save();
+    archPath(innerHalf, sidesH, baseY);
+    ctx.clip();
+    if (this._destinationScene && this._destinationScene._renderForPreview) {
+      this._destinationScene._renderForPreview(ctx);
+    } else {
+      const grad = ctx.createRadialGradient(
+        vpX, baseY - sidesH * 0.5, 1,
+        vpX, baseY - sidesH * 0.5, innerHalf * 1.3,
+      );
+      grad.addColorStop(0,   'rgba(10, 12, 20, 1)');
+      grad.addColorStop(0.6, 'rgba(2, 3, 6, 1)');
+      grad.addColorStop(1,   'rgba(0, 0, 0, 1)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
+    ctx.restore();
 
     // 3. Filo SUPERIOR brillante del marco (la luz del andén pega arriba)
     ctx.strokeStyle = 'rgba(255, 251, 230, 0.65)';
@@ -771,46 +827,41 @@ export class EstacionBase {
     // 4. Filo INTERIOR oscuro del marco (sombra de la profundidad)
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
     ctx.lineWidth   = 1;
-    ctx.beginPath();
-    ctx.moveTo(vpX - innerHalf, baseY);
-    ctx.lineTo(vpX - innerHalf, baseY - sidesH);
-    ctx.arc(vpX, baseY - sidesH, innerHalf, Math.PI, 0, false);
-    ctx.lineTo(vpX + innerHalf, baseY);
+    archPath(innerHalf, sidesH, baseY);
     ctx.stroke();
 
-    // 5. Suelo del arco — banda oscura por donde entra el balasto al túnel
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-    ctx.fillRect(vpX - innerHalf, baseY - 1, innerHalf * 2, 3);
+    // 5. Suelo del arco + luces de señalización ferroviaria — sólo cuando
+    //    la boca está pequeña (approach < 0.4). Conforme la cámara se
+    //    acerca, estos detalles quedarían desproporcionados o fuera del
+    //    cuadro y empeoran la sensación de "entrar al túnel".
+    if (approach < 0.4) {
+      const fade = 1 - approach / 0.4;
+      // Banda oscura del suelo
+      ctx.fillStyle = `rgba(0, 0, 0, ${0.9 * fade})`;
+      ctx.fillRect(vpX - innerHalf, baseY - 1, innerHalf * 2, 3);
 
-    // 6. Luces de señalización ferroviaria al fondo del túnel
-    //    (rojo a la izquierda + verde a la derecha — semáforos de vía)
-    //    Sólo visibles cuando la boca aún es pequeña; al ampliarse durante
-    //    la transición, las señales quedan fuera del marco visible.
-    if (animScale < 1.6) {
+      // Luces de señalización (rojo izq + verde der)
       const sigR = Math.max(1.5, innerHalf * 0.10);
       const sigY = baseY - sidesH * 0.55;
       const sigOff = innerHalf * 0.45;
       const drawSignal = (cx, color, glowColor) => {
-        // Halo difuso
         const halo = ctx.createRadialGradient(cx, sigY, 0, cx, sigY, sigR * 4);
         halo.addColorStop(0,   glowColor);
         halo.addColorStop(0.5, glowColor.replace(/[\d.]+\)$/, '0.18)'));
         halo.addColorStop(1,   glowColor.replace(/[\d.]+\)$/, '0)'));
         ctx.fillStyle = halo;
         ctx.fillRect(cx - sigR * 4, sigY - sigR * 4, sigR * 8, sigR * 8);
-        // Bombilla
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.arc(cx, sigY, sigR, 0, Math.PI * 2);
         ctx.fill();
-        // Brillo central
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillStyle = `rgba(255,255,255,${0.85 * fade})`;
         ctx.beginPath();
         ctx.arc(cx - sigR * 0.25, sigY - sigR * 0.25, sigR * 0.35, 0, Math.PI * 2);
         ctx.fill();
       };
-      drawSignal(vpX - sigOff, '#FF2A2A', 'rgba(255,60,60,0.55)');
-      drawSignal(vpX + sigOff, '#22DD33', 'rgba(60,255,80,0.55)');
+      drawSignal(vpX - sigOff, '#FF2A2A', `rgba(255,60,60,${0.55 * fade})`);
+      drawSignal(vpX + sigOff, '#22DD33', `rgba(60,255,80,${0.55 * fade})`);
     }
   }
 
@@ -1247,10 +1298,15 @@ export class EstacionBase {
   // del fondo de la estación), igual que en estaciones reales donde el
   // letrero "Metro" cuelga del frontón sobre el arco.
   _drawMetroLogo(ctx, W, H, vpX, vpY) {
-    // Calcular techo del marco del arco (debe coincidir con _drawTunnelMouth,
-    // incluyendo la animación de tamaño)
-    const scale     = 0.45 * this._tunnelMouthAnimScale();
-    const innerHalf = Math.max(28, W * 0.075) * scale;
+    // Si la cámara ya está aproximándose al túnel (final de la escena), el
+    // arco crece tanto que el logo quedaría fuera del cuadro o tapado por
+    // el marco — lo ocultamos.
+    const approach = this._tunnelMouthApproach();
+    if (approach > 0.05) return;
+
+    // Calcular techo del marco del arco (debe coincidir con _drawTunnelMouth
+    // cuando approach=0).
+    const innerHalf = Math.max(28, W * 0.075) * 0.45;
     const sidesH    = innerHalf * 0.85;
     const frameW    = Math.max(3, innerHalf * 0.10);
     const archTopY  = (vpY + 8) - (sidesH + frameW) - (innerHalf + frameW);

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mockup punto de interconexión</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      background: #0d0d1a;
+      color: #ddd;
+      font-family: monospace;
+      min-height: 100vh;
+    }
+    h1 { font-size: 16px; margin: 12px 16px 4px; color: #F39200; }
+    p  { font-size: 12px; margin: 2px 16px; color: #aaa; }
+    .panel {
+      background: #050508;
+      border: 1px solid #2a2a3a;
+      padding: 8px;
+      margin: 12px 16px;
+      display: inline-block;
+    }
+    .panel h2 { margin: 0 0 6px; font-size: 12px; color: #F5C518; }
+    canvas { display: block; }
+    .controls { padding: 8px 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .controls label { font-size: 12px; }
+    .controls input[type=range] { width: 320px; vertical-align: middle; }
+    .controls .val { color: #5DCAA5; font-weight: bold; }
+    button {
+      background: #2a2a3a; color: #ddd; border: 1px solid #444;
+      padding: 4px 10px; cursor: pointer; font-family: monospace;
+      font-size: 11px;
+    }
+    button:hover { background: #3a3a4a; }
+    button.active { background: #F39200; color: #000; border-color: #F39200; }
+  </style>
+</head>
+<body>
+
+<h1>Punto de interconexión — aproximación al final de cada escena</h1>
+<p>El slider <b>approach</b> simula los últimos ~1.5 s de la escena.
+   approach=0 → boca estática al fondo (vista normal).
+   approach=1 → la boca llena el cuadro y la siguiente escena tomaría el relevo.</p>
+
+<div class="controls">
+  <button id="mode-tunnel" class="active">TÚNEL → estación (boca cálida)</button>
+  <button id="mode-station">ESTACIÓN → túnel (boca oscura)</button>
+</div>
+<div class="controls">
+  <button id="play-btn">▶ Play (1.5 s)</button>
+  <button id="reset-btn">⟲ Reset</button>
+  <span style="color:#666">|</span>
+  <label>approach: <span class="val" id="ap-val">0.00</span></label>
+  <input type="range" id="ap-slider" min="0" max="1" step="0.01" value="0" />
+</div>
+
+<div class="panel">
+  <h2 id="title">approach = 0.00</h2>
+  <canvas id="game" width="800" height="500"></canvas>
+</div>
+
+<script type="module">
+  import { TunelBase } from './js/escenarios/metro_base/tunel_base.js';
+  import { EstacionBase } from './js/escenarios/metro_base/estacion_base.js';
+  import { canvas, ctx, STATE } from './js/mecanica/estado.js';
+  import { resetCamera } from './js/mecanica/camara.js';
+
+  resetCamera();
+
+  let mode = 'tunnel';   // 'tunnel' (→estación) | 'station' (→túnel)
+  let approach = 0;
+  let playing = false;
+  let playStart = 0;
+
+  // Escenas reusables: una de cada tipo + sus respectivos destination.
+  const tunnel = new TunelBase({});
+  tunnel.init();
+  // Destination del túnel = una estación
+  tunnel._destinationScene = new EstacionBase({});
+  tunnel._destinationScene._spawnPassengers && tunnel._destinationScene._spawnPassengers();
+
+  const station = new EstacionBase({});
+  station.init('SOL');
+  // Destination de la estación = un túnel
+  station._destinationScene = new TunelBase({});
+  station._destinationScene.init();
+
+  const titleEl = document.getElementById('title');
+  const apSlider = document.getElementById('ap-slider');
+  const apVal    = document.getElementById('ap-val');
+
+  function render() {
+    STATE.worldZ = approach * 60;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (mode === 'tunnel') {
+      // Forzamos _frame en el rango de aproximación
+      const apS = tunnel.cfg.approachSeconds ?? 1.5;
+      const dur = tunnel.cfg.durationSeconds;
+      const startAt = dur - apS;
+      tunnel._frame = (startAt + approach * apS) * 60;
+      tunnel.render(ctx);
+    } else {
+      const apS = station.cfg.approachSeconds ?? 1.5;
+      const dur = station.cfg.durationSeconds;
+      const startAt = dur - apS;
+      station._elapsed = startAt + approach * apS;
+      station.render(ctx);
+    }
+    titleEl.textContent = `${mode === 'tunnel' ? 'TÚNEL' : 'ESTACIÓN'} · approach = ${approach.toFixed(2)}`;
+    apVal.textContent = approach.toFixed(2);
+  }
+
+  document.getElementById('mode-tunnel').addEventListener('click', () => {
+    mode = 'tunnel';
+    document.getElementById('mode-tunnel').classList.add('active');
+    document.getElementById('mode-station').classList.remove('active');
+    render();
+  });
+  document.getElementById('mode-station').addEventListener('click', () => {
+    mode = 'station';
+    document.getElementById('mode-station').classList.add('active');
+    document.getElementById('mode-tunnel').classList.remove('active');
+    render();
+  });
+
+  apSlider.addEventListener('input', () => {
+    approach = +apSlider.value;
+    render();
+  });
+
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    approach = 0; playing = false;
+    apSlider.value = 0;
+    render();
+  });
+
+  document.getElementById('play-btn').addEventListener('click', () => {
+    playing = true;
+    playStart = performance.now();
+  });
+
+  function loop(now) {
+    if (playing) {
+      const elapsed = (now - playStart) / 1000;
+      approach = Math.min(1, elapsed / 1.5);
+      apSlider.value = approach;
+      if (approach >= 1) playing = false;
+      render();
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  render();
+</script>
+
+</body>
+</html>
