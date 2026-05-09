@@ -14,6 +14,7 @@
 import { canvas, STATE, pigeon } from '../../mecanica/estado.js';
 import { perspective, getViewBounds, getCameraVpY, camera, CAMERA_RANGE_X } from '../../mecanica/camara.js';
 import { drawTrenFrontal, setTrenLED } from '../../elementos/tren.js';
+import { drawRailProfile, RAIL_LAYERS_STATION } from './tunel.js';
 
 const DEFAULT_CONFIG = {
   // ── Geometría ───────────────────────────────────────────────────────────
@@ -1211,41 +1212,20 @@ export class EstacionBase {
                    Math.round(rightX2 - rightX1), 1);
     }
 
-    // 3. CARRILES METÁLICOS (4 carriles con efecto brillo de 3 capas)
+    // 3. CARRILES METÁLICOS (perfil 3D multicapa, idéntico al del túnel
+    //    pero con paleta `RAIL_LAYERS_STATION` — ligeramente más claros
+    //    porque el andén está bien iluminado. La forma exacta y la
+    //    geometría son las mismas, así el recorrido se percibe como una
+    //    única vía continua entre el andén y el túnel.
     const rails = [
-      // Vía izquierda
-      { startX: G.tOBL, endX: G.tOVL },
-      { startX: G.tIBL, endX: G.tIVL },
+      // Vía izquierda  (near=BASE, far=VP)
+      { near: G.tOBL, far: G.tOVL },
+      { near: G.tIBL, far: G.tIVL },
       // Vía derecha
-      { startX: G.tIBR, endX: G.tIVR },
-      { startX: G.tOBR, endX: G.tOVR },
+      { near: G.tIBR, far: G.tIVR },
+      { near: G.tOBR, far: G.tOVR },
     ];
-
-    rails.forEach((rail) => {
-      // Capa 1: sombra
-      ctx.strokeStyle = this.cfg.railShadowColor;
-      ctx.lineWidth   = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(rail.startX + 1, H);
-      ctx.lineTo(rail.endX + 1, vpY + 8);
-      ctx.stroke();
-
-      // Capa 2: cuerpo del carril
-      ctx.strokeStyle = this.cfg.railColor;
-      ctx.lineWidth   = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(rail.startX, H);
-      ctx.lineTo(rail.endX, vpY + 8);
-      ctx.stroke();
-
-      // Capa 3: brillo blanco (filo del carril)
-      ctx.strokeStyle = this.cfg.railHighlight;
-      ctx.lineWidth   = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(rail.startX, H);
-      ctx.lineTo(rail.endX, vpY + 8);
-      ctx.stroke();
-    });
+    drawRailProfile(ctx, rails, vpY + 8, H, 7, RAIL_LAYERS_STATION);
 
     // 4. SUJECIONES (puntos negros donde el carril toca cada traviesa)
     for (let i = 0; i < N; i += 2) {

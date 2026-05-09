@@ -656,27 +656,54 @@ function _drawCentralDrain(ctx, vpX, topY, botY, cw, worldZ, config = {}) {
 // brillo metálico. Réplica del raíl del plano técnico — color óxido en la
 // parte baja por la oxidación natural del acero, cabeza pulida porque la
 // rueda del tren la mantiene brillante.
+// Capas del perfil 3D del raíl en TÚNEL (oscuro, sombra dura).
+const _RAIL_LAYERS_TUNNEL = [
+  { offY: +2.4, w: 2.4, c: 'rgba(0,0,0,0.60)' },         // sombra en solera
+  { offY: +1.6, w: 2.0, c: '#5a3220' },                  // pie (óxido oscuro)
+  { offY: +0.6, w: 1.55, c: '#7d4a2c' },                 // pie/alma (óxido)
+  { offY: -0.2, w: 1.20, c: '#5e5a55' },                 // alma — gris cálido
+  { offY: -1.2, w: 1.10, c: '#8a8a8e' },                 // cabeza inferior
+  { offY: -2.1, w: 0.92, c: '#c2c4c8' },                 // cabeza superior
+  { offY: -2.7, w: 0.55, c: 'rgba(235,238,242,0.96)' },  // brillo metálico
+  { offY: -3.1, w: 0.22, c: 'rgba(255,255,255,0.90)' },  // especular
+];
+
+// Capas del perfil 3D del raíl en ESTACIÓN — mismo diseño pero un pelín
+// más claras porque el andén está bien iluminado: sombra en solera más
+// suave, óxido del pie aclarado, alma/cabeza con tonos más fríos y
+// brillo más alto. El recorrido se ve continuo con el del túnel pero
+// con el tono visual del andén.
+const _RAIL_LAYERS_STATION = [
+  { offY: +2.4, w: 2.4, c: 'rgba(0,0,0,0.32)' },         // sombra (más suave que en túnel)
+  { offY: +1.6, w: 2.0, c: '#7a4a30' },                  // pie (óxido más claro)
+  { offY: +0.6, w: 1.55, c: '#9a6440' },                 // pie/alma (óxido aclarado)
+  { offY: -0.2, w: 1.20, c: '#7a7670' },                 // alma — gris medio
+  { offY: -1.2, w: 1.10, c: '#a8a8ae' },                 // cabeza inferior
+  { offY: -2.1, w: 0.92, c: '#d8dade' },                 // cabeza superior
+  { offY: -2.7, w: 0.55, c: 'rgba(245,247,250,0.98)' },  // brillo metálico
+  { offY: -3.1, w: 0.22, c: 'rgba(255,255,255,0.95)' },  // especular
+];
+
 function _drawRailLines(ctx, rails, topY, botY, color, baseW) {
-  // Cada capa: { offY, w, color }
-  //   offY  = desplazamiento Y respecto al baseline del raíl
-  //   w     = multiplicador del ancho (baseW) en el extremo CERCANO
-  //
-  // Cada capa se dibuja como un trapecio: en la base (cerca de la cámara)
-  // tiene el ancho completo, en el VP (lejano) se estrecha al FAR_TAPER.
-  // 0.30 (antes 0.18): el extremo VP queda ligeramente más ancho para que
-  // los rieles del fondo se vean con un mínimo de cuerpo visible (no se
-  // confundan con líneas finas casi invisibles).
+  drawRailProfile(ctx, rails, topY, botY, baseW, _RAIL_LAYERS_TUNNEL);
+}
+
+/**
+ * Dibuja un set de raíles con perfil 3D multicapa.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Array<{near:number, far:number}>} rails  X de cada raíl en (near=base) y (far=VP).
+ * @param {number} topY    Y donde el raíl arranca (lado del VP).
+ * @param {number} botY    Y donde el raíl termina (lado de la cámara).
+ * @param {number} baseW   Ancho base del raíl en la cámara (~7 px).
+ * @param {Array}  layers  Capas del perfil. Por defecto el set "túnel" (más
+ *                         oscuro). Para el andén usar `RAIL_LAYERS_STATION`.
+ */
+export function drawRailProfile(ctx, rails, topY, botY, baseW = 7, layers = _RAIL_LAYERS_TUNNEL) {
+  // Trapecios en perspectiva: cerca tiene baseW*L.w, en el VP se estrecha
+  // a FAR_TAPER * el ancho cercano para que los rieles del fondo no se
+  // confundan con líneas finas casi invisibles.
   const FAR_TAPER = 0.30;
-  const layers = [
-    { offY: +2.4, w: 2.4, c: 'rgba(0,0,0,0.60)' },            // sombra en solera
-    { offY: +1.6, w: 2.0, c: '#5a3220' },                     // pie del raíl (oxido oscuro)
-    { offY: +0.6, w: 1.55, c: '#7d4a2c' },                    // pie/alma transición (oxido)
-    { offY: -0.2, w: 1.20, c: '#5e5a55' },                    // alma — gris cálido sucio
-    { offY: -1.2, w: 1.10, c: '#8a8a8e' },                    // cabeza inferior — plateado oscuro
-    { offY: -2.1, w: 0.92, c: '#c2c4c8' },                    // cabeza superior — plateado claro
-    { offY: -2.7, w: 0.55, c: 'rgba(235,238,242,0.96)' },     // brillo metálico (cabeza pulida)
-    { offY: -3.1, w: 0.22, c: 'rgba(255,255,255,0.90)' },     // especular blanco
-  ];
 
   ctx.save();
   for (const rail of rails) {
@@ -688,7 +715,6 @@ function _drawRailLines(ctx, rails, topY, botY, color, baseW) {
 
       ctx.fillStyle = L.c;
       ctx.beginPath();
-      // Trapecio: vértices del lado FAR (estrecho) y del lado NEAR (ancho).
       ctx.moveTo(rail.far  - wFar  / 2, yFar);
       ctx.lineTo(rail.far  + wFar  / 2, yFar);
       ctx.lineTo(rail.near + wNear / 2, yNear);
@@ -699,6 +725,10 @@ function _drawRailLines(ctx, rails, topY, botY, color, baseW) {
   }
   ctx.restore();
 }
+
+/** Capas pre-definidas para usar con `drawRailProfile`. */
+export const RAIL_LAYERS_TUNNEL  = _RAIL_LAYERS_TUNNEL;
+export const RAIL_LAYERS_STATION = _RAIL_LAYERS_STATION;
 
 // ── Canales laterales de drenaje y cableado ──────────────────────────────
 // Pequeñas trincheras con rejilla en las esquinas inferiores del túnel,
