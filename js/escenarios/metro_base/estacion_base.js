@@ -747,16 +747,20 @@ export class EstacionBase {
   }
 
   // ── BOCA DE TÚNEL (arco oscuro al fondo) ─────────────────────────────────
-  // Donde acaba el andén, las vías se adentran en el siguiente túnel. Esta
-  // boca da el "punto de ruptura" entre la estación iluminada y el túnel
-  // oscuro — replica lo que se ve en estaciones reales del Metro de Madrid.
+  // Donde acaba el andén, las vías se adentran en el siguiente túnel.
   //
-  // Forma: rectángulo con la parte superior redondeada (semicírculo) — un
-  // arco clásico de túnel. Centrado horizontalmente en el VP, sentado sobre
-  // la línea de las vías (vpY + 8) por abajo.
+  // IMPORTANTE: la boca SÓLO se dibuja durante la fase de aproximación
+  // final (`approach > 0`, último `cfg.approachSeconds`). En el grueso del
+  // andén `approach=0` y la función sale temprano — el jugador ve el
+  // andén sin un arco oscuro al fondo, sólo las vías que se pierden en
+  // el VP. La boca aparece y crece justo antes del cambio de escena,
+  // dando sensación de "me acerco al túnel para irme".
+  //
+  // Forma: rectángulo con la parte superior redondeada (semicírculo).
   _drawTunnelMouth(ctx, W, H, vpX, vpY, G) {
     const cfg = this.cfg;
     const approach = this._tunnelMouthApproach();
+    if (approach <= 0) return;   // boca oculta hasta entrar en aproximación
     // Curva ease-in: el crecimiento se acelera al final.
     const eased = approach * approach;
 

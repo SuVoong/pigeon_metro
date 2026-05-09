@@ -203,13 +203,21 @@ export class TunelBase {
   }
 
   /** Dibuja la boca de la siguiente estación al fondo del túnel.
-   *  La forma del arco crece con `approach` (0 → 1, último 1.5 s).
+   *
+   *  IMPORTANTE: la boca SÓLO se dibuja durante la fase de aproximación
+   *  final (`approach > 0`, último `cfg.approachSeconds`). En el grueso
+   *  del túnel `approach=0` y la función sale temprano — el jugador ve
+   *  un túnel oscuro normal, sin un punto luminoso al fondo. La boca
+   *  aparece y crece justo antes del cambio de escena, dando sensación
+   *  de que la próxima estación se "asoma" al final del recorrido.
+   *
    *  El INTERIOR del arco renderiza la siguiente EstacionBase
    *  (`this._destinationScene._renderForPreview`) recortada al contorno
    *  del arco — el jugador ve realmente el andén destino al fondo. Si no
    *  hay destination disponible, fallback a gradiente cálido. */
   _drawDestinationFront(ctx) {
     const approach = this._computeStationMouthApproach();
+    if (approach <= 0) return;   // boca oculta hasta entrar en aproximación
     const eased    = approach * approach;
 
     const cw = canvas.width;
