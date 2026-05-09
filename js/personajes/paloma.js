@@ -1,4 +1,5 @@
 // Paloma urbana — vista de espaldas, físíca con easing y sprite 32×32 (4 frames de aleteo)
+// Diseño pixel 3D: sombreado tri-tonal, luz desde arriba-izquierda
 
 import { pigeon, STATE, canvas } from '../mecanica/estado.js';
 import { keys } from '../mecanica/input.js';
@@ -11,25 +12,47 @@ const MAX_VELOCITY = 6;
 const EASING       = 0.15;
 const SPRITE_SCALE = 2.25;  // 32px diseño × 2.25 = 72px (reducido 25 % desde 3)
 
-// Paleta
+// Paleta 3D: 3 tonos por zona (highlight / base / sombra)
 const PAL_PALOMA = {
-  head:        '#8899AA',
-  headLight:   '#9AABBB',
-  eye:         '#FFFFFF',
-  collarTeal:  '#4488AA',
-  collarPurp:  '#AA44AA',
-  collarShad1: '#2255AA',
-  collarShad2: '#882299',
-  body:        '#8899AA',
-  belly:       '#DDDDEE',
-  bodyShadow:  '#667788',
-  wing:        '#556677',
-  wingTip:     '#445566',
-  tail:        '#445566',
-  tailMid:     '#334455',
-  tailTip:     '#223344',
-  leg:         '#E8AA88',
-  foot:        '#D09977',
+  // Cabeza
+  headHigh:       '#C4D4E6',
+  head:           '#8899AA',
+  headDark:       '#5A6B7C',
+  // Ojo
+  eye:            '#FFFFFF',
+  eyePupil:       '#1A1A2A',
+  // Pico
+  beak:           '#D4A855',
+  beakDark:       '#9A7830',
+  // Collar iridiscente
+  collarTealHigh: '#66CCEE',
+  collarTealD:    '#1F5577',
+  collarPurpHigh: '#DD77DD',
+  collarPurpD:    '#772288',
+  // Cuerpo
+  bodyHigh:       '#AABCCE',
+  body:           '#8899AA',
+  bodyDark:       '#5A6B7C',
+  bodyDeep:       '#3C4D5E',
+  // Vientre
+  bellyHigh:      '#EEEEFF',
+  belly:          '#CCCCDD',
+  // Alas
+  wingHigh:       '#8A9DAF',
+  wing:           '#556677',
+  wingDark:       '#38495A',
+  wingTip:        '#1E3040',
+  // Cola
+  tailHigh:       '#667788',
+  tail:           '#445566',
+  tailMid:        '#2E3F50',
+  tailTip:        '#162636',
+  tailDark:       '#1A2B3C',
+  // Patas y pies
+  leg:            '#E8AA88',
+  legDark:        '#B07855',
+  foot:           '#C08864',
+  footTip:        '#8A5A3A',
 };
 
 // Ciclo de aleteo: 4 frames visuales, 6 pasos de ciclo, avanza cada 7 frames de juego.
@@ -161,76 +184,109 @@ export function drawPigeon(ctx) {
 }
 
 /**
- * Dibuja el sprite 32×32 de la paloma centrado en (cx, cy).
- * Se puede llamar con escala 1 (el contexto ya está escalado desde fuera)
- * o con escala diferente para previews.
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} cx  X centro del sprite en el espacio actual
- * @param {number} cy  Y centro del sprite en el espacio actual
- * @param {number} wingFrame  0-3
- * @param {boolean} isStunned  true para dibujar con ojos en X y alas caídas
+ * Sprite 32×32 de la paloma centrado en (cx, cy).
+ * Diseño pixel 3D: 3 tonos por zona, luz desde arriba-izquierda.
  */
 export function _drawPalomaSprite(ctx, cx, cy, wingFrame = 0, isStunned = false) {
-  const ox = cx - 16;  // esquina superior-izquierda del box 32×32
+  const ox = cx - 16;
   const oy = cy - 16;
-  const p  = (x, y, w, h, col) => {
-    ctx.fillStyle = col;
-    ctx.fillRect(ox + x, oy + y, w, h);
-  };
+  const p  = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(ox+x, oy+y, w, h); };
 
-  // ── Cabeza ─────────────────────────────────────────────────────────────────
-  p(12,  0,  8, 7, PAL_PALOMA.head);
-  p(14,  0,  4, 2, PAL_PALOMA.headLight);
+  // ── Pico (visible de perfil 3/4 desde atrás) ──────────────────────────────
+  p(20, 3, 2, 1, PAL_PALOMA.beak);
+  p(21, 4, 2, 1, PAL_PALOMA.beakDark);
 
-  // ── Ojos (normal o aturdido en X) ───────────────────────────────────────────
+  // ── Cabeza (domo 3D) ───────────────────────────────────────────────────────
+  p(12, 0, 8, 7, PAL_PALOMA.head);
+  // Highlight arco superior-izq
+  p(14, 0, 4, 1, PAL_PALOMA.headHigh);
+  p(13, 1, 3, 1, PAL_PALOMA.headHigh);
+  p(12, 2, 2, 1, PAL_PALOMA.headHigh);
+  // Sombra der e inferior
+  p(19, 2, 1, 4, PAL_PALOMA.headDark);
+  p(18, 5, 2, 2, PAL_PALOMA.headDark);
+  p(12, 5, 1, 2, PAL_PALOMA.headDark);
+
+  // ── Ojo ───────────────────────────────────────────────────────────────────
   if (isStunned) {
-    _drawXEye(ctx, ox + 19, oy + 2);   // ojo derecho en X
-    _drawXEye(ctx, ox + 11, oy + 2);   // ojo izquierdo en X
+    _drawXEye(ctx, ox + 19, oy + 2);
+    _drawXEye(ctx, ox + 11, oy + 2);
   } else {
-    p(19,  2,  2, 2, PAL_PALOMA.eye);
+    p(19, 2, 2, 2, PAL_PALOMA.eye);
+    p(20, 3, 1, 1, PAL_PALOMA.eyePupil);
   }
 
-  // ── Collar iridiscente ─────────────────────────────────────────────────────
-  p(10,  7,  5, 2, PAL_PALOMA.collarTeal);
-  p(15,  7,  5, 2, PAL_PALOMA.collarPurp);
-  p(10,  8,  5, 1, PAL_PALOMA.collarShad1);
-  p(15,  8,  5, 1, PAL_PALOMA.collarShad2);
+  // ── Collar iridiscente (highlight → sombra) ────────────────────────────────
+  p(10, 7, 5, 1, PAL_PALOMA.collarTealHigh);
+  p(15, 7, 5, 1, PAL_PALOMA.collarPurpHigh);
+  p(10, 8, 5, 1, PAL_PALOMA.collarTealD);
+  p(15, 8, 5, 1, PAL_PALOMA.collarPurpD);
 
-  // ── Cuerpo ─────────────────────────────────────────────────────────────────
+  // ── Cuerpo (torso 3D) ─────────────────────────────────────────────────────
   p( 8,  9, 16, 14, PAL_PALOMA.body);
-  p(10, 10, 12, 10, PAL_PALOMA.belly);
-  p( 8,  9,  2,  6, PAL_PALOMA.bodyShadow);  // sombra izq
-  p(22,  9,  2,  6, PAL_PALOMA.bodyShadow);  // sombra der
+  p(10,  9, 12,  2, PAL_PALOMA.bodyHigh);   // hombros iluminados
+  p( 8,  9,  2, 12, PAL_PALOMA.bodyDark);   // borde lat izq
+  p(22,  9,  2, 12, PAL_PALOMA.bodyDark);   // borde lat der
+  p( 9, 20, 14,  3, PAL_PALOMA.bodyDeep);   // sombra inferior
 
-  // ── Alas (4 frames o caídas si aturdido) ───────────────────────────────────
+  // ── Vientre ───────────────────────────────────────────────────────────────
+  p(11, 10, 10,  9, PAL_PALOMA.belly);
+  p(12, 11,  8,  7, PAL_PALOMA.bellyHigh);
+
+  // ── Alas ──────────────────────────────────────────────────────────────────
   let wingY, tipY;
   if (isStunned) {
-    // Alas caídas (frame fijo en posición baja)
-    wingY = 14;
-    tipY  = 17;
+    wingY = 15; tipY = 18;
   } else {
     switch (wingFrame) {
-      case 1:  wingY = 4;  tipY = 3;  break;  // arriba
-      case 2:  wingY = 7;  tipY = 6;  break;  // medio-arriba
-      case 3:  wingY = 14; tipY = 17; break;  // abajo
-      default: wingY = 10; tipY = 13; break;  // nivel (0)
+      case 1:  wingY = 4;  tipY = 3;  break;   // arriba
+      case 2:  wingY = 7;  tipY = 6;  break;   // medio-arriba
+      case 3:  wingY = 15; tipY = 18; break;   // abajo
+      default: wingY = 11; tipY = 14; break;   // nivel (0)
     }
   }
-  p( 0, wingY,  8, 4, PAL_PALOMA.wing);    // ala izq cuerpo
-  p(24, wingY,  8, 4, PAL_PALOMA.wing);    // ala der cuerpo
-  p( 0, tipY,   8, 2, PAL_PALOMA.wingTip); // punta izq
-  p(24, tipY,   8, 2, PAL_PALOMA.wingTip); // punta der
+  // Ala izquierda: highlight → base → tip → sombra borde
+  if (wingY > 0) p(0, wingY - 1, 8, 1, PAL_PALOMA.wingHigh);
+  p(0, wingY,     8, 3, PAL_PALOMA.wing);
+  p(0, tipY,      8, 2, PAL_PALOMA.wingTip);
+  p(0, wingY + 3, 8, 1, PAL_PALOMA.wingDark);
+  // Separadores de cañones (solo cuando las alas van hacia abajo/nivel)
+  if (!isStunned && tipY >= wingY) {
+    p(2, wingY, 1, 3, PAL_PALOMA.wingDark);
+    p(5, wingY, 1, 3, PAL_PALOMA.wingDark);
+  }
+  // Ala derecha
+  if (wingY > 0) p(24, wingY - 1, 8, 1, PAL_PALOMA.wingHigh);
+  p(24, wingY,     8, 3, PAL_PALOMA.wing);
+  p(24, tipY,      8, 2, PAL_PALOMA.wingTip);
+  p(24, wingY + 3, 8, 1, PAL_PALOMA.wingDark);
+  if (!isStunned && tipY >= wingY) {
+    p(25, wingY, 1, 3, PAL_PALOMA.wingDark);
+    p(28, wingY, 1, 3, PAL_PALOMA.wingDark);
+  }
 
-  // ── Cola ───────────────────────────────────────────────────────────────────
-  p(12, 23,  8, 4, PAL_PALOMA.tail);
-  p(11, 26, 10, 2, PAL_PALOMA.tailMid);
-  p(10, 27, 12, 1, PAL_PALOMA.tailTip);
+  // ── Cola (abanico con separadores de plumas) ──────────────────────────────
+  p(13, 22,  6, 1, PAL_PALOMA.tailHigh);
+  p(11, 23, 10, 2, PAL_PALOMA.tail);
+  p(10, 25, 12, 1, PAL_PALOMA.tailMid);
+  p( 9, 26, 14, 1, PAL_PALOMA.tailMid);
+  p( 8, 27, 16, 1, PAL_PALOMA.tailTip);
+  p(14, 23,  1, 5, PAL_PALOMA.tailDark);   // separador
+  p(18, 23,  1, 5, PAL_PALOMA.tailDark);   // separador
 
-  // ── Patas ──────────────────────────────────────────────────────────────────
-  p(11, 22,  2, 3, PAL_PALOMA.leg);   // pierna izq
-  p(19, 22,  2, 3, PAL_PALOMA.leg);   // pierna der
-  p( 9, 24,  4, 1, PAL_PALOMA.foot);  // pie izq
-  p(19, 24,  4, 1, PAL_PALOMA.foot);  // pie der
+  // ── Patas (con sombra lateral) ────────────────────────────────────────────
+  p(11, 22, 2, 3, PAL_PALOMA.leg);
+  p(12, 22, 1, 3, PAL_PALOMA.legDark);
+  p(19, 22, 2, 3, PAL_PALOMA.leg);
+  p(20, 22, 1, 3, PAL_PALOMA.legDark);
+
+  // ── Pies (con dedo trasero y garra) ───────────────────────────────────────
+  p( 9, 24, 4, 1, PAL_PALOMA.foot);
+  p(19, 24, 4, 1, PAL_PALOMA.foot);
+  p( 8, 24, 2, 1, PAL_PALOMA.footTip);   // dedo trasero izq
+  p(22, 24, 2, 1, PAL_PALOMA.footTip);   // dedo trasero der
+  p( 9, 25, 1, 1, PAL_PALOMA.footTip);   // garra frontal izq
+  p(22, 25, 1, 1, PAL_PALOMA.footTip);   // garra frontal der
 }
 
 /** Dibuja un ojo en forma de X (3×3 píxeles) */
