@@ -242,6 +242,10 @@ export class EstacionBase {
     // de cercanía); en el VP convergen casi a un punto.
     const G = this._computeTrackGeom(W, vpX);
 
+    // 1. Fondo del andén SIN raíles ni trenes (paredes, techo, andén,
+    //    fluorescentes, etc.). Los raíles van más adelante para poder
+    //    pasar por encima de la boca y crear continuidad con el túnel
+    //    destino.
     this._drawBackground   (ctx, W, H);
     this._drawCeiling      (ctx, W, H, vpX, vpY);
     this._drawFluorescents (ctx, W, H, vpX, vpY);
@@ -253,14 +257,18 @@ export class EstacionBase {
     this._drawPlatformFront(ctx, W, H, vpX, vpY, G);
     this._drawBenches      (ctx, W, H, vpX, vpY, G);
     this._drawPlatformTactile(ctx, W, H, vpX, vpY, G);
+
+    // 2. Boca del túnel con el siguiente TunelBase RECORTADO dentro del
+    //    arco. Es punto de interconexión + ventana al túnel destino.
+    this._drawTunnelMouth  (ctx, W, H, vpX, vpY, G);
+
+    // 3. Raíles + trenes ENCIMA de todo: cruzan la boca sin recorte y
+    //    el jugador percibe un único trazado continuo entre el andén
+    //    actual y el túnel destino.
     this._drawTracks       (ctx, W, H, vpX, vpY, G);
     this._drawSafetyLines  (ctx, W, H, vpX, vpY, G);
     this._drawPassengers   (ctx, W, H);
     this._drawTrains       (ctx, W, H, vpX, vpY, G);
-    // Boca de túnel: se dibuja DESPUÉS de las vías y los trenes para que
-    // los trenes parezcan SALIR del túnel (los pequeños del fondo quedan
-    // tapados por la boca, los grandes que se acercan la sobrepasan).
-    this._drawTunnelMouth  (ctx, W, H, vpX, vpY, G);
     // LED, logo Metro y carteles colgantes — sólo cuando NO estamos
     // entrando al túnel (approach=0): durante la aproximación final, el
     // arco oscuro debe llenar el cuadro y estos elementos quedarían
@@ -280,10 +288,12 @@ export class EstacionBase {
   }
 
   /** Render simplificado para usar como CONTENIDO dentro de la boca de
-   *  otra escena (típicamente el túnel previo). Pinta TODO el andén
-   *  excepto la propia boca de túnel y los overlays (LED/logo/carteles
-   *  /tutorial/checkpoint) — quedarían fuera de escala al verse a través
-   *  del arco y romperían la coherencia. */
+   *  otra escena (típicamente el túnel previo). Pinta el andén SIN:
+   *    · La propia boca de túnel (sería una boca dentro de otra boca).
+   *    · Los raíles/trenes/pasajeros — los raíles los pinta ENCIMA la
+   *      escena exterior, así son continuos a través de la boca.
+   *    · LED/logo/carteles/overlays — fuera de escala vistos por la boca.
+   *  Sólo paredes, bóveda, fluorescentes, suelo del andén, bancos. */
   _renderForPreview(ctx) {
     const W   = canvas.width;
     const H   = canvas.height;
@@ -303,10 +313,6 @@ export class EstacionBase {
     this._drawPlatformFront(ctx, W, H, vpX, vpY, G);
     this._drawBenches      (ctx, W, H, vpX, vpY, G);
     this._drawPlatformTactile(ctx, W, H, vpX, vpY, G);
-    this._drawTracks       (ctx, W, H, vpX, vpY, G);
-    this._drawSafetyLines  (ctx, W, H, vpX, vpY, G);
-    this._drawPassengers   (ctx, W, H);
-    this._drawTrains       (ctx, W, H, vpX, vpY, G);
   }
 
   // ── Geometría de las vías y andenes (trapecios en perspectiva) ──────────

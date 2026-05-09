@@ -15,7 +15,7 @@
 
 import { canvas, STATE }      from '../../mecanica/estado.js';
 import { w2sx, w2sy, perspective, getCameraVpY } from '../../mecanica/camara.js';
-import { drawTunel }          from './tunel.js';
+import { drawTunel, drawTunelTrackLayer } from './tunel.js';
 import { OBSTACULOS }         from '../../elementos/obstaculos.js';
 import { getTrenVariante }    from '../../elementos/tren_config.js';
 import { TRAIN_CFG }          from '../../editor/train_config.js';
@@ -145,42 +145,52 @@ export class TunelBase {
     }
   }
 
-  /** Render: túnel + obstáculos + trenes + boca de la próxima estación.
+  /** Render: túnel + boca de la próxima estación + raíles continuos + trenes.
    *
-   *  La boca de la próxima estación se dibuja al final con la siguiente
-   *  EstacionBase (`this._destinationScene`) RECORTADA dentro del contorno
-   *  del arco — así dentro de la boca se ve realmente el andén destino,
-   *  no un gradiente plano.
+   *  Orden deliberado:
+   *    1. Túnel SIN raíles (paredes, bóveda, luces, niebla).
+   *    2. BOCA con la siguiente EstacionBase RECORTADA dentro del arco
+   *       (también sin raíles — sólo paredes/techo/andén destino).
+   *    3. RAÍLES encima de TODO — atraviesan la boca sin recorte y se
+   *       perciben como un único trazado continuo entre el túnel actual
+   *       y la estación destino.
+   *    4. Trenes y obstáculos del túnel.
    *
    *  Durante los últimos `cfg.approachSeconds` segundos la boca CRECE
-   *  por perspectiva (la cámara "entra" en el andén); al cumplirse
-   *  `cfg.durationSeconds` la boca llena el cuadro y MetroBase pasa el
-   *  destination preview a ser la nueva escena activa, sin corte
-   *  perceptible para el jugador. */
+   *  por perspectiva. Como los raíles van encima, el jugador ve la
+   *  estación destino aproximarse mientras los raíles siguen tendidos
+   *  hasta sus pies. */
   render(ctx) {
-    // Pintamos el túnel SIN la boca interna — la dibujaremos nosotros con
-    // la siguiente estación recortada dentro.
+    // 1. Fondo del túnel SIN raíles
     drawTunel(ctx, {
       bgColor:               this.cfg.bgColor,
       lightColor:            this.cfg.lightColor,
       vanishingPointY:       this.cfg.vanishingPointY,
       archRadiusRatio:       this.cfg.archRadiusRatio,
       archCenterOffsetRatio: this.cfg.archCenterOffsetRatio,
-      endsAtStation:         false,   // boca la dibujamos manualmente
+      skipRails:             true,
     }, STATE.worldZ);
-    this._renderObstacles(ctx);
 
+    // 2. Boca con la EstacionBase destino recortada dentro
+    this._drawDestinationFront(ctx);
+
+    // 3. Raíles encima — continuos a través de la boca
+    drawTunelTrackLayer(ctx, {
+      vanishingPointY:       this.cfg.vanishingPointY,
+      archRadiusRatio:       this.cfg.archRadiusRatio,
+      archCenterOffsetRatio: this.cfg.archCenterOffsetRatio,
+    }, STATE.worldZ);
+
+    // 4. Obstáculos y trenes
+    this._renderObstacles(ctx);
     const variante   = getTrenVariante(this.cfg.trainLineVariant);
     const trainColor = variante.stripeColor ?? '#F39200';
     this._drawTrainsExtruded(ctx, { stripeColor: trainColor });
-
-    this._drawDestinationFront(ctx);
   }
 
   /** Render simplificado para usar como CONTENIDO dentro de la boca de
-   *  otra escena (otro túnel previo, o una estación previa). Sólo dibuja
-   *  paredes/anillos/raíles del túnel — sin trenes ni obstáculos cercanos
-   *  (que aparecerían descontextualizados al verse a través de la boca). */
+   *  otra escena. SIN raíles — los raíles los pinta encima la escena
+   *  exterior, así son continuos a través de la boca. */
   _renderForPreview(ctx) {
     drawTunel(ctx, {
       bgColor:               this.cfg.bgColor,
@@ -188,7 +198,7 @@ export class TunelBase {
       vanishingPointY:       this.cfg.vanishingPointY,
       archRadiusRatio:       this.cfg.archRadiusRatio,
       archCenterOffsetRatio: this.cfg.archCenterOffsetRatio,
-      endsAtStation:         false,
+      skipRails:             true,
     }, STATE.worldZ);
   }
 
