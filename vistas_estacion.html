@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Vistas Alternativas — EstacionBase Pigeon Metro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; }
+  body {
+    background: #0a0a0e;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #ddd;
+    overflow: hidden;
+  }
+  #grid { display: block; cursor: crosshair; }
+  #header {
+    position: fixed; top: 0; left: 0; right: 0;
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, 0.85);
+    border-bottom: 1px solid #FFCC00;
+    color: #FFCC00;
+    font: bold 12px monospace;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #header h1 { font-size: 12px; }
+  #header .help {
+    color: #888; font-weight: normal;
+  }
+  .label {
+    /* Etiquetas las pinta el canvas */
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>EstacionBase — Vistas Alternativas (#3 #5 #8 #9)</h1>
+  <div class="help">Cortes técnicos + perspectivas no soportadas por el motor 2D del juego</div>
+</div>
+
+<canvas id="grid"></canvas>
+
+<script type="module">
+import {
+  drawCorteTransversal,
+  drawCorteLongitudinal,
+  drawDesdeBocaTunel,
+  drawAndenOpuesto,
+} from './js/escenarios/metro_base/vistas_alternativas.js';
+
+const canvas = document.getElementById('grid');
+const ctx    = canvas.getContext('2d');
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  draw();
+}
+
+function drawCellLabel(x, y, w, label, sub) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.fillRect(x, y, Math.min(w, 380), 32);
+  ctx.fillStyle = '#FFCC00';
+  ctx.font = 'bold 13px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(label, x + 8, y + 5);
+  ctx.fillStyle = '#aaa';
+  ctx.font = '10px monospace';
+  ctx.fillText(sub, x + 8, y + 19);
+  ctx.restore();
+}
+
+function drawCellBorder(x, y, w, h) {
+  ctx.save();
+  ctx.strokeStyle = '#FFCC00';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.restore();
+}
+
+function draw() {
+  const W = canvas.width;
+  const H = canvas.height;
+  const headerH = 32;
+  const gridY = headerH;
+  const gridH = H - headerH;
+  const cellW = W / 2;
+  const cellH = gridH / 2;
+
+  // Limpia
+  ctx.fillStyle = '#0a0a0e';
+  ctx.fillRect(0, 0, W, H);
+
+  // Top-left: #9 Corte transversal
+  drawCorteTransversal(ctx, 0, gridY, cellW, cellH);
+  drawCellBorder      (   0, gridY, cellW, cellH);
+  drawCellLabel       (   8, gridY + 8, cellW - 16,
+                          '#9 CORTE TRANSVERSAL',
+                          'plano arquitectónico 2D — vista frontal a escala');
+
+  // Top-right: #8 Corte longitudinal
+  drawCorteLongitudinal(ctx, cellW, gridY, cellW, cellH);
+  drawCellBorder       (    cellW, gridY, cellW, cellH);
+  drawCellLabel        (    cellW + 8, gridY + 8, cellW - 16,
+                            '#8 CORTE LONGITUDINAL',
+                            'plano arquitectónico 2D — vista lateral del andén');
+
+  // Bottom-left: #3 Desde boca del túnel
+  drawDesdeBocaTunel(ctx, 0, gridY + cellH, cellW, cellH);
+  drawCellBorder    (   0, gridY + cellH, cellW, cellH);
+  drawCellLabel     (   8, gridY + cellH + 8, cellW - 16,
+                        '#3 DESDE LA BOCA DEL TÚNEL',
+                        'perspectiva inversa — la estación queda lejos enmarcada por el túnel');
+
+  // Bottom-right: #5 Andén opuesto
+  drawAndenOpuesto(ctx, cellW, gridY + cellH, cellW, cellH);
+  drawCellBorder  (    cellW, gridY + cellH, cellW, cellH);
+  drawCellLabel   (    cellW + 8, gridY + cellH + 8, cellW - 16,
+                       '#5 ANDÉN OPUESTO',
+                       'vista perpendicular — pared de fondo SIN puertas (ver doc)');
+}
+
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>
