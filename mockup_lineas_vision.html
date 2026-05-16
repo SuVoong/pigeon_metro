@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Líneas de visión EstacionBase — Pigeon Metro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0e;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #ddd;
+    display: flex;
+    min-height: 100vh;
+  }
+  #stage {
+    position: relative;
+    flex: 0 0 auto;
+    width: 1280px;
+    height: 720px;
+  }
+  #game, #annot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1280px;
+    height: 720px;
+  }
+  #annot { pointer-events: none; }
+  #legend {
+    flex: 1;
+    padding: 18px 22px;
+    overflow-y: auto;
+    max-height: 100vh;
+    background: #0d0d12;
+    border-left: 1px solid #222;
+    min-width: 340px;
+  }
+  #legend h1 {
+    color: #FFCC00;
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  #legend .subtitle {
+    color: #888;
+    font-size: 11px;
+    margin-bottom: 18px;
+    line-height: 1.5;
+  }
+  .group { margin-bottom: 14px; }
+  .group h2 {
+    font-size: 11px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #2a2a30;
+  }
+  .item {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 4px;
+    line-height: 1.35;
+    font-size: 11px;
+  }
+  .swatch {
+    flex: 0 0 22px;
+    width: 22px;
+    height: 3px;
+    margin-top: 7px;
+    border-radius: 2px;
+  }
+  .item .text b { color: #fff; }
+  .item .text span { color: #999; display: block; margin-top: 1px; font-size: 10px; }
+  table.vps {
+    width: 100%;
+    margin-top: 6px;
+    font-size: 10px;
+    border-collapse: collapse;
+  }
+  table.vps td {
+    padding: 3px 4px;
+    border-bottom: 1px solid #1f1f25;
+  }
+  table.vps td.name { color: #ccc; }
+  table.vps td.coord { color: #ffcc00; font-family: monospace; text-align: right; }
+  .delta {
+    color: #ff8060;
+    font-size: 10px;
+    margin-top: 6px;
+    padding: 6px;
+    background: #1a1010;
+    border-left: 2px solid #ff8060;
+  }
+  .delta.ok {
+    color: #a8e060;
+    background: #101a10;
+    border-left-color: #a8e060;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="game" width="1280" height="720"></canvas>
+  <canvas id="annot" width="1280" height="720"></canvas>
+</div>
+
+<aside id="legend">
+  <h1>Líneas de visión y perspectiva</h1>
+  <div class="subtitle">
+    Cada par de líneas (izq + der) debería converger al MISMO punto de fuga
+    para ser visualmente paralelas. Las marcas <b style="color:#FFCC00">✕</b>
+    indican los VPs reales calculados.
+  </div>
+
+  <div class="group">
+    <h2>Líneas dibujadas</h2>
+    <div class="item">
+      <div class="swatch" style="background:#ff5050"></div>
+      <div class="text"><b>Rieles externos UIC 60</b><span>tOBL/tOVL ↔ tOBR/tOVR</span></div>
+    </div>
+    <div class="item">
+      <div class="swatch" style="background:#50e0ff"></div>
+      <div class="text"><b>Borde del andén (lado vía)</b><span>pBL/pVL ↔ pBR/pVR</span></div>
+    </div>
+    <div class="item">
+      <div class="swatch" style="background:#ffd048"></div>
+      <div class="text"><b>Friso azul (parte alta)</b><span>línea superior del friso DELICIAS</span></div>
+    </div>
+    <div class="item">
+      <div class="swatch" style="background:#a8e060"></div>
+      <div class="text"><b>Línea del techo</b><span>donde arranca la bóveda sobre la pared</span></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h2>Puntos de convergencia (VP de cada par)</h2>
+    <table class="vps" id="vps-table"></table>
+    <div class="delta" id="paral-msg"></div>
+  </div>
+
+  <div class="group">
+    <h2>Notas</h2>
+    <div class="item">
+      <div class="text" style="font-size:10px; color:#aaa; line-height:1.5;">
+        En perspectiva 1-punto, todas las líneas longitudinales deberían
+        converger al mismo VP. Si dos líneas convergen a puntos distintos,
+        NO son paralelas en 3D — el ojo lo nota como "esa línea está torcida".
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h2>Cámara fija</h2>
+    <div class="item">
+      <div class="text" style="font-size:10px; color:#ccc;">
+        X = 0 %, Y = 50 % (vista frontal levemente bajada, igual a tu última captura)
+      </div>
+    </div>
+  </div>
+</aside>
+
+<script type="module">
+import { canvas, ctx, STATE, pigeon } from './js/mecanica/estado.js';
+import { EstacionBase } from './js/escenarios/metro_base/estacion_base.js';
+import {
+  camera, applyCamera, unapplyCamera,
+  CAMERA_RANGE_X, CAMERA_RANGE_Y_DOWN, initCamera,
+  getCameraVpY,
+} from './js/mecanica/camara.js';
+import { drawPigeon } from './js/personajes/paloma.js';
+
+initCamera();
+STATE.phase = '_MOCKUP_LINEAS_';
+
+const stationName = 'Delicias';
+const est = new EstacionBase({
+  stationName,
+  stationDirection: 'MONCLOA',
+  lineNumber: 3,
+  lineColor: '#F39200',
+});
+est.init(stationName);
+for (let i = 0; i < 60; i++) est.update(1);
+
+// Cámara fija X=0%, Y=50% (igual que tu captura)
+const CX_PCT = 0.0;
+const CY_PCT = 0.50;
+camera.offsetX = canvas.width  * CAMERA_RANGE_X      * CX_PCT;
+camera.offsetY = canvas.height * CAMERA_RANGE_Y_DOWN * CY_PCT;
+pigeon.x = camera.offsetX;
+pigeon.y = camera.offsetY;
+pigeon.vx = 0; pigeon.vy = 0; pigeon.tilt = 0; pigeon.invincible = 0;
+
+function tick() {
+  est.update(1);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  applyCamera(ctx);
+  est.render(ctx);
+  unapplyCamera(ctx);
+  drawPigeon(ctx);
+}
+function loop() {
+  tick();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ── Anotaciones: líneas perspectivas extendidas + VPs ────────────────────
+const annot = document.getElementById('annot');
+const a = annot.getContext('2d');
+
+const W = canvas.width;
+const H = canvas.height;
+const vpX = W / 2;
+const vpY = getCameraVpY(H * est.cfg.vanishingPointY);
+
+// Reusa _computeTrackGeom internals — calcular desde cfg
+const cfg = est.cfg;
+const oR  = cfg.trackOuterOffset    / 100;
+const oVR = cfg.trackOuterOffsetVP  / 100;
+const pR  = cfg.platformEdgeOffset  / 100;
+const pVR = cfg.platformEdgeOffsetVP / 100;
+
+const G = {
+  pBL:  vpX - W * pR,    pBR:  vpX + W * pR,
+  pVL:  vpX - W * pVR,   pVR:  vpX + W * pVR,
+  tOBL: vpX - W * oR,    tOBR: vpX + W * oR,
+  tOVL: vpX - W * oVR,   tOVR: vpX + W * oVR,
+};
+
+// Puntos extremos de cada línea (en píxeles de canvas)
+// La cámara aplica translate(-offsetX, 0) — pero el overlay no aplica
+// cámara. Para que las líneas coincidan con lo dibujado, NO restamos
+// offsetX cuando offsetX=0. Como CX_PCT=0, camera.offsetX=0, no afecta.
+const LINES = [
+  { name: 'Rail externo izq', color: '#ff5050', x1: G.tOBL, y1: H, x2: G.tOVL, y2: vpY + 8 },
+  { name: 'Rail externo der', color: '#ff5050', x1: G.tOBR, y1: H, x2: G.tOVR, y2: vpY + 8 },
+  { name: 'Borde andén izq',  color: '#50e0ff', x1: G.pBL,  y1: H, x2: G.pVL,  y2: vpY + 5 },
+  { name: 'Borde andén der',  color: '#50e0ff', x1: G.pBR,  y1: H, x2: G.pVR,  y2: vpY + 5 },
+  { name: 'Friso top izq',    color: '#ffd048', x1: 0,      y1: H * 0.32, x2: G.pVL, y2: vpY - 4 },
+  { name: 'Friso top der',    color: '#ffd048', x1: W,      y1: H * 0.32, x2: G.pVR, y2: vpY - 4 },
+  { name: 'Techo arranque iz',color: '#a8e060', x1: 0,      y1: H * 0.10, x2: G.pVL, y2: vpY - 30 },
+  { name: 'Techo arranque dr',color: '#a8e060', x1: W,      y1: H * 0.10, x2: G.pVR, y2: vpY - 30 },
+];
+
+// Calcula el punto de convergencia (intersección con y=vpY) por extrapolación
+function vpOf(line) {
+  const dx = line.x2 - line.x1;
+  const dy = line.y2 - line.y1;
+  if (Math.abs(dy) < 0.001) return { x: null, y: vpY };
+  const t = (vpY - line.y1) / dy;
+  return { x: line.x1 + t * dx, y: vpY };
+}
+
+function drawAnnotations() {
+  a.clearRect(0, 0, annot.width, annot.height);
+
+  // ── Dibujar líneas extendidas ───────────────────────────────────────────
+  for (const L of LINES) {
+    const vp = vpOf(L);
+    a.strokeStyle = L.color;
+    a.lineWidth = 1.4;
+    a.setLineDash([]);
+    // Línea principal (entre puntos definidos)
+    a.beginPath();
+    a.moveTo(L.x1, L.y1);
+    a.lineTo(L.x2, L.y2);
+    a.stroke();
+    // Extensión punteada hasta el VP
+    a.setLineDash([3, 3]);
+    a.globalAlpha = 0.5;
+    a.beginPath();
+    a.moveTo(L.x2, L.y2);
+    a.lineTo(vp.x, vp.y);
+    a.stroke();
+    a.globalAlpha = 1;
+    a.setLineDash([]);
+  }
+
+  // ── Marcar VPs con cruz ──────────────────────────────────────────────────
+  const pairs = [
+    { name: 'rieles',  iL: 0, iR: 1 },
+    { name: 'andenes', iL: 2, iR: 3 },
+    { name: 'friso',   iL: 4, iR: 5 },
+    { name: 'techo',   iL: 6, iR: 7 },
+  ];
+
+  const vpsTable = document.getElementById('vps-table');
+  vpsTable.innerHTML = '';
+  let maxDelta = 0;
+
+  for (const p of pairs) {
+    const L = LINES[p.iL];
+    const R = LINES[p.iR];
+    const vpL = vpOf(L);
+    const vpR = vpOf(R);
+    const vpMid = { x: (vpL.x + vpR.x) / 2, y: vpY };
+    const delta = Math.abs(vpL.x - vpR.x);
+    maxDelta = Math.max(maxDelta, delta);
+
+    // Cruz en VP medio del par
+    a.strokeStyle = L.color;
+    a.lineWidth = 2;
+    a.beginPath();
+    a.moveTo(vpMid.x - 8, vpMid.y); a.lineTo(vpMid.x + 8, vpMid.y);
+    a.moveTo(vpMid.x, vpMid.y - 8); a.lineTo(vpMid.x, vpMid.y + 8);
+    a.stroke();
+
+    // Etiqueta
+    a.font = 'bold 11px monospace';
+    a.fillStyle = L.color;
+    a.fillText(p.name, vpMid.x + 12, vpMid.y - 4);
+
+    // Fila en la tabla
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="name"><span style="display:inline-block; width:10px; height:3px; background:${L.color}; margin-right:6px; vertical-align:middle;"></span>${p.name}</td>
+      <td class="coord">(${Math.round(vpL.x)}, ${Math.round(vpY)})</td>
+      <td class="coord">(${Math.round(vpR.x)}, ${Math.round(vpY)})</td>
+      <td class="coord" style="color:${delta < 1 ? '#a8e060' : delta < 5 ? '#ffd048' : '#ff5050'}">Δ=${delta.toFixed(1)}</td>
+    `;
+    vpsTable.appendChild(tr);
+  }
+
+  // Cabecera tabla
+  const header = document.createElement('tr');
+  header.innerHTML = `
+    <td class="name" style="color:#888; font-size:9px">Par</td>
+    <td class="coord" style="color:#888; font-size:9px">VP izq</td>
+    <td class="coord" style="color:#888; font-size:9px">VP der</td>
+    <td class="coord" style="color:#888; font-size:9px">Δx</td>
+  `;
+  vpsTable.insertBefore(header, vpsTable.firstChild);
+
+  // Marcar VP central teórico
+  a.strokeStyle = '#ffffff';
+  a.lineWidth = 1;
+  a.setLineDash([2, 2]);
+  a.beginPath();
+  a.arc(vpX, vpY, 14, 0, Math.PI * 2);
+  a.stroke();
+  a.setLineDash([]);
+  a.font = '10px monospace';
+  a.fillStyle = '#fff';
+  a.fillText(`VP teórico (${vpX}, ${Math.round(vpY)})`, vpX + 18, vpY + 22);
+
+  // Mensaje de diagnóstico
+  const msg = document.getElementById('paral-msg');
+  if (maxDelta < 2) {
+    msg.className = 'delta ok';
+    msg.textContent = '✓ Todas las parejas convergen al mismo punto (Δ<2 px). Las líneas son paralelas.';
+  } else if (maxDelta < 6) {
+    msg.className = 'delta';
+    msg.style.borderLeftColor = '#ffd048';
+    msg.style.color = '#ffd048';
+    msg.style.background = '#1a1810';
+    msg.textContent = `⚠ Pequeña divergencia (Δ máx = ${maxDelta.toFixed(1)} px). Casi imperceptible visualmente.`;
+  } else {
+    msg.className = 'delta';
+    msg.textContent = `✗ Divergencia grande (Δ máx = ${maxDelta.toFixed(1)} px). Las líneas no son paralelas — visible a simple vista.`;
+  }
+}
+
+setTimeout(drawAnnotations, 100);
+</script>
+
+</body>
+</html>

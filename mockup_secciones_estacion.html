@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Secciones EstacionBase — Pigeon Metro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0e;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #ddd;
+    display: flex;
+    min-height: 100vh;
+  }
+  #stage {
+    position: relative;
+    flex: 0 0 auto;
+    width: 1280px;
+    height: 720px;
+  }
+  #game, #annot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1280px;
+    height: 720px;
+  }
+  #annot { pointer-events: none; }
+  #legend {
+    flex: 1;
+    padding: 18px 22px;
+    overflow-y: auto;
+    max-height: 100vh;
+    background: #0d0d12;
+    border-left: 1px solid #222;
+  }
+  #legend h1 {
+    color: #FFCC00;
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  #legend .subtitle {
+    color: #888;
+    font-size: 11px;
+    margin-bottom: 18px;
+  }
+  .group {
+    margin-bottom: 18px;
+  }
+  .group h2 {
+    font-size: 11px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #2a2a30;
+  }
+  .group[data-color="A"] h2 { color: #88c8ff; }
+  .group[data-color="B"] h2 { color: #ffd048; }
+  .group[data-color="C"] h2 { color: #a8e060; }
+  .group[data-color="D"] h2 { color: #ff8060; }
+  .item {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 6px;
+    line-height: 1.35;
+  }
+  .num {
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #1a1a22;
+    border: 1.5px solid;
+    color: #fff;
+    font-weight: bold;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+  .group[data-color="A"] .num { border-color: #88c8ff; }
+  .group[data-color="B"] .num { border-color: #ffd048; }
+  .group[data-color="C"] .num { border-color: #a8e060; }
+  .group[data-color="D"] .num { border-color: #ff8060; }
+  .item .text { font-size: 12px; }
+  .item .text b { color: #fff; }
+  .item .text span { color: #999; font-size: 11px; display: block; margin-top: 1px; }
+  .footer {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid #2a2a30;
+    font-size: 10px;
+    color: #666;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="game" width="1280" height="720"></canvas>
+  <canvas id="annot" width="1280" height="720"></canvas>
+</div>
+
+<aside id="legend">
+  <h1>EstacionBase — Secciones</h1>
+  <div class="subtitle">Plano funcional de Pueblo Nuevo (L5) · 16 elementos</div>
+
+  <div class="group" data-color="A">
+    <h2>A · Estructura superior</h2>
+    <div class="item"><div class="num">1</div><div class="text"><b>Techo abovedado</b><span>bóveda de hormigón sobre la vía</span></div></div>
+    <div class="item"><div class="num">2</div><div class="text"><b>Catenaria rígida</b><span>perfil aluminio doble (uno por vía)</span></div></div>
+    <div class="item"><div class="num">3</div><div class="text"><b>Colgadores al techo</b><span>pernos cortos que fijan la catenaria</span></div></div>
+    <div class="item"><div class="num">4</div><div class="text"><b>Pantalla LED de sentido</b><span>"SENTIDO MONCLOA"</span></div></div>
+    <div class="item"><div class="num">5</div><div class="text"><b>Boca del túnel</b><span>arco oscuro · transición a Túnel</span></div></div>
+  </div>
+
+  <div class="group" data-color="B">
+    <h2>B · Pared y señalética</h2>
+    <div class="item"><div class="num">6</div><div class="text"><b>Revestimiento amarillo</b><span>placas cerámicas (plano #13)</span></div></div>
+    <div class="item"><div class="num">7</div><div class="text"><b>Friso azul "DELICIAS"</b><span>banda con nombre de la estación (plano #12)</span></div></div>
+    <div class="item"><div class="num">8</div><div class="text"><b>Cartel colgante destino</b><span>"→ MONCLOA" · cuelga del techo</span></div></div>
+  </div>
+
+  <div class="group" data-color="C">
+    <h2>C · Andén (~90 cm sobre vías)</h2>
+    <div class="item"><div class="num">9</div><div class="text"><b>Suelo del andén</b><span>hormigón claro · zona de espera</span></div></div>
+    <div class="item"><div class="num">10</div><div class="text"><b>Banda táctil amarilla</b><span>línea de seguridad pintada</span></div></div>
+    <div class="item"><div class="num">11</div><div class="text"><b>Cara vertical del bordillo</b><span>frente del andén · marca el desnivel</span></div></div>
+  </div>
+
+  <div class="group" data-color="D">
+    <h2>D · Foso / Vías (subnivel inferior)</h2>
+    <div class="item"><div class="num">12</div><div class="text"><b>Balasto</b><span>suelo gris medio del foso</span></div></div>
+    <div class="item"><div class="num">13</div><div class="text"><b>Rieles UIC 60</b><span>4 carriles · 2 por vía</span></div></div>
+    <div class="item"><div class="num">14</div><div class="text"><b>Pads + clips Pandrol</b><span>anclajes de hormigón bajo cada riel</span></div></div>
+    <div class="item"><div class="num">15</div><div class="text"><b>Canal de drenaje central</b><span>rejilla metálica entre las dos vías</span></div></div>
+    <div class="item"><div class="num">16</div><div class="text"><b>Tren estacionado</b><span>en la vía del andén izquierdo</span></div></div>
+  </div>
+
+  <div class="footer">
+    Render generado en vivo desde EstacionBase + drawTunelTracks.<br>
+    Cámara fija X=7%, Y=50% (igual a la captura de referencia).<br>
+    Estación: <b id="stationName">Delicias</b> · Línea 3 · L. naranja
+  </div>
+</aside>
+
+<script type="module">
+import { canvas, ctx, STATE, pigeon } from './js/mecanica/estado.js';
+import { EstacionBase } from './js/escenarios/metro_base/estacion_base.js';
+import {
+  camera, applyCamera, unapplyCamera,
+  CAMERA_RANGE_X, CAMERA_RANGE_Y_DOWN, initCamera,
+} from './js/mecanica/camara.js';
+import { drawPigeon } from './js/personajes/paloma.js';
+
+// ── Bootstrap idéntico al inspector (mismo render dinámico) ─────────────
+initCamera();
+STATE.phase = '_MOCKUP_SECCIONES_';
+
+const stationName = 'Delicias';
+const est = new EstacionBase({
+  stationName,
+  stationDirection: 'MONCLOA',
+  lineNumber: 3,
+  lineColor: '#F39200',
+});
+est.init(stationName);
+for (let i = 0; i < 60; i++) est.update(1);
+document.getElementById('stationName').textContent = stationName;
+
+// Cámara fija = misma de la captura del usuario (X=7 %, Y=50 %)
+const CX_PCT = 0.07;
+const CY_PCT = 0.50;
+camera.offsetX = canvas.width  * CAMERA_RANGE_X      * CX_PCT;
+camera.offsetY = canvas.height * CAMERA_RANGE_Y_DOWN * CY_PCT;
+pigeon.x = camera.offsetX;
+pigeon.y = camera.offsetY;
+pigeon.vx = 0; pigeon.vy = 0; pigeon.tilt = 0; pigeon.invincible = 0;
+
+// ── Loop de render (sólo la estación; las anotaciones se pintan UNA vez) ─
+function tick() {
+  est.update(1);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  applyCamera(ctx);
+  est.render(ctx);
+  unapplyCamera(ctx);
+  drawPigeon(ctx);
+}
+function loop() {
+  tick();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ── Overlay de anotaciones (canvas estático) ────────────────────────────
+const annot = document.getElementById('annot');
+const a = annot.getContext('2d');
+
+// Paleta por grupo
+const COLORS = {
+  A: '#88c8ff',   // estructura superior
+  B: '#ffd048',   // pared / señalética
+  C: '#a8e060',   // andén
+  D: '#ff8060',   // foso / vías
+};
+
+// Cada item: [n, grupo, x_punta, y_punta, x_etiqueta, y_etiqueta, label]
+// Coords en píxeles del canvas 1280×720 (idéntico al render).
+const ITEMS = [
+  // GRUPO A — estructura superior (etiquetas a la IZQUIERDA arriba)
+  [1,  'A',  450,  80,   60,  60,  'Techo abovedado'],
+  [2,  'A',  470, 160,   60, 100,  'Catenaria rígida'],
+  [3,  'A',  520,  55,   60, 140,  'Colgadores'],
+  [4,  'A',  640,  18,  500,  18,  'LED · SENTIDO MONCLOA'],
+  [5,  'A',  640, 250,  840, 110,  'Boca del túnel'],
+
+  // GRUPO B — pared y señalética (etiquetas a los lados)
+  [6,  'B',  170, 220,   60, 220,  'Pared amarilla'],
+  [7,  'B',  280, 320,   60, 290,  'Friso azul · DELICIAS'],
+  [8,  'B', 1010, 245, 1140, 215,  'Cartel destino'],
+
+  // GRUPO C — andén (etiquetas debajo a la izquierda)
+  [9,  'C',  200, 520,   60, 470,  'Suelo del andén'],
+  [10, 'C',  330, 470,   60, 525,  'Banda táctil amarilla'],
+  [11, 'C',  390, 540,   60, 580,  'Cara del bordillo (~90 cm)'],
+
+  // GRUPO D — foso / vías (etiquetas a la derecha abajo)
+  [12, 'D',  720, 600, 1140, 410,  'Balasto (gris medio)'],
+  [13, 'D',  810, 540, 1140, 460,  'Rieles UIC 60'],
+  [14, 'D',  720, 660, 1140, 510,  'Pads + clips Pandrol'],
+  [15, 'D',  640, 680, 1140, 560,  'Canal de drenaje central'],
+  [16, 'D',  340, 600, 1140, 610,  'Tren estacionado'],
+];
+
+function drawAnnotations() {
+  a.clearRect(0, 0, annot.width, annot.height);
+  a.font = '600 12px "Segoe UI", system-ui, sans-serif';
+  a.textBaseline = 'middle';
+
+  for (const [n, g, px, py, lx, ly, label] of ITEMS) {
+    const color = COLORS[g];
+
+    // Línea de la etiqueta al punto (con quiebro horizontal suave)
+    a.strokeStyle = color;
+    a.lineWidth = 1.2;
+    a.setLineDash([4, 3]);
+    a.beginPath();
+    a.moveTo(lx + (lx < px ? 18 : -6), ly);
+    // Punto intermedio para quebrar la línea con un ángulo
+    const midX = (lx + px) / 2;
+    a.lineTo(midX, ly);
+    a.lineTo(px, py);
+    a.stroke();
+    a.setLineDash([]);
+
+    // Punto en el target
+    a.fillStyle = color;
+    a.beginPath();
+    a.arc(px, py, 3.5, 0, Math.PI * 2);
+    a.fill();
+
+    // Etiqueta: círculo numerado + texto
+    const labelW = a.measureText(label).width + 36;
+    const labelLeft = lx < px ? lx - 4 : lx - labelW + 4;
+    a.fillStyle = 'rgba(10, 10, 14, 0.85)';
+    a.fillRect(labelLeft, ly - 11, labelW, 22);
+    a.strokeStyle = color;
+    a.lineWidth = 1;
+    a.strokeRect(labelLeft + 0.5, ly - 10.5, labelW - 1, 21);
+
+    // Círculo del número
+    const numCx = labelLeft + 11;
+    a.fillStyle = color;
+    a.beginPath();
+    a.arc(numCx, ly, 8, 0, Math.PI * 2);
+    a.fill();
+    a.fillStyle = '#0a0a0e';
+    a.font = 'bold 10px "Segoe UI", system-ui, sans-serif';
+    a.textAlign = 'center';
+    a.fillText(String(n), numCx, ly + 0.5);
+
+    // Texto de la etiqueta
+    a.fillStyle = '#fff';
+    a.font = '600 12px "Segoe UI", system-ui, sans-serif';
+    a.textAlign = 'left';
+    a.fillText(label, labelLeft + 24, ly + 0.5);
+  }
+}
+
+// Pinta las anotaciones una vez (no dependen del tick de la estación)
+// Se llama tras un pequeño delay para asegurar que el render base ya está.
+setTimeout(drawAnnotations, 100);
+</script>
+
+</body>
+</html>

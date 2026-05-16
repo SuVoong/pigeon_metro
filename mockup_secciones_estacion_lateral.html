@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Secciones EstacionBase · Vista lateral — Pigeon Metro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0e;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #ddd;
+    display: flex;
+    min-height: 100vh;
+  }
+  #stage {
+    position: relative;
+    flex: 0 0 auto;
+    width: 1280px;
+    height: 720px;
+  }
+  #game, #annot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1280px;
+    height: 720px;
+  }
+  #annot { pointer-events: none; }
+  #legend {
+    flex: 1;
+    padding: 18px 22px;
+    overflow-y: auto;
+    max-height: 100vh;
+    background: #0d0d12;
+    border-left: 1px solid #222;
+  }
+  #legend h1 {
+    color: #FFCC00;
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  #legend .subtitle {
+    color: #888;
+    font-size: 11px;
+    margin-bottom: 18px;
+  }
+  .group {
+    margin-bottom: 18px;
+  }
+  .group h2 {
+    font-size: 11px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #2a2a30;
+  }
+  .group[data-color="A"] h2 { color: #88c8ff; }
+  .group[data-color="B"] h2 { color: #ffd048; }
+  .group[data-color="C"] h2 { color: #a8e060; }
+  .group[data-color="D"] h2 { color: #ff8060; }
+  .item {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 6px;
+    line-height: 1.35;
+  }
+  .item.hidden { opacity: 0.35; }
+  .num {
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #1a1a22;
+    border: 1.5px solid;
+    color: #fff;
+    font-weight: bold;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+  .item.hidden .num { background: #15151b; border-style: dashed; }
+  .group[data-color="A"] .num { border-color: #88c8ff; }
+  .group[data-color="B"] .num { border-color: #ffd048; }
+  .group[data-color="C"] .num { border-color: #a8e060; }
+  .group[data-color="D"] .num { border-color: #ff8060; }
+  .item .text { font-size: 12px; }
+  .item .text b { color: #fff; }
+  .item.hidden .text b { color: #888; }
+  .item .text span { color: #999; font-size: 11px; display: block; margin-top: 1px; }
+  .item .tag-off { color: #666; font-size: 10px; font-style: italic; }
+  .footer {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid #2a2a30;
+    font-size: 10px;
+    color: #666;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="game" width="1280" height="720"></canvas>
+  <canvas id="annot" width="1280" height="720"></canvas>
+</div>
+
+<aside id="legend">
+  <h1>EstacionBase — Vista lateral</h1>
+  <div class="subtitle">Cámara X=75 %, Y=96 % · paloma pegada al andén derecho mirando al rail</div>
+
+  <div class="group" data-color="A">
+    <h2>A · Estructura superior</h2>
+    <div class="item"><div class="num">1</div><div class="text"><b>Techo abovedado</b><span>bóveda de hormigón</span></div></div>
+    <div class="item"><div class="num">2</div><div class="text"><b>Catenaria rígida</b><span>perfil aluminio inclinado al VP</span></div></div>
+    <div class="item"><div class="num">3</div><div class="text"><b>LED · SENTIDO MONCLOA</b><span>pantalla colgante de sentido</span></div></div>
+    <div class="item"><div class="num">4</div><div class="text"><b>Boca del túnel</b><span>al fondo de la vía · ahora más pequeña</span></div></div>
+  </div>
+
+  <div class="group" data-color="B">
+    <h2>B · Pared y señalética</h2>
+    <div class="item"><div class="num">5</div><div class="text"><b>Revestimiento amarillo</b><span>placas cerámicas (domina la derecha)</span></div></div>
+    <div class="item"><div class="num">6</div><div class="text"><b>Friso azul "DELICIAS"</b><span>banda en perspectiva pronunciada</span></div></div>
+    <div class="item"><div class="num">7</div><div class="text"><b>Cartel colgante "→ MONCLOA"</b><span>destino del andén derecho</span></div></div>
+    <div class="item"><div class="num">8</div><div class="text"><b>Cartel destino izq "Delicias"</b><span>cuelga del techo · andén 2</span></div></div>
+  </div>
+
+  <div class="group" data-color="C">
+    <h2>C · Andén derecho (cerca cámara)</h2>
+    <div class="item"><div class="num">9</div><div class="text"><b>Suelo del andén derecho</b><span>casi tapado por perspectiva baja</span></div></div>
+    <div class="item"><div class="num">10</div><div class="text"><b>Cara del bordillo</b><span>banda oscura paralela al rail</span></div></div>
+    <div class="item hidden"><div class="num">11</div><div class="text"><b>Banda táctil amarilla</b><span class="tag-off">no visible · pegada al borde, oculta por ángulo</span></div></div>
+  </div>
+
+  <div class="group" data-color="D">
+    <h2>D · Foso / Vías</h2>
+    <div class="item"><div class="num">12</div><div class="text"><b>Balasto</b><span>suelo gris medio del foso</span></div></div>
+    <div class="item"><div class="num">13</div><div class="text"><b>Rieles UIC 60</b><span>brillantes · convergiendo al VP</span></div></div>
+    <div class="item hidden"><div class="num">14</div><div class="text"><b>Pads / clips Pandrol</b><span class="tag-off">no visible · ocultos por la cara del bordillo</span></div></div>
+    <div class="item hidden"><div class="num">15</div><div class="text"><b>Canal de drenaje central</b><span class="tag-off">no visible · al fondo de la perspectiva</span></div></div>
+    <div class="item hidden"><div class="num">16</div><div class="text"><b>Tren estacionado</b><span class="tag-off">no visible · queda detrás del andén derecho</span></div></div>
+  </div>
+
+  <div class="footer">
+    Render generado en vivo desde EstacionBase + drawTunelTracks.<br>
+    Cámara fija a X=75 %, Y=96 % — la paloma está casi pegada al andén derecho con la mirada baja, vista típica "rasante" sobre el rail.<br>
+    Estación: <b id="stationName">Delicias</b> · Línea 3 · L. naranja
+  </div>
+</aside>
+
+<script type="module">
+import { canvas, ctx, STATE, pigeon } from './js/mecanica/estado.js';
+import { EstacionBase } from './js/escenarios/metro_base/estacion_base.js';
+import {
+  camera, applyCamera, unapplyCamera,
+  CAMERA_RANGE_X, CAMERA_RANGE_Y_DOWN, initCamera,
+} from './js/mecanica/camara.js';
+import { drawPigeon } from './js/personajes/paloma.js';
+
+initCamera();
+STATE.phase = '_MOCKUP_SECCIONES_LATERAL_';
+
+const stationName = 'Delicias';
+const est = new EstacionBase({
+  stationName,
+  stationDirection: 'MONCLOA',
+  lineNumber: 3,
+  lineColor: '#F39200',
+});
+est.init(stationName);
+for (let i = 0; i < 60; i++) est.update(1);
+document.getElementById('stationName').textContent = stationName;
+
+// Cámara fija = exactamente la captura del usuario (X=75 %, Y=96 %)
+const CX_PCT = 0.75;
+const CY_PCT = 0.96;
+camera.offsetX = canvas.width  * CAMERA_RANGE_X      * CX_PCT;
+camera.offsetY = canvas.height * CAMERA_RANGE_Y_DOWN * CY_PCT;
+pigeon.x = camera.offsetX;
+pigeon.y = camera.offsetY;
+pigeon.vx = 0; pigeon.vy = 0; pigeon.tilt = 0; pigeon.invincible = 0;
+
+function tick() {
+  est.update(1);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  applyCamera(ctx);
+  est.render(ctx);
+  unapplyCamera(ctx);
+  drawPigeon(ctx);
+}
+function loop() {
+  tick();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ── Overlay de anotaciones ──────────────────────────────────────────────
+const annot = document.getElementById('annot');
+const a = annot.getContext('2d');
+
+const COLORS = {
+  A: '#88c8ff',
+  B: '#ffd048',
+  C: '#a8e060',
+  D: '#ff8060',
+};
+
+// Coordenadas en pantalla (canvas 1280×720) — estimadas mirando la captura
+// del usuario. Punto de fuga aparente cerca de (304, 715).
+//  [n, grupo, x_punta, y_punta, x_etiqueta, y_etiqueta, label]
+const ITEMS = [
+  // GRUPO A — estructura superior
+  [1, 'A',  250,  70,    60,  50,  'Techo abovedado'],
+  [2, 'A',  340, 200,    60,  90,  'Catenaria rígida'],
+  [3, 'A',  185,   8,   400,  20,  'LED · SENTIDO MONCLOA'],
+  [4, 'A',  290, 605,    60, 600,  'Boca del túnel'],
+
+  // GRUPO B — pared y señalética
+  [5, 'B', 1080, 300,  1190, 200,  'Pared amarilla'],
+  [6, 'B',  920, 360,  1190, 360,  'Friso azul · DELICIAS'],
+  [7, 'B',  670, 410,   430, 470,  'Cartel · → MONCLOA'],
+  [8, 'B',  920,  35,   720,  70,  'Cartel destino "Delicias"'],
+
+  // GRUPO C — andén derecho
+  [9, 'C', 1180, 680,  1190, 540,  'Suelo del andén derecho'],
+  [10,'C',  580, 680,    60, 660,  'Cara del bordillo'],
+
+  // GRUPO D — foso / vías
+  [12,'D',  450, 690,    60, 700,  'Balasto (gris medio)'],
+  [13,'D',  340, 670,   720, 660,  'Rieles UIC 60'],
+];
+
+function drawAnnotations() {
+  a.clearRect(0, 0, annot.width, annot.height);
+  a.font = '600 12px "Segoe UI", system-ui, sans-serif';
+  a.textBaseline = 'middle';
+
+  for (const [n, g, px, py, lx, ly, label] of ITEMS) {
+    const color = COLORS[g];
+
+    // Línea con quiebro
+    a.strokeStyle = color;
+    a.lineWidth = 1.2;
+    a.setLineDash([4, 3]);
+    a.beginPath();
+    a.moveTo(lx + (lx < px ? 18 : -6), ly);
+    const midX = (lx + px) / 2;
+    a.lineTo(midX, ly);
+    a.lineTo(px, py);
+    a.stroke();
+    a.setLineDash([]);
+
+    // Punto en el target
+    a.fillStyle = color;
+    a.beginPath();
+    a.arc(px, py, 3.5, 0, Math.PI * 2);
+    a.fill();
+
+    // Caja de la etiqueta
+    const labelW = a.measureText(label).width + 36;
+    const labelLeft = lx < px ? lx - 4 : lx - labelW + 4;
+    a.fillStyle = 'rgba(10, 10, 14, 0.88)';
+    a.fillRect(labelLeft, ly - 11, labelW, 22);
+    a.strokeStyle = color;
+    a.lineWidth = 1;
+    a.strokeRect(labelLeft + 0.5, ly - 10.5, labelW - 1, 21);
+
+    // Número
+    const numCx = labelLeft + 11;
+    a.fillStyle = color;
+    a.beginPath();
+    a.arc(numCx, ly, 8, 0, Math.PI * 2);
+    a.fill();
+    a.fillStyle = '#0a0a0e';
+    a.font = 'bold 10px "Segoe UI", system-ui, sans-serif';
+    a.textAlign = 'center';
+    a.fillText(String(n), numCx, ly + 0.5);
+
+    // Texto
+    a.fillStyle = '#fff';
+    a.font = '600 12px "Segoe UI", system-ui, sans-serif';
+    a.textAlign = 'left';
+    a.fillText(label, labelLeft + 24, ly + 0.5);
+  }
+}
+
+setTimeout(drawAnnotations, 100);
+</script>
+
+</body>
+</html>

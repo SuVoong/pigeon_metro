@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Comparativa juego vs foto real — Pigeon Metro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0e;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #ddd;
+    display: flex;
+    min-height: 100vh;
+  }
+  #stage {
+    position: relative;
+    flex: 0 0 auto;
+    width: 1280px;
+    height: 720px;
+  }
+  #game, #annot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1280px;
+    height: 720px;
+  }
+  #annot { pointer-events: none; }
+  #legend {
+    flex: 1;
+    padding: 18px 22px;
+    overflow-y: auto;
+    max-height: 100vh;
+    background: #0d0d12;
+    border-left: 1px solid #222;
+    min-width: 380px;
+  }
+  #legend h1 {
+    color: #FFCC00;
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  #legend .subtitle {
+    color: #888;
+    font-size: 11px;
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+  .diff {
+    margin-bottom: 14px;
+    padding: 9px 11px;
+    background: #14141a;
+    border-left: 3px solid;
+    border-radius: 0 4px 4px 0;
+  }
+  .diff.major { border-color: #ff5050; }
+  .diff.medium { border-color: #ffd048; }
+  .diff.minor { border-color: #a8e060; }
+  .diff h3 {
+    font-size: 12px;
+    color: #fff;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .diff h3 .num {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    font-size: 10px; font-weight: bold;
+    background: #0a0a0e;
+    border: 1.5px solid;
+  }
+  .diff.major h3 .num { border-color: #ff5050; color: #ff5050; }
+  .diff.medium h3 .num { border-color: #ffd048; color: #ffd048; }
+  .diff.minor h3 .num { border-color: #a8e060; color: #a8e060; }
+  .diff .row {
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+    line-height: 1.4;
+    margin-top: 3px;
+  }
+  .diff .lbl {
+    flex: 0 0 70px;
+    color: #888;
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .diff .val { color: #ddd; }
+  .summary {
+    margin-bottom: 18px;
+    padding: 10px;
+    background: #14141a;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .summary .count { color: #ffcc00; font-weight: bold; }
+  .legend-key {
+    display: flex;
+    gap: 14px;
+    font-size: 10px;
+    margin-bottom: 14px;
+    color: #aaa;
+  }
+  .legend-key .k {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .legend-key .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="game" width="1280" height="720"></canvas>
+  <canvas id="annot" width="1280" height="720"></canvas>
+</div>
+
+<aside id="legend">
+  <h1>Diferencias con la foto real</h1>
+  <div class="subtitle">
+    El render se muestra a la izquierda con números sobre cada elemento que
+    difiere del referente fotográfico. Lista a la derecha por severidad.
+  </div>
+
+  <div class="summary">
+    <span class="count">10</span> diferencias detectadas ·
+    <span style="color:#ff5050">3 mayores</span> ·
+    <span style="color:#ffd048">4 medias</span> ·
+    <span style="color:#a8e060">3 menores</span>
+  </div>
+
+  <div class="legend-key">
+    <div class="k"><span class="dot" style="background:#ff5050"></span>mayor</div>
+    <div class="k"><span class="dot" style="background:#ffd048"></span>medio</div>
+    <div class="k"><span class="dot" style="background:#a8e060"></span>menor</div>
+  </div>
+
+  <div class="diff major">
+    <h3><span class="num">1</span> Parte alta de la pared</h3>
+    <div class="row"><div class="lbl">Juego</div><div class="val">amarillo en TODA la altura de la pared</div></div>
+    <div class="row"><div class="lbl">Foto</div><div class="val">blanco crema arriba, amarillo SOLO en la mitad inferior (paneles de zócalo)</div></div>
+  </div>
+
+  <div class="diff major">
+    <h3><span class="num">2</span> Friso azul "Nombre Estación"</h3>
+    <div class="row"><div class="lbl">Juego</div><div class="val">banda continua con el texto repetido en perspectiva (~6 ocurrencias)</div></div>
+    <div class="row"><div class="lbl">Foto</div><div class="val">cartel rectangular único por andén, con marco blanco alrededor</div></div>
+  </div>
+
+  <div class="diff major">
+    <h3><span class="num">3</span> Boca del túnel</h3>
+    <div class="row"><div class="lbl">Juego</div><div class="val">interior con gradiente gris claro (intento de "bóveda interior")</div></div>
+    <div class="row"><div class="lbl">Foto</div><div class="val">agujero NEGRO puro — no se ve nada dentro</div></div>
+  </div>
+
+  <div class="diff medium">
+    <h3><span class="num">4</span> Iluminación del techo</h3>
+    <div class="row"><div class="lbl">Juego</div><div class="val">catenaria rígida + perfiles fluorescentes inclinados</div></div>
+    <div class="row"><div class="lbl">Foto</div><div class="val">luminarias colgantes circulares ("globos") a intervalos regulares</div></div>
+  </div>
+
+  <div class="diff medium">
+    <h3><span class="num">5</span> Carteles colgantes destino</h3>
+    <div class="row"><div class="lbl">Juego</div><div class="val">presentes (cartel oscuro "→ EL CASAR" / "→ MONCLOA")</div></div>
+    <div class="row"><div class="lbl">Foto</div><div class="val">no visibles en esta toma (pueden estar fuera del cuadro)</div></div>
+  </div>
+
+  <div class="diff medium">
+    <h3><span class="num">6</span> LED de sentido</h3>
+    <div class="row"><div class="lbl">Juego</div><div class="val">presente sobre la boca del túnel ("SENTIDO MONCLOA")</div></div>
+    <div class="row"><div class="lbl">Foto</div><div class="val">no visible</div></div>
+  </div>
+
+  <div class="diff medium">
+    <h3><span class="num">7</span> Cajas rojas (emergencia)</h3>
+    <div class="row"><div class="lbl">Juego</div><div class="val">2 cajas rojas sobre la pared amarilla</div></div>
+    <div class="row"><div class="lbl">Foto</div><div class="val">no visibles</div></div>
+  </div>
+
+  <div class="diff minor">
+    <h3><span class="num">8</span> Tono del andén</h3>
+    <div class="row"><div class="lbl">Juego</div><div class="val">hormigón gris claro frío (#C8C2B7)</div></div>
+    <div class="row"><div class="lbl">Foto</div><div class="val">beige cálido más amarillento (tono "piedra natural")</div></div>
+  </div>
+
+  <div class="diff minor">
+    <h3><span class="num">9</span> Bóveda</h3>
+    <div class="row"><div class="lbl">Juego</div><div class="val">gris hormigón frío (#9C9890)</div></div>
+    <div class="row"><div class="lbl">Foto</div><div class="val">blanco crema cálido (luz cálida sobre el hormigón blanco)</div></div>
+  </div>
+
+  <div class="diff minor">
+    <h3><span class="num">10</span> Cara del bordillo</h3>
+    <div class="row"><div class="lbl">Juego</div><div class="val">gris hormigón medio (#7A746B)</div></div>
+    <div class="row"><div class="lbl">Foto</div><div class="val">tono beige más cálido, casi mostaza claro</div></div>
+  </div>
+
+  <div class="summary" style="margin-top:18px">
+    <b style="color:#a8e060">Iguales o muy similares:</b><br>
+    · Banda táctil amarilla pegada al borde ✓<br>
+    · Andén elevado con cara del bordillo ✓<br>
+    · Vías centrales con rieles brillantes ✓<br>
+    · Disposición general 2 andenes + foso central ✓<br>
+    · Perspectiva 1-punto con VP centrado ✓
+  </div>
+</aside>
+
+<script type="module">
+import { canvas, ctx, STATE, pigeon } from './js/mecanica/estado.js';
+import { EstacionBase } from './js/escenarios/metro_base/estacion_base.js';
+import {
+  camera, applyCamera, unapplyCamera,
+  CAMERA_RANGE_X, CAMERA_RANGE_Y_DOWN, initCamera,
+} from './js/mecanica/camara.js';
+import { drawPigeon } from './js/personajes/paloma.js';
+
+initCamera();
+STATE.phase = '_MOCKUP_COMPARATIVA_';
+
+const stationName = 'Delicias';
+const est = new EstacionBase({
+  stationName,
+  stationDirection: 'MONCLOA',
+  lineNumber: 3,
+  lineColor: '#F39200',
+});
+est.init(stationName);
+for (let i = 0; i < 60; i++) est.update(1);
+
+// Misma cámara que la captura referida (X=0, Y=50)
+const CX_PCT = 0.0;
+const CY_PCT = 0.50;
+camera.offsetX = canvas.width  * CAMERA_RANGE_X      * CX_PCT;
+camera.offsetY = canvas.height * CAMERA_RANGE_Y_DOWN * CY_PCT;
+pigeon.x = camera.offsetX;
+pigeon.y = camera.offsetY;
+pigeon.vx = 0; pigeon.vy = 0; pigeon.tilt = 0; pigeon.invincible = 0;
+
+function tick() {
+  est.update(1);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  applyCamera(ctx);
+  est.render(ctx);
+  unapplyCamera(ctx);
+  drawPigeon(ctx);
+}
+function loop() {
+  tick();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ── Anotaciones sobre el render ──────────────────────────────────────────
+const annot = document.getElementById('annot');
+const a = annot.getContext('2d');
+
+// Colores por severidad
+const COL = {
+  major: '#ff5050',
+  medium: '#ffd048',
+  minor: '#a8e060',
+};
+
+// [n, severidad, x_punta, y_punta, x_etiqueta, y_etiqueta]
+// Coords aproximadas para canvas 1280×720 con cámara X=0, Y=50%
+const ITEMS = [
+  [1,  'major',  220, 110,    60,  90,   'Pared parte alta'],
+  [2,  'major',  340, 280,    60, 250,   'Friso repetido'],
+  [3,  'major',  640, 280,   850, 270,   'Boca con gradient'],
+  [4,  'medium', 380,  80,    60, 150,   'Iluminación'],
+  [5,  'medium', 1090, 215, 1200, 165,   'Cartel destino'],
+  [6,  'medium', 640,   8,   880,  15,   'LED SENTIDO'],
+  [7,  'medium', 1020, 130, 1200, 100,   'Caja emergencia'],
+  [8,  'minor',  220, 540,    60, 480,   'Suelo andén'],
+  [9,  'minor',  600,  20,   880,  60,   'Bóveda'],
+  [10, 'minor',  300, 510,    60, 580,   'Cara bordillo'],
+];
+
+function drawAnnotations() {
+  a.clearRect(0, 0, annot.width, annot.height);
+  a.font = '600 12px "Segoe UI", system-ui, sans-serif';
+  a.textBaseline = 'middle';
+
+  for (const [n, sev, px, py, lx, ly, label] of ITEMS) {
+    const color = COL[sev];
+
+    // Línea con quiebro
+    a.strokeStyle = color;
+    a.lineWidth = 1.4;
+    a.setLineDash([4, 3]);
+    a.beginPath();
+    a.moveTo(lx + (lx < px ? 18 : -6), ly);
+    const midX = (lx + px) / 2;
+    a.lineTo(midX, ly);
+    a.lineTo(px, py);
+    a.stroke();
+    a.setLineDash([]);
+
+    // Punto en target
+    a.fillStyle = color;
+    a.beginPath();
+    a.arc(px, py, 4.5, 0, Math.PI * 2);
+    a.fill();
+    a.strokeStyle = '#0a0a0e';
+    a.lineWidth = 1;
+    a.stroke();
+
+    // Caja etiqueta
+    const labelW = a.measureText(label).width + 36;
+    const labelLeft = lx < px ? lx - 4 : lx - labelW + 4;
+    a.fillStyle = 'rgba(10, 10, 14, 0.92)';
+    a.fillRect(labelLeft, ly - 12, labelW, 24);
+    a.strokeStyle = color;
+    a.lineWidth = 1.2;
+    a.strokeRect(labelLeft + 0.5, ly - 11.5, labelW - 1, 23);
+
+    // Círculo número
+    const numCx = labelLeft + 12;
+    a.fillStyle = color;
+    a.beginPath();
+    a.arc(numCx, ly, 9, 0, Math.PI * 2);
+    a.fill();
+    a.fillStyle = '#0a0a0e';
+    a.font = 'bold 11px "Segoe UI", system-ui, sans-serif';
+    a.textAlign = 'center';
+    a.fillText(String(n), numCx, ly + 0.5);
+
+    // Texto
+    a.fillStyle = '#fff';
+    a.font = '600 12px "Segoe UI", system-ui, sans-serif';
+    a.textAlign = 'left';
+    a.fillText(label, labelLeft + 26, ly + 0.5);
+  }
+}
+
+setTimeout(drawAnnotations, 150);
+</script>
+
+</body>
+</html>

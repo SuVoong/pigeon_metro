@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Estación minimal — Pigeon Metro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0e;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #ddd;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 18px;
+    gap: 14px;
+  }
+  h1 {
+    color: #FFCC00;
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .subtitle {
+    color: #888;
+    font-size: 11px;
+    text-align: center;
+    max-width: 800px;
+  }
+  /* Tamaño compacto similar a la foto de referencia */
+  #stage {
+    position: relative;
+    width: 800px;
+    height: 450px;
+    overflow: hidden;
+    border: 1px solid #2a2a30;
+    border-radius: 4px;
+  }
+  /* El canvas se renderiza a 1280×720 internamente, luego se escala */
+  #game {
+    width: 800px;
+    height: 450px;
+  }
+  .meta {
+    font-size: 10px;
+    color: #666;
+    text-align: center;
+    margin-top: 4px;
+  }
+  .meta b { color: #ccc; }
+  .flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    max-width: 800px;
+    margin-top: 6px;
+  }
+  .flag {
+    font-size: 10px;
+    padding: 3px 8px;
+    background: #14141a;
+    border: 1px solid #2a2a30;
+    border-radius: 3px;
+    color: #888;
+  }
+  .flag.off { color: #ff8060; text-decoration: line-through; }
+  .flag.on { color: #a8e060; }
+</style>
+</head>
+<body>
+
+<h1>Estación minimal · vista limpia</h1>
+<div class="subtitle">
+  Render simplificado para enfatizar la lectura espacial: 2 andenes laterales,
+  foso central con vías, desnivel marcado por la cara del bordillo. Sin
+  carteles colgantes, LED, cajas de emergencia ni catenaria.
+</div>
+
+<div id="stage">
+  <canvas id="game" width="1280" height="720"></canvas>
+</div>
+
+<div class="meta">
+  Render dinámico desde <b>EstacionBase</b> · canvas 1280×720 escalado a 800×450 · cámara X=0%, Y=50%
+</div>
+
+<div class="flags">
+  <div class="flag off">showHangingSigns</div>
+  <div class="flag off">showLEDScreen</div>
+  <div class="flag off">showMetroLogo</div>
+  <div class="flag off">showEmergencyBoxes</div>
+  <div class="flag off">showCatenary</div>
+  <div class="flag on">paredes amarillas</div>
+  <div class="flag on">friso azul</div>
+  <div class="flag on">bóveda</div>
+  <div class="flag on">andén + bordillo</div>
+  <div class="flag on">balasto + rieles</div>
+</div>
+
+<script type="module">
+import { canvas, ctx, STATE, pigeon } from './js/mecanica/estado.js';
+import { EstacionBase } from './js/escenarios/metro_base/estacion_base.js';
+import {
+  camera, applyCamera, unapplyCamera,
+  CAMERA_RANGE_X, CAMERA_RANGE_Y_DOWN, initCamera,
+} from './js/mecanica/camara.js';
+
+initCamera();
+STATE.phase = '_MOCKUP_MINIMAL_';
+
+const est = new EstacionBase({
+  stationName: 'Nombre Estación',
+  stationDirection: 'MONCLOA',
+  lineNumber: 3,
+  lineColor: '#F39200',
+  // Desactivar elementos opcionales para vista limpia
+  showHangingSigns: false,
+  showLEDScreen: false,
+  showMetroLogo: false,
+  showEmergencyBoxes: false,
+  showCatenary: false,
+});
+est.init('Nombre Estación');
+for (let i = 0; i < 60; i++) est.update(1);
+
+// Cámara fija X=0%, Y=50% (vista frontal levemente bajada)
+const CX_PCT = 0.0;
+const CY_PCT = 0.50;
+camera.offsetX = canvas.width  * CAMERA_RANGE_X      * CX_PCT;
+camera.offsetY = canvas.height * CAMERA_RANGE_Y_DOWN * CY_PCT;
+pigeon.x = camera.offsetX;
+pigeon.y = camera.offsetY;
+pigeon.vx = 0; pigeon.vy = 0; pigeon.tilt = 0; pigeon.invincible = 0;
+// Ocultar paloma para mockup limpio
+pigeon.invincible = 0;
+
+function tick() {
+  est.update(1);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  applyCamera(ctx);
+  est.render(ctx);
+  unapplyCamera(ctx);
+}
+// Render inmediato (no esperar al primer rAF — funciona aunque la pestaña
+// esté oculta, útil para screenshots desde herramientas headless).
+tick();
+// Luego sigue con rAF para que la animación de traviesas/drenaje progrese
+function loop() {
+  tick();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>
