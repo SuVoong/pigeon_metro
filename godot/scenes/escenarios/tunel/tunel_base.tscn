@@ -1,0 +1,25 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/escenarios/tunel/tunel_base.gd" id="1_script"]
+
+[sub_resource type="Environment" id="Environment_env1"]
+background_mode = 1
+background_color = Color(0.02, 0.02, 0.05, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.1, 0.1, 0.15, 1)
+ambient_light_energy = 0.3
+fog_enabled = true
+fog_light_color = Color(0.02, 0.02, 0.05, 1)
+fog_density = 0.02
+
+[node name="TunelBase" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+current = true
+near = 0.05
+far = 200.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_env1")
