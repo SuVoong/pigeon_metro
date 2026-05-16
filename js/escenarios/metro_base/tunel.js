@@ -30,6 +30,29 @@ const _defaultMaxR       = () => canvas.height * 0.45;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Dibuja SOLO los rieles + traviesas + drenaje central + suelo del foso, con
+ * el mismo aspecto que dentro del túnel. Reutilizable desde EstacionBase para
+ * que la transición túnel→estación sea visualmente continua.
+ * Recibe vpY explícito para que los rieles arranquen donde haga falta.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} vpY     Y del punto de fuga (donde arrancan los rieles)
+ * @param {object} [config]  Mismas opciones que drawTunel (railWidth, etc.)
+ * @param {number} [worldZ]  Animación de las traviesas (scroll forward)
+ */
+export function drawTunelTracks(ctx, vpY, config = {}, worldZ = STATE.worldZ) {
+  const cw = canvas.width;
+  const ch = canvas.height;
+  const vpX = _vpX();
+
+  // 1. Suelo de la vía (hormigón gris oscuro tipo modo oscuro)
+  _drawTrackFloor(ctx, vpX, vpY, vpY + 100, cw * 0.4, cw, ch, config);
+
+  // 2. Rieles + anclajes + drenaje central
+  _drawRails(ctx, vpX, vpY, vpY + 100, cw, ch, worldZ, config);
+}
+
+/**
  * Dibuja el túnel completo de Metro (reemplaza el drawTunnel rectangular).
  * @param {CanvasRenderingContext2D} ctx
  * @param {object}  config   config de MetroBase/Linea3 (bgColor, lightColor…)
@@ -508,11 +531,15 @@ function _drawTrackFloor(ctx, vpX, vpY, archCY, maxR, cw, ch, config = {}) {
   };
 
   ctx.save();
-  // Gradiente vertical (más oscuro hacia la cámara, ligero brillo central)
+  // Balasto del foso en gris medio — el rango anterior (#1c1f25 → #0d0f14)
+  // se leía como "rectángulo negro plano" sin profundidad. Subido el rango
+  // a un gris hormigón oscuro visible: las traviesas/clips/canal central
+  // pintados encima ahora se distinguen y el foso parece nivel inferior
+  // de balasto, no un agujero negro.
   const grad = ctx.createLinearGradient(0, railTopY, 0, railBotY);
-  grad.addColorStop(0,   '#1c1f25');   // cerca del VP — gris oscuro suave
-  grad.addColorStop(0.5, '#171a20');   // intermedio
-  grad.addColorStop(1,   '#0d0f14');   // pegado a la cámara — más negro
+  grad.addColorStop(0,   '#3F434B');   // cerca del VP — hormigón gris medio
+  grad.addColorStop(0.5, '#363941');   // intermedio
+  grad.addColorStop(1,   '#2C2F36');   // pegado a la cámara — gris oscuro
   ctx.fillStyle = grad;
   _floorPath();
   ctx.fill();

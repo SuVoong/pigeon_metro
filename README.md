@@ -203,22 +203,20 @@ pigeon_metro/
         tunel_base.js           TunelBase — scroll de túnel con spawn de obstáculos
         estacion_base.js        EstacionBase — vista trasera de andén: 4 vías, 2
                                 andenes, fluorescentes, tren llegando, pantalla LED
+      metro_base/
+        metro_base_render.js   Renderizadores compartidos: drawTrainFront, drawTrainSide,
+                                drawTrainPerspective, setLEDStation, _drawLED
       metro_madrid/
-        linea_3.js              Linea3Class — ruta bidireccional, init() con dirección,
+        datos_madrid.js         MADRID_LINES — datos completos de todas las líneas
+        mapa_metro_madrid.js    MapaMetroMadrid — selector visual de líneas/estaciones
+        linea_3/
+          linea_3.js            Linea3Class — ruta bidireccional, init() con dirección,
                                 isFinished, getLastIndex(), getOppositeDir()
-        delicias/               Overrides específicos de la estación Delicias
-          delicias.js
-          delicias_estacion.js
-          delicias_tunel.js
-      metros/
-        metro_base/             Renderizadores base de túnel y tren compartidos
-          metro_base_render.js
-          metro_base.js
-          tunel.js
-          estacion_render.js
-        metros_madrid/
-          datos_madrid.js       MADRID_LINES — datos completos de todas las líneas
-          mapa_metro_madrid.js  MapaMetroMadrid — selector visual de líneas/estaciones
+          delicias/             Overrides específicos de la estación Delicias
+            delicias.js
+            delicias_estacion.js
+            delicias_tunel.js
+          ...                   Resto de paradas como stubs (un dir por estación)
     pantallas/
       inicio.js                 drawStartScreen(ctx) — paloma animada, menú principal
       arcade.js                 Mapa de arcade; selector de dificultad; selector de

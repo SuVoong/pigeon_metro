@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Inspector EstacionBase — Pigeon Metro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0e; font-family: 'Segoe UI', system-ui, sans-serif; color: #ddd; overflow: hidden; }
+  #game { display: block; cursor: crosshair; }
+  #panel {
+    position: fixed; top: 8px; left: 8px; padding: 8px 12px;
+    background: rgba(0,0,0,0.85); border: 1px solid #FFCC00;
+    color: #FFCC00; font: bold 12px monospace; line-height: 1.6;
+    border-radius: 4px; z-index: 10; pointer-events: none;
+    max-width: 360px;
+  }
+  #panel .row { display: flex; gap: 8px; }
+  #panel .key { color: #fff; min-width: 90px; }
+  #panel .val { color: #FFCC00; }
+  #panel h2 { font-size: 12px; color: #FFFFFF; margin-bottom: 4px; }
+  #panel .help { color: #888; font-size: 10px; margin-top: 6px; font-weight: normal; }
+  .controls { margin-top: 8px; pointer-events: auto; }
+  .controls label { color: #ccc; font-weight: normal; font-size: 11px; display: block; margin: 4px 0; }
+  .controls input { width: 80%; vertical-align: middle; }
+  .controls .v { color: #FFCC00; font-size: 10px; display: inline-block; min-width: 38px; text-align: right; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="panel">
+  <h2>Inspector EstacionBase</h2>
+  <div class="row"><span class="key">Estación:</span><span class="val" id="info-station">—</span></div>
+  <div class="row"><span class="key">Cámara X:</span><span class="val" id="info-cx">0</span></div>
+  <div class="row"><span class="key">Cámara Y:</span><span class="val" id="info-cy">0</span></div>
+  <div class="row"><span class="key">Cursor:</span><span class="val" id="info-cur">—</span></div>
+  <div class="row"><span class="key">Elemento:</span><span class="val" id="info-el">—</span></div>
+
+  <div class="controls">
+    <label>Cámara X <span class="v" id="vx">0%</span></label>
+    <input type="range" id="rx" min="-100" max="100" value="0">
+    <label>Cámara Y <span class="v" id="vy">40%</span></label>
+    <input type="range" id="ry" min="0" max="100" value="40">
+    <label>Estación <span class="v" id="vs">Delicias</span></label>
+    <input type="text" id="rs" value="Delicias" style="width:90%">
+  </div>
+  <div class="help">Mueve el ratón sobre el canvas — el campo correspondiente del cfg de EstacionBase aparece junto al cursor.</div>
+</div>
+
+<script type="module">
+import { canvas, ctx, STATE, pigeon } from './js/mecanica/estado.js';
+import { EstacionBase } from './js/escenarios/metro_base/estacion_base.js';
+import { camera, applyCamera, unapplyCamera, getCameraVpY, CAMERA_RANGE_X, CAMERA_RANGE_Y_DOWN, initCamera } from './js/mecanica/camara.js';
+import { drawPigeon } from './js/personajes/paloma.js';
+
+initCamera();
+
+// ── Estado interactivo ────────────────────────────────────────────────────
+STATE.phase = '_DEBUG_INSPECTOR_';
+const ui = {
+  station: document.getElementById('info-station'),
+  cx: document.getElementById('info-cx'),
+  cy: document.getElementById('info-cy'),
+  cur: document.getElementById('info-cur'),
+  el: document.getElementById('info-el'),
+  rx: document.getElementById('rx'),
+  ry: document.getElementById('ry'),
+  rs: document.getElementById('rs'),
+  vx: document.getElementById('vx'),
+  vy: document.getElementById('vy'),
+  vs: document.getElementById('vs'),
+};
+
+let est = new EstacionBase({ stationName: ui.rs.value, stationDirection: 'MONCLOA', lineNumber: 3, lineColor: '#F39200' });
+est.init(ui.rs.value);
+for (let i = 0; i < 60; i++) est.update(1);
+ui.station.textContent = est.cfg.stationName;
+ui.rs.addEventListener('input', () => {
+  ui.vs.textContent = ui.rs.value || '—';
+  est.cfg.stationName = ui.rs.value;
+  ui.station.textContent = ui.rs.value;
+});
+
+pigeon.x = 0; pigeon.y = 0; pigeon.vx = 0; pigeon.vy = 0; pigeon.tilt = 0; pigeon.invincible = 0;
+
+// ── Mouse tracking ────────────────────────────────────────────────────────
+const mouse = { x: 0, y: 0, inside: false };
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = (e.clientX - rect.left) * (canvas.width / rect.width);
+  mouse.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+  mouse.inside = true;
+});
+canvas.addEventListener('mouseleave', () => { mouse.inside = false; });
+
+// ── Identificador de elementos ────────────────────────────────────────────
+function identifyAt(x, y) {
+  const W = canvas.width, H = canvas.height;
+  const vpX = W / 2;
+  const vpY = getCameraVpY(H * est.cfg.vanishingPointY);
+  const wx = x + camera.offsetX;
+  const G = {
+    pBL: vpX - W * 0.4485,  pBR: vpX + W * 0.4485,
+    pVL: vpX - W * 0.02875, pVR: vpX + W * 0.02875,
+    tOBL: vpX - W * 0.414,  tOBR: vpX + W * 0.414,
+    tIBL: vpX - W * 0.0276, tIBR: vpX + W * 0.0276,
+  };
+
+  // 1. LED screen colgante
+  if (wx >= vpX - 60 && wx <= vpX + 60 && y >= 5 && y <= 27)
+    return 'ledScreenBg · pantalla LED sentido';
+
+  // 2. Carteles colgantes destino
+  if (y > H * 0.10 && y < H * 0.32) {
+    if (wx > W * 0.18 && wx < W * 0.36) return 'hangingSignBg · cartel destino izq (Andén 2)';
+    if (wx > W * 0.64 && wx < W * 0.82) return 'hangingSignBg · cartel destino der (Andén 1)';
+  }
+
+  // 3. Boca del túnel
+  const archInnerHalf = Math.max(28, W * 0.075) * 0.45;
+  if (Math.abs(wx - vpX) < archInnerHalf * 1.3 && y > vpY - 60 && y < vpY + 18)
+    return 'tunnelMouthFrame · boca del túnel';
+
+  // 4. FRISO AZUL — interpolación POR X (correcto por perspectiva)
+  // (en sincronía con _drawStationFrieze de estacion_base.js)
+  const friseTopBase = H * 0.32, friseBotBase = H * 0.45;
+  const friseTopVP   = vpY - 4, friseBotVP   = vpY - 1;
+  const checkFriseX = (xBase, xVP) => {
+    const t = (wx - xBase) / (xVP - xBase);
+    if (t < 0 || t > 1) return false;
+    const yT = (1 - t) * friseTopBase + t * friseTopVP;
+    const yB = (1 - t) * friseBotBase + t * friseBotVP;
+    return y >= yT && y <= yB;
+  };
+  if (checkFriseX(0, G.pVL) || checkFriseX(W, G.pVR))
+    return 'friezeBgColor · friso azul (' + est.cfg.stationName + ')';
+
+  // 5. Banda táctil amarilla (borde del andén)
+  if (y > H * 0.55 && y < H) {
+    const tF = (y - H * 0.55) / (H - H * 0.55);
+    const xEL = (1 - tF) * G.pVL + tF * G.pBL;
+    const xER = (1 - tF) * G.pVR + tF * G.pBR;
+    if (Math.abs(wx - xEL) < 8 || Math.abs(wx - xER) < 8)
+      return 'tactileBandColor · banda táctil amarilla';
+  }
+
+  // 6. CATENARIA pegada al techo (sin brazo lateral: la catenaria toca
+  //    directamente la bóveda, así que sólo hay perfil + colgadores cortos).
+  const yCatBase_ = Math.max(8, H * 0.06), yCatVP_ = vpY - 12;
+  const N_ = est.cfg.catenaryHangers || 6;
+  const lanesC_ = [
+    { cBase: (G.tOBL + G.tIBL) / 2, cVP: vpX - W * 0.0165, lane: 'izq' },
+    { cBase: (G.tOBR + G.tIBR) / 2, cVP: vpX + W * 0.0165, lane: 'der' },
+  ];
+  for (const lane of lanesC_) {
+    // a) PERFIL RÍGIDO de aluminio (pegado al techo)
+    const tRail = (y - yCatBase_) / (yCatVP_ - yCatBase_);
+    if (tRail >= 0 && tRail <= 1) {
+      const rcx = (1 - tRail) * lane.cBase + tRail * lane.cVP;
+      if (Math.abs(wx - rcx) < 8) return 'catenaryRailColor · perfil rígido aluminio (pegado al techo, sobre rail ' + lane.lane + ')';
+    }
+    // b) COLGADORES cortos hacia el techo
+    for (let i = 0; i < N_; i++) {
+      const t = i / Math.max(1, N_ - 1);
+      const cx = (1 - t) * lane.cBase + t * lane.cVP;
+      const cy = (1 - t) * yCatBase_ + t * yCatVP_;
+      const hangH = Math.max(2, 8 * (1 - t * 0.80));
+      const hangW = Math.max(1, Math.round(2 * (1 - t * 0.5)));
+      if (Math.abs(wx - cx) <= hangW + 3 && y >= cy - hangH - 2 && y <= cy + 2) {
+        return 'catenaryHangerColor · colgador (perno al techo, sobre rail ' + lane.lane + ')';
+      }
+    }
+  }
+
+  // 7. Pared amarilla (interpolación por X)
+  const checkWallX = (xBase, xVP) => {
+    const t = (wx - xBase) / (xVP - xBase);
+    if (t < 0 || t > 1) return false;
+    const yT = (1 - t) * 0 + t * (vpY - 10);
+    const yB = (1 - t) * (H * 0.55) + t * (vpY + 5);
+    return y >= yT && y <= yB;
+  };
+  if (checkWallX(0, G.pVL))     return 'wallColor · revestimiento amarillo (pared izq)';
+  if (checkWallX(W, G.pVR))     return 'wallColor · revestimiento amarillo (pared der)';
+
+  // 7. Carriles UIC60
+  if (y > vpY + 8) {
+    const t = (y - (vpY + 8)) / (H - (vpY + 8));
+    const railTol = Math.max(4, 12 * t);
+    const rails = [
+      { xB: G.tOBL, name: 'rail exterior izq' },
+      { xB: G.tIBL, name: 'rail interior izq' },
+      { xB: G.tIBR, name: 'rail interior der' },
+      { xB: G.tOBR, name: 'rail exterior der' },
+    ];
+    for (const r of rails) {
+      const xVP = vpX + (r.xB - vpX) * 0.07;
+      const rx = (1 - t) * xVP + t * r.xB;
+      if (Math.abs(wx - rx) < railTol) return 'railColor · ' + r.name;
+    }
+  }
+
+  // 8. Suelo del andén / balasto
+  if (y > H * 0.55) {
+    const tF = (y - H * 0.55) / (H - H * 0.55);
+    const xEL = (1 - tF) * G.pVL + tF * (G.pBL + W * 0.05);
+    const xER = (1 - tF) * G.pVR + tF * (G.pBR - W * 0.05);
+    if (wx < xEL) return 'platformColor · suelo del andén (hormigón)';
+    if (wx > xER) return 'platformColor · suelo del andén (hormigón)';
+    return 'ballastColor · suelo de la vía (hormigón oscuro)';
+  }
+
+  // 10. Techo
+  if (y < vpY) return 'ceilingColor · techo abovedado';
+  return '(zona no identificada)';
+}
+
+// ── Tooltip overlay ────────────────────────────────────────────────────────
+function drawTooltip() {
+  if (!mouse.inside) return;
+  const name = identifyAt(mouse.x, mouse.y);
+  ui.el.textContent = name;
+  ui.cur.textContent = `${Math.round(mouse.x)}, ${Math.round(mouse.y)}`;
+  ctx.save();
+  ctx.font = 'bold 14px monospace';
+  const tw = ctx.measureText(name).width;
+  let tx = mouse.x + 14, ty = mouse.y - 8;
+  if (tx + tw + 16 > canvas.width) tx = mouse.x - tw - 30;
+  if (ty < 24) ty = mouse.y + 32;
+  ctx.fillStyle = 'rgba(0,0,0,0.92)';
+  ctx.fillRect(tx - 4, ty - 18, tw + 18, 26);
+  ctx.strokeStyle = '#FFCC00';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(tx - 4, ty - 18, tw + 18, 26);
+  ctx.fillStyle = '#FFCC00';
+  ctx.fillText(name, tx + 4, ty);
+  ctx.fillStyle = '#FFCC00';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(mouse.x, mouse.y, 4, 0, Math.PI * 2); ctx.stroke(); ctx.fill();
+  ctx.restore();
+}
+
+// ── Panel de control de cámara ────────────────────────────────────────────
+function applyControls() {
+  const cxPct = parseFloat(ui.rx.value) / 100;
+  const cyPct = parseFloat(ui.ry.value) / 100;
+  camera.offsetX = canvas.width * CAMERA_RANGE_X * cxPct;
+  camera.offsetY = canvas.height * CAMERA_RANGE_Y_DOWN * cyPct;
+  pigeon.x = camera.offsetX;
+  pigeon.y = camera.offsetY;
+  ui.vx.textContent = Math.round(cxPct * 100) + '%';
+  ui.vy.textContent = Math.round(cyPct * 100) + '%';
+  ui.cx.textContent = Math.round(camera.offsetX);
+  ui.cy.textContent = Math.round(camera.offsetY);
+}
+ui.rx.addEventListener('input', applyControls);
+ui.ry.addEventListener('input', applyControls);
+
+// ── Loop ──────────────────────────────────────────────────────────────────
+let __tickCount = 0;
+window.__getTickCount = () => __tickCount;
+function tick() {
+  try {
+    __tickCount++;
+    applyControls();
+    est.update(1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    applyCamera(ctx); est.render(ctx); unapplyCamera(ctx);
+    drawPigeon(ctx);
+    drawTooltip();
+  } catch (e) {
+    console.error('[tick error]', e);
+    document.title = 'TICK ERROR: ' + e.message;
+  }
+}
+function rafLoop() {
+  tick();
+  requestAnimationFrame(rafLoop);
+}
+requestAnimationFrame(rafLoop);
+</script>
+</body>
+</html>

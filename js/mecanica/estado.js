@@ -24,7 +24,7 @@ export const FONT = '8px monospace';
 
 export const STATE = {
   // 'START' | 'ARCADE' | 'HISTORY' | 'CHARACTER' | 'ACHIEVEMENTS' | 'SETTINGS'
-  // 'SCENE_EDITOR' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'
+  // 'SCENE_EDITOR' | 'PLAYING' | 'PAUSED' | 'LEVEL_COMPLETE' | 'GAMEOVER'
   phase: 'START',
   score: 0,
   lives: 3,
@@ -35,6 +35,7 @@ export const STATE = {
   selectedCharacter: 0,     // índice del personaje elegido
   selectedScenario: 'metro',// id del escenario elegido en arcade
   selectedStartStationIndex: null, // índice de estación inicial (null ⇒ startStation por defecto)
+  selectedDirection: null,  // 'north' | 'south' | null — consumida por Linea3.init()
   totalPlaySeconds: 0,      // segundos jugados acumulados (para logros)
   flightHistory: [],        // [{seconds, date}] ordenado desc, máx 10 entradas
   linesCompleted: 0,        // veces que se ha llegado a un terminal de línea
