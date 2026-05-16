@@ -1,0 +1,24 @@
+# Godot 4+ specific ignores
+godot/.godot/
+godot/.import/
+godot/export.cfg
+godot/export_presets.cfg
+
+# Imported translations (automatically generated from CSV files)
+godot/*.translation
+
+# Mono/.NET specific (si en futuro se usa C#)
+godot/.mono/
+godot/data_*/
+godot/mono_crash.*.json
+
+# System/tool-specific
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# Claude Code worktrees (local, no se trackean)
+.claude/worktrees/
