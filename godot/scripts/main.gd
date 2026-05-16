@@ -1,10 +1,12 @@
 extends Node
 
 # Orquestador raíz — equivalente al switch de fases en js/main.js (líneas 160-241).
-# Suscrito a GameState.phase_changed; muestra/oculta el mundo 3D o la UI según fase.
+# Suscrito a GameState.phase_changed; alterna visibilidad del mundo 3D y de
+# las pantallas UI según la fase actual.
 
 @onready var _mundo_3d: Node3D = $Mundo3D
-@onready var _ui: CanvasLayer = $UI
+@onready var _ui_inicio: CanvasLayer = $UI_Inicio
+@onready var _ui_arcade: CanvasLayer = $UI_Arcade
 
 
 func _ready() -> void:
@@ -17,21 +19,25 @@ func _on_phase_changed(new_phase: GameState.Phase) -> void:
 
 
 func _aplicar_fase(phase: GameState.Phase) -> void:
-	# START = menú visible, mundo oculto.
-	# ARCADE (placeholder hasta B7) y PLAYING = mundo 3D visible.
-	# Otras fases (HISTORY, CHARACTER, ACHIEVEMENTS, SETTINGS) aún sin UI propia;
-	# se quedan en pantalla negra hasta que el usuario pulse ESC para volver.
-	var es_menu: bool = phase == GameState.Phase.START
-	var muestra_mundo: bool = (
-		phase == GameState.Phase.PLAYING
-		or phase == GameState.Phase.ARCADE
-	)
-	_ui.visible = es_menu
-	_mundo_3d.visible = muestra_mundo
+	# Fases con UI propia: START (menú), ARCADE (mapa).
+	# Fase 3D: PLAYING (mundo del túnel).
+	# Otras (HISTORY, CHARACTER, ACHIEVEMENTS, SETTINGS, PAUSED, etc.) aún sin
+	# pantalla propia → se quedan en negro hasta ESC.
+	_ui_inicio.visible = phase == GameState.Phase.START
+	_ui_arcade.visible = phase == GameState.Phase.ARCADE
+	_mundo_3d.visible = phase == GameState.Phase.PLAYING
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# ESC vuelve al menú desde cualquier fase no-START.
+	# ESC: jerarquía de retorno
+	#   PLAYING  → ARCADE  (volver al mapa)
+	#   ARCADE   → START   (volver al menú)
+	#   Otras    → START
 	if event.is_action_pressed("ui_cancel"):
-		if GameState.current_phase != GameState.Phase.START:
-			GameState.change_phase(GameState.Phase.START)
+		match GameState.current_phase:
+			GameState.Phase.PLAYING:
+				GameState.change_phase(GameState.Phase.ARCADE)
+			GameState.Phase.START:
+				pass  # no hacer nada en menú principal
+			_:
+				GameState.change_phase(GameState.Phase.START)
