@@ -1,17 +1,24 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/escenarios/tunel/tunel_base.tscn" id="2_tunel"]
 [ext_resource type="PackedScene" path="res://scenes/pantallas/inicio.tscn" id="3_inicio"]
 [ext_resource type="PackedScene" path="res://scenes/pantallas/arcade.tscn" id="4_arcade"]
+[ext_resource type="Script" path="res://scripts/escenarios/mundo_juego.gd" id="5_mundo"]
+[ext_resource type="PackedScene" path="res://scenes/personajes/paloma.tscn" id="6_paloma"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/hud.tscn" id="7_hud"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
 
 [node name="Mundo3D" type="Node3D" parent="."]
 visible = false
+script = ExtResource("5_mundo")
 
 [node name="TunelBase" parent="Mundo3D" instance=ExtResource("2_tunel")]
+
+[node name="Paloma" parent="Mundo3D" instance=ExtResource("6_paloma")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -7)
 
 [node name="UI_Inicio" type="CanvasLayer" parent="."]
 
@@ -21,3 +28,8 @@ visible = false
 visible = false
 
 [node name="Arcade" parent="UI_Arcade" instance=ExtResource("4_arcade")]
+
+[node name="UI_HUD" type="CanvasLayer" parent="."]
+visible = false
+
+[node name="HUD" parent="UI_HUD" instance=ExtResource("7_hud")]
