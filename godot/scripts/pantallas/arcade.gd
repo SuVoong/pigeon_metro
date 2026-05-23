@@ -16,7 +16,7 @@ const COLOR_BG := Color("#0d0d1a")
 const COLOR_TRAIN_YELLOW := Color("#f5c518")
 const COLOR_TEXT := Color("#aaaaaa")
 const COLOR_HINT := Color("#888888")
-const COLOR_RANK_SEP := Color("#333333")
+const COLOR_PERIMETRO := Color("#6c6c80")
 const COLOR_EMPTY := Color("#444444")
 const COLOR_TOOLTIP_BG := Color(0, 0, 0, 0.8)
 const COLOR_DIALOG_BG := Color("#0d0d1a")
@@ -24,12 +24,15 @@ const COLOR_DIALOG_BACKDROP := Color(0, 0, 0, 0.55)
 const COLOR_BTN_BG := Color("#111111")
 const COLOR_BTN_BG_SEL := Color(0.96, 0.77, 0.09, 0.08)
 const COLOR_BTN_BORDER := Color("#2a2a3a")
+const COLOR_M_LOGO := Color("#cc1414")    # rojo del logo Metro Madrid
 
-const PAD_TOP: float = 42.0
-const PAD_BOTTOM: float = 18.0
-const RANK_X: float = 10.0
-const RANK_W: float = 170.0
-const RANK_Y: float = 44.0
+# Layout
+const PAD_TOP: float = 50.0
+const PAD_BOTTOM: float = 22.0
+const PAD_LATERAL: float = 60.0     # margen para que las etiquetas perimetrales se vean
+const TITULO_PAD: Vector2 = Vector2(20.0, 30.0)
+const M_LOGO_SIZE: float = 22.0
+const M_LOGO_PAD: Vector2 = Vector2(20.0, 18.0)
 
 # Popup de selección de andén (aparece al clicar una estación de L3).
 const DIALOG_W: float = 400.0
@@ -68,7 +71,9 @@ func _process(_delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not visible:
+	# Comprobar la fase, no `visible` — los Control dentro de CanvasLayer no
+	# heredan la visibilidad del layer (ver gameover.gd para más detalle).
+	if GameState.current_phase != GameState.Phase.ARCADE:
 		return
 
 	# Popup tiene prioridad sobre el mapa.
@@ -148,27 +153,17 @@ func _draw() -> void:
 
 	draw_rect(Rect2(0, 0, w, h), COLOR_BG)
 
-	# Título compacto centrado en la parte superior
-	var titulo: String = "MODO ARCADE  ·  METRO DE MADRID  ·  ENERO 2026"
-	var titulo_size: Vector2 = _font.get_string_size(titulo,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-	draw_string(_font, Vector2((w - titulo_size.x) / 2.0, 22.0), titulo,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, COLOR_TRAIN_YELLOW)
+	# Cabecera: "2026 ENERO" arriba-izquierda + logo M Metro arriba-derecha
+	# (calco del mapa oficial de la imagen de referencia).
+	draw_string(_font, Vector2(TITULO_PAD.x, TITULO_PAD.y),
+			"2026  ENERO",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color.WHITE)
+	_dibujar_logo_m(w - M_LOGO_PAD.x - M_LOGO_SIZE * 3.5, M_LOGO_PAD.y)
 
-	# Ranking: header + separador + placeholder vacío.
-	var rank_title: String = "TOP VUELOS"
-	var rank_title_size: Vector2 = _font.get_string_size(rank_title,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 11)
-	draw_string(_font, Vector2(RANK_X + (RANK_W - rank_title_size.x) / 2.0, RANK_Y),
-		rank_title, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, COLOR_TEXT)
-	draw_rect(Rect2(RANK_X, RANK_Y + 5.0, RANK_W, 1.0), COLOR_RANK_SEP)
-	var empty: String = "Sin partidas aún"
-	var empty_size: Vector2 = _font.get_string_size(empty,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 10)
-	draw_string(_font, Vector2(RANK_X + (RANK_W - empty_size.x) / 2.0, RANK_Y + 28.0),
-		empty, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, COLOR_EMPTY)
+	# Etiquetas perimetrales (MetroNorte / MetroEste / MetroSur / TFM).
+	_dibujar_etiquetas_perimetro(w, h)
 
-	# Mapa centrado en el rect restante.
+	# Mapa ocupando el ancho completo (sin columna ranking).
 	_mapa.draw_in(self, _map_rect())
 
 	# Tooltip sobre estación bajo el cursor.
@@ -176,15 +171,41 @@ func _draw() -> void:
 		_draw_tooltip()
 
 	# Hint inferior.
-	var hint: String = "CLIC EN ESTACIÓN DE L3 (NARANJA) PARA JUGAR   ·   ESC VOLVER"
+	var hint: String = "CLIC EN ESTACIÓN DE L3 PARA ELEGIR ANDÉN   ·   ESC VOLVER"
 	var hint_size: Vector2 = _font.get_string_size(hint,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 9)
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9)
 	draw_string(_font, Vector2((w - hint_size.x) / 2.0, h - 6.0), hint,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 9, COLOR_HINT)
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, COLOR_HINT)
 
 	# Popup encima de todo.
 	if not _dialog.is_empty():
 		_draw_dialog()
+
+
+# Logo "M Metro" en cuadrado rojo con letra M blanca + texto "Metro" al lado.
+func _dibujar_logo_m(x: float, y: float) -> void:
+	draw_rect(Rect2(x, y, M_LOGO_SIZE, M_LOGO_SIZE), COLOR_M_LOGO)
+	var m_size: Vector2 = _font.get_string_size("M",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 16)
+	draw_string(_font, Vector2(
+			x + (M_LOGO_SIZE - m_size.x) / 2.0,
+			y + M_LOGO_SIZE * 0.78),
+			"M", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
+	draw_string(_font, Vector2(x + M_LOGO_SIZE + 6.0, y + M_LOGO_SIZE * 0.75),
+			"Metro", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, COLOR_M_LOGO)
+
+
+# Etiquetas grises en los 4 bordes — apuntan a las redes de cercanías
+# alrededor del centro (norte, este, sur, TFM al sureste).
+func _dibujar_etiquetas_perimetro(w: float, h: float) -> void:
+	draw_string(_font, Vector2(w * 0.40, PAD_TOP - 8.0),
+			"MetroNorte", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, COLOR_PERIMETRO)
+	draw_string(_font, Vector2(w - 64.0, h * 0.45),
+			"MetroEste", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, COLOR_PERIMETRO)
+	draw_string(_font, Vector2(w * 0.18, h - 22.0),
+			"MetroSur", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, COLOR_PERIMETRO)
+	draw_string(_font, Vector2(w - 46.0, h * 0.62),
+			"TFM", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, COLOR_PERIMETRO)
 
 
 func _draw_dialog() -> void:
@@ -251,11 +272,12 @@ func _draw_tooltip() -> void:
 
 
 func _map_rect() -> Rect2:
-	var pad_left: float = RANK_X + RANK_W + 10.0
-	var pad_right: float = 8.0
+	# Mapa ocupando el ancho completo (sin columna ranking) y dejando un margen
+	# perimetral para que las etiquetas MetroNorte/Este/Sur/TFM queden visibles
+	# sin solapar con los chips de los terminales.
 	return Rect2(
-		pad_left, PAD_TOP,
-		size.x - pad_left - pad_right,
+		PAD_LATERAL, PAD_TOP,
+		size.x - PAD_LATERAL * 2.0,
 		size.y - PAD_TOP - PAD_BOTTOM
 	)
 

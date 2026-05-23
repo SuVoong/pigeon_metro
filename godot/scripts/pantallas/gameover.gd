@@ -19,7 +19,10 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not visible:
+	# Nota: comprobar visible no basta — los Control dentro de CanvasLayer
+	# NO heredan la visibilidad del layer, así que `visible` puede ser true
+	# aunque UI_Gameover esté oculto. Comprobamos la fase como fuente de verdad.
+	if GameState.current_phase != GameState.Phase.GAMEOVER:
 		return
 	if event.is_action_pressed("ui_accept"):
 		GameState.change_phase(GameState.Phase.PLAYING)

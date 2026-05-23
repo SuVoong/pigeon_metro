@@ -102,3 +102,17 @@ func _draw() -> void:
 		Vector2(marker_x + 6.0, marker_y - 6.0),
 		Vector2(marker_x, marker_y + 5.0),
 	]), COLOR_MARCADOR)
+
+	# Mensaje opcional de la estación actual (tutorial, checkpoint, etc.).
+	# Aparece centrado bajo el panel del HUD; vacío si la estación no tiene.
+	var mensaje: String = _mundo.mensaje_estacion_actual()
+	if not mensaje.is_empty():
+		var m_size: Vector2 = _font.get_string_size(mensaje,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 13)
+		var bg_w: float = m_size.x + 24.0
+		var bg_x: float = (w - bg_w) / 2.0
+		var bg_y: float = PANEL_ALTO + 4.0
+		draw_rect(Rect2(bg_x, bg_y, bg_w, 24.0), Color(0, 0, 0, 0.55))
+		draw_rect(Rect2(bg_x, bg_y, bg_w, 24.0), COLOR_LINEA_L3, false, 1.0)
+		draw_string(_font, Vector2(bg_x + 12.0, bg_y + 16.0),
+				mensaje, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.WHITE)

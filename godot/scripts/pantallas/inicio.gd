@@ -65,7 +65,9 @@ func _process(_delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not visible:
+	# Comprobar la fase, no `visible` — los Control dentro de CanvasLayer no
+	# heredan la visibilidad del layer (ver gameover.gd para más detalle).
+	if GameState.current_phase != GameState.Phase.START:
 		return
 
 	if event.is_action_pressed("ui_up"):

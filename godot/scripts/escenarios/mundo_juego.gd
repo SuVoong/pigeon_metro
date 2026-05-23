@@ -54,7 +54,10 @@ var _trenes: Array[Area3D] = []
 var _estado: Estado = Estado.JUGANDO
 var _cooldown: float = 0.0
 
-var _l3_stations: Array[String] = []
+# Estaciones de L3 — Diccionarios completos del JSON. Cada uno trae name,
+# pos, transfers + los campos de identidad (velocidad, tren_izq/der,
+# pasajeros, tutorial, mensaje, checkpoint). Ver madrid_lines.json.
+var _l3_stations: Array[Dictionary] = []
 var _l3_to: String = "MONCLOA"
 var _l3_from: String = "EL CASAR"
 var _idx_proxima: int = IDX_INICIAL
@@ -130,12 +133,19 @@ func _process(delta: float) -> void:
 			_estacion = null
 	if _t_ciclo >= CICLO_SEG:
 		_t_ciclo -= CICLO_SEG
-		if _l3_stations.size() > 0:
-			_idx_proxima = wrapi(_idx_proxima + _direccion, 0, _l3_stations.size())
 		_puntuacion += 1
 		if _estacion != null:
 			_estacion.queue_free()
 			_estacion = null
+		# Detección de terminal: si avanzar nos sacara de la línea, en vez
+		# de envolver disparamos LEVEL_COMPLETE para que el jugador decida
+		# entre dar la vuelta o terminar.
+		if _l3_stations.size() > 0:
+			var siguiente: int = _idx_proxima + _direccion
+			if siguiente < 0 or siguiente >= _l3_stations.size():
+				GameState.change_phase(GameState.Phase.LEVEL_COMPLETE)
+				return
+			_idx_proxima = siguiente
 
 	# ── Ocultar túnel donde está la estación y avisar a la paloma ───────
 	# Cuando la estación atraviesa la paloma, los límites de vuelo cambian
@@ -149,8 +159,11 @@ func _process(delta: float) -> void:
 		_paloma.set_en_estacion(false)
 
 	# ── Trenes: avanzan en su vía con velocidad propia + scroll del mundo.
-	# La velocidad propia crece con la puntuación (dificultad progresiva).
-	var vel_tren: float = VEL_SCROLL + _tren_vel_extra()
+	# La velocidad propia crece con la puntuación (dificultad progresiva) y
+	# se modula por el multiplicador de la estación actual (Delicias más
+	# lento por ser tutorial, Sol más rápido por ser hora punta…).
+	var vel_tren: float = (VEL_SCROLL + _tren_vel_extra()) \
+			* _velocidad_estacion_actual()
 	for tren in _trenes:
 		tren.position.z += vel_tren * delta
 		if tren.position.z > TREN_Z_RECICLAJE:
@@ -171,7 +184,7 @@ func _cargar_estaciones_l3() -> void:
 		push_warning("mundo_juego: no se pudo cargar la lista de estaciones de L3")
 		return
 	for s in linea_3.stations:
-		_l3_stations.append(String(s.name))
+		_l3_stations.append(s as Dictionary)
 	_l3_to = String(linea_3.get("to", "MONCLOA"))
 	_l3_from = String(linea_3.get("from", "EL CASAR"))
 
@@ -191,7 +204,8 @@ func _spawn_estacion() -> void:
 	if env != null:
 		est.remove_child(env)
 		env.queue_free()
-	est.set("nombre_estacion", _l3_stations[_idx_proxima])
+	var datos: Dictionary = _l3_stations[_idx_proxima]
+	est.set("nombre_estacion", String(datos.get("name", "")))
 	est.set("direccion", (_l3_to if _direccion > 0 else _l3_from).to_upper())
 	est.set("numero_linea", 3)
 	est.position = Vector3(0.0, 0.0, EST_SPAWN_Z)
@@ -200,8 +214,13 @@ func _spawn_estacion() -> void:
 
 
 # ── Getters consumidos por el HUD ────────────────────────────────────────
+# Devuelve solo los nombres — el HUD pinta los dots y no necesita los demás
+# campos. Si el HUD evoluciona y los necesita, usar `estacion_dato(idx)`.
 func estaciones_linea() -> Array:
-	return _l3_stations
+	var nombres: Array = []
+	for s in _l3_stations:
+		nombres.append(String(s.get("name", "")))
+	return nombres
 
 
 func indice_proxima() -> int:
@@ -223,7 +242,24 @@ func progreso_ciclo() -> float:
 func proxima_estacion_nombre() -> String:
 	if _l3_stations.is_empty():
 		return ""
-	return _l3_stations[_idx_proxima]
+	return String(_l3_stations[_idx_proxima].get("name", ""))
+
+
+# Mensaje opcional para mostrar en el HUD cuando estamos en una estación
+# concreta (tutoriales, checkpoints, etc.). Vacío si la estación no tiene.
+func mensaje_estacion_actual() -> String:
+	if _l3_stations.is_empty():
+		return ""
+	return String(_l3_stations[_idx_proxima].get("mensaje", ""))
+
+
+# Multiplicador de velocidad del tren para la estación actual (1.0 = base).
+# Permite que Sol/Callao tengan trenes más rápidos y Delicias (tutorial)
+# más lentos.
+func _velocidad_estacion_actual() -> float:
+	if _l3_stations.is_empty():
+		return 1.0
+	return float(_l3_stations[_idx_proxima].get("velocidad", 1.0))
 
 
 func vidas() -> int:
