@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/escenarios/tunel/tunel_base.tscn" id="2_tunel"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/escenarios/mundo_juego.gd" id="5_mundo"]
 [ext_resource type="PackedScene" path="res://scenes/personajes/paloma.tscn" id="6_paloma"]
 [ext_resource type="PackedScene" path="res://scenes/pantallas/hud.tscn" id="7_hud"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/gameover.tscn" id="8_gameover"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1_main")
@@ -33,3 +34,8 @@ visible = false
 visible = false
 
 [node name="HUD" parent="UI_HUD" instance=ExtResource("7_hud")]
+
+[node name="UI_Gameover" type="CanvasLayer" parent="."]
+visible = false
+
+[node name="Gameover" parent="UI_Gameover" instance=ExtResource("8_gameover")]

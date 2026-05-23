@@ -17,9 +17,15 @@ const TREN_Z_LEJOS_MIN: float = -130.0
 const TREN_Z_LEJOS_MAX: float = -95.0
 const TREN_SEPARACION: float = 50.0     # separación al colocar trenes nuevos
 # Velocidad propia del tren respecto al mundo: sumada a VEL_SCROLL produce
-# trenes que SE MUEVEN sobre las vías (a 18 m/s ≈ 65 km/h relativos a la
-# cámara), en vez de quedar quietos respecto al túnel.
-const TREN_VEL: float = 6.0
+# trenes que SE MUEVEN sobre las vías. TREN_VEL_BASE 6 m/s da ~18 m/s
+# relativos a la cámara; con la dificultad progresiva crece hasta +6 m/s
+# extra (24 m/s ≈ 86 km/h) a medida que sube la puntuación.
+const TREN_VEL_BASE: float = 6.0
+const TREN_VEL_INC_POR_PUNTO: float = 0.4
+const TREN_VEL_INC_MAX: float = 6.0
+
+# Vidas del run completo (no las "vidas" internas de la paloma).
+const VIDAS_INICIALES: int = 3
 
 # ── Ciclo de estaciones (B6) ─────────────────────────────────────────────
 const ESTACION_SCENE: PackedScene = preload("res://scenes/escenarios/estacion/estacion_base.tscn")
@@ -45,6 +51,11 @@ var _l3_stations: Array[String] = []
 var _idx_proxima: int = IDX_INICIAL
 var _t_ciclo: float = 0.0
 var _estacion: Node3D = null
+
+# Progreso del run
+var _vidas_totales: int = VIDAS_INICIALES
+var _puntuacion: int = 0
+var _ultimo_record_nuevo: bool = false   # true si el último GAME OVER batió el récord
 
 
 func _ready() -> void:
@@ -76,23 +87,35 @@ func _process(delta: float) -> void:
 		_t_ciclo -= CICLO_SEG
 		if _l3_stations.size() > 0:
 			_idx_proxima = (_idx_proxima + 1) % _l3_stations.size()
+		_puntuacion += 1
 		if _estacion != null:
 			_estacion.queue_free()
 			_estacion = null
 
-	# ── Ocultar túnel donde está la estación ────────────────────────────
+	# ── Ocultar túnel donde está la estación y avisar a la paloma ───────
+	# Cuando la estación atraviesa la paloma, los límites de vuelo cambian
+	# del bore arqueado al recinto rectangular entre pilares.
 	if _estacion != null:
 		var sz: float = _estacion.position.z
 		_tunel.ocultar_rango_z(sz - 32.0, sz + 32.0)
+		_paloma.set_en_estacion(absf(sz - _paloma.position.z) < 28.0)
 	else:
 		_tunel.mostrar_todo()
+		_paloma.set_en_estacion(false)
 
-	# ── Trenes: avanzan en su vía con velocidad propia + scroll del mundo
-	#         (resultado: visualmente adelantan al túnel, como trenes reales).
+	# ── Trenes: avanzan en su vía con velocidad propia + scroll del mundo.
+	# La velocidad propia crece con la puntuación (dificultad progresiva).
+	var vel_tren: float = VEL_SCROLL + _tren_vel_extra()
 	for tren in _trenes:
-		tren.position.z += (VEL_SCROLL + TREN_VEL) * delta
+		tren.position.z += vel_tren * delta
 		if tren.position.z > TREN_Z_RECICLAJE:
 			_reciclar_tren(tren)
+
+
+# Velocidad extra del tren según la dificultad (escala con la puntuación).
+func _tren_vel_extra() -> float:
+	return TREN_VEL_BASE + clampf(float(_puntuacion) * TREN_VEL_INC_POR_PUNTO,
+			0.0, TREN_VEL_INC_MAX)
 
 
 # ── Estaciones ───────────────────────────────────────────────────────────
@@ -148,6 +171,14 @@ func proxima_estacion_nombre() -> String:
 	return _l3_stations[_idx_proxima]
 
 
+func vidas() -> int:
+	return _vidas_totales
+
+
+func puntuacion() -> int:
+	return _puntuacion
+
+
 # ── Trenes ───────────────────────────────────────────────────────────────
 func _crear_trenes() -> void:
 	for i in NUM_TRENES:
@@ -172,9 +203,23 @@ func _reciclar_tren(tren: Area3D) -> void:
 
 # ── Muerte / reinicio ────────────────────────────────────────────────────
 func _on_paloma_murio() -> void:
-	print("[MundoJuego] La paloma se estrelló — respawn en el sitio.")
+	_vidas_totales -= 1
+	print("[MundoJuego] La paloma se estrelló — vidas restantes: %d" % _vidas_totales)
+	if _vidas_totales <= 0:
+		_ultimo_record_nuevo = GameState.actualizar_record(_puntuacion)
+		if _ultimo_record_nuevo:
+			print("[MundoJuego] ¡NUEVO RÉCORD! %d estaciones" % _puntuacion)
+		else:
+			print("[MundoJuego] GAME OVER · estaciones: %d (récord %d)"
+					% [_puntuacion, GameState.record_puntuacion])
+		GameState.change_phase(GameState.Phase.GAMEOVER)
+		return
 	_estado = Estado.MUERTO
 	_cooldown = COOLDOWN_MUERTE
+
+
+func nuevo_record() -> bool:
+	return _ultimo_record_nuevo
 
 
 func _on_phase_changed(nueva: GameState.Phase) -> void:
@@ -202,4 +247,6 @@ func _reset_completo() -> void:
 		_estacion = null
 	_t_ciclo = 0.0
 	_idx_proxima = IDX_INICIAL
+	_vidas_totales = VIDAS_INICIALES
+	_puntuacion = 0
 	_estado = Estado.JUGANDO

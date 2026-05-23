@@ -326,7 +326,9 @@ func _construir_friso() -> void:
 func _construir_pantalla_led() -> void:
 	var c := _contenedor("PantallaLED")
 	var z: float = 16.0
-	var y: float = 3.7
+	# y 4.0 (era 3.7) para que la pantalla no toque la cabeza de la paloma
+	# cuando vuela alto (LIMITE_Y_MAX 2.9 → top ≈3.4).
+	var y: float = 4.0
 	_bloque(c, Vector3(2.6, 0.8, 0.12), Vector3(0.0, y, z), "led_fondo")
 	var cable_alto: float = HALL_ALTO - (y + 0.4)
 	for s in 2:
@@ -404,7 +406,9 @@ func _construir_boca_en(z_muro: float, signo: float, con_void: bool, con_nombre:
 	var nombre_cont: String = "BocaLejana" if signo < 0.0 else "BocaCercana"
 	var c := _contenedor(nombre_cont)
 	var open_half: float = 4.0
-	var open_alto: float = 3.2
+	# open_alto 4.0 (era 3.2): el dintel queda por encima de la paloma a
+	# LIMITE_Y_MAX 2.9 (su cabeza llega a y≈3.4), así no lo atraviesa.
+	var open_alto: float = 4.0
 	var lateral_ancho: float = MURO_X - open_half
 	# Paneles del muro de fondo alrededor de la abertura
 	_bloque(c, Vector3(MURO_X * 2.0, HALL_ALTO - open_alto, 0.4),

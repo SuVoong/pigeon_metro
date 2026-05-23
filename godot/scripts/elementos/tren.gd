@@ -1,33 +1,36 @@
 extends Area3D
 
-# Fase B5 (prototipo) — Tren del Metro de Madrid como obstáculo móvil.
-# Modelo procedural de cajas inspirado en la serie 3000/8000:
-#   · cuerpo blanco, frente oscuro prominente con parabrisas envolvente,
-#   · cuatro faros (dos blancos inferiores + dos rojos de gálibo),
-#   · friso azul corporativo + franja del color de línea,
-#   · rombo rojo de Metro de Madrid en el costado de la cabina,
-#   · marcas verticales de las puertas a lo largo del cuerpo.
+# Fase B5 — Tren del Metro de Madrid como obstáculo móvil.
+# Modelo procedural de cajas inspirado en la serie 5000/8000:
+#   · cuerpo blanco con cabina blanca (no oscura — la cara oscura es solo
+#     el parabrisas y el panel LED de destino),
+#   · parabrisas dividido en dos ventanas grandes con pilar central blanco
+#     + dos ventanas envolventes laterales,
+#   · panel LED prominente sobre el parabrisas (texto naranja-rojo),
+#   · 5 ventanas de pasajeros a lo largo del costado,
+#   · franjas azul corporativo arriba y abajo de la línea de ventanas
+#     + franja del color de línea (naranja L3) en el faldón superior,
+#   · rombo rojo de Metro de Madrid grande en el frente y en cada costado,
+#   · faros blancos emisivos inferiores + luces de gálibo rojas.
 # La velocidad propia respecto al scroll del mundo la añade mundo_juego.gd.
 
 @export var color_linea: Color = Color("#f39200")  # L3 naranja por defecto
 
-# ── Paleta — colores reales del Metro de Madrid ──────────────────────────
-const COL_CUERPO := Color("#f5f5f5")        # blanco perlado
-const COL_TECHO := Color("#dcdcdc")
+# ── Paleta — Metro de Madrid (serie 5000/8000) ───────────────────────────
+const COL_CUERPO := Color("#f6f6f6")        # blanco perlado
+const COL_TECHO := Color("#dadada")
 const COL_BAJO := Color("#1a1a25")          # faldón y bogies
-const COL_CABINA := Color("#161616")        # frente oscuro prominente
-const COL_WINDOW := Color("#0e1e30")        # parabrisas tintado
+const COL_VENTANA := Color("#0c1a2a")       # cristal tintado oscuro
+const COL_PILAR := Color("#f6f6f6")         # pilar central blanco entre parabrisas
 const COL_LED_BG := Color("#0a0a0a")
-const COL_LED_TXT := Color("#ff9933")
-const COL_HEADLIGHT := Color("#ffffff")
-const COL_MARKER := Color("#cc2211")        # rojo Metro
-const COL_STRIPE_BLUE := Color("#1a4080")   # azul corporativo
-const COL_ROMBO := Color("#cc2211")
-const COL_PUERTA := Color("#707070")
+const COL_LED_TXT := Color("#ff5520")       # rojo-naranja brillante del destino
+const COL_HEADLIGHT := Color("#fff5d0")     # blanco cálido
+const COL_MARKER := Color("#cc2211")
+const COL_AZUL := Color("#1a4080")          # azul corporativo Metro
+const COL_ROMBO := Color("#cc2211")         # rojo del rombo
 
 
 func _ready() -> void:
-	# El tren es detectado por la paloma, no detecta nada por sí mismo.
 	monitoring = false
 	add_to_group("obstaculos")
 	_construir_modelo()
@@ -35,57 +38,71 @@ func _ready() -> void:
 
 
 func _construir_modelo() -> void:
-	# ── Cuerpo principal ─────────────────────────────────────────────────
+	# ── Cuerpo y techo ──────────────────────────────────────────────────
 	_caja(Vector3(2.0, 2.6, 7.5), Vector3(0.0, 1.45, -0.25), COL_CUERPO)
 	_caja(Vector3(1.95, 0.18, 7.3), Vector3(0.0, 2.85, -0.25), COL_TECHO)
 	_caja(Vector3(1.92, 0.3, 7.3), Vector3(0.0, 0.3, -0.25), COL_BAJO)
 
-	# ── Cabina (frente oscuro, sobresale 0.5 m del cuerpo) ───────────────
-	_caja(Vector3(2.0, 2.85, 1.0), Vector3(0.0, 1.55, 4.0), COL_CABINA)
+	# ── Cabina (blanca como el cuerpo, sobresale 0.5 m) ─────────────────
+	_caja(Vector3(2.0, 2.85, 1.0), Vector3(0.0, 1.55, 4.0), COL_CUERPO)
+	_caja(Vector3(1.95, 0.18, 1.0), Vector3(0.0, 2.95, 4.0), COL_TECHO)
 
-	# ── Parabrisas + ventanas laterales envolventes ──────────────────────
-	_caja(Vector3(1.55, 0.95, 0.06), Vector3(0.0, 2.05, 4.53), COL_WINDOW)
-	_caja(Vector3(0.25, 0.85, 0.06), Vector3(-0.92, 2.05, 4.53), COL_WINDOW)
-	_caja(Vector3(0.25, 0.85, 0.06), Vector3(0.92, 2.05, 4.53), COL_WINDOW)
+	# ── Frente: panel LED de destino (prominente, arriba) ───────────────
+	_caja(Vector3(1.85, 0.42, 0.06), Vector3(0.0, 2.7, 4.53), COL_LED_BG)
+	_caja(Vector3(1.55, 0.2, 0.07), Vector3(0.0, 2.7, 4.54), COL_LED_TXT)
 
-	# ── Panel LED de destino sobre el parabrisas ─────────────────────────
-	_caja(Vector3(1.4, 0.2, 0.06), Vector3(0.0, 2.75, 4.53), COL_LED_BG)
-	_caja(Vector3(1.2, 0.1, 0.07), Vector3(0.0, 2.75, 4.54), COL_LED_TXT)
+	# ── Frente: parabrisas dividido en DOS con pilar central blanco ─────
+	_caja(Vector3(0.78, 0.88, 0.06), Vector3(-0.45, 2.0, 4.53), COL_VENTANA)
+	_caja(Vector3(0.78, 0.88, 0.06), Vector3(0.45, 2.0, 4.53), COL_VENTANA)
+	_caja(Vector3(0.14, 0.88, 0.07), Vector3(0.0, 2.0, 4.55), COL_PILAR)
+	# Ventanas envolventes a los lados del parabrisas
+	_caja(Vector3(0.18, 0.78, 0.06), Vector3(-0.94, 2.0, 4.53), COL_VENTANA)
+	_caja(Vector3(0.18, 0.78, 0.06), Vector3(0.94, 2.0, 4.53), COL_VENTANA)
 
-	# ── Faros (2 blancos inferiores + 2 rojos de gálibo) ─────────────────
+	# ── Frente: rombo rojo GRANDE bajo el parabrisas ────────────────────
+	_caja(Vector3(0.42, 0.42, 0.05), Vector3(0.0, 1.2, 4.53), COL_ROMBO)
+	# Centro blanco del rombo (efecto "M")
+	_caja(Vector3(0.18, 0.18, 0.06), Vector3(0.0, 1.2, 4.54), COL_CUERPO)
+
+	# ── Frente: faros blancos emisivos inferiores + luces rojas de gálibo
 	var mat_blanco := StandardMaterial3D.new()
 	mat_blanco.albedo_color = COL_HEADLIGHT
 	mat_blanco.emission_enabled = true
 	mat_blanco.emission = COL_HEADLIGHT
-	mat_blanco.emission_energy_multiplier = 2.0
-	_caja_mat(Vector3(0.32, 0.2, 0.05), Vector3(-0.65, 1.0, 4.53), mat_blanco)
-	_caja_mat(Vector3(0.32, 0.2, 0.05), Vector3(0.65, 1.0, 4.53), mat_blanco)
+	mat_blanco.emission_energy_multiplier = 2.4
+	_caja_mat(Vector3(0.26, 0.16, 0.05), Vector3(-0.7, 0.65, 4.53), mat_blanco)
+	_caja_mat(Vector3(0.26, 0.16, 0.05), Vector3(0.7, 0.65, 4.53), mat_blanco)
 
 	var mat_rojo := StandardMaterial3D.new()
 	mat_rojo.albedo_color = COL_MARKER
 	mat_rojo.emission_enabled = true
 	mat_rojo.emission = COL_MARKER
-	mat_rojo.emission_energy_multiplier = 1.2
-	_caja_mat(Vector3(0.15, 0.1, 0.05), Vector3(-0.85, 1.55, 4.53), mat_rojo)
-	_caja_mat(Vector3(0.15, 0.1, 0.05), Vector3(0.85, 1.55, 4.53), mat_rojo)
+	mat_rojo.emission_energy_multiplier = 1.4
+	_caja_mat(Vector3(0.14, 0.1, 0.05), Vector3(-0.88, 1.6, 4.53), mat_rojo)
+	_caja_mat(Vector3(0.14, 0.1, 0.05), Vector3(0.88, 1.6, 4.53), mat_rojo)
 
-	# ── Franjas laterales (azul corporativo + color de línea) ────────────
+	# ── Frente: franja azul horizontal inferior (parte del "swoosh") ────
+	_caja(Vector3(1.85, 0.1, 0.06), Vector3(0.0, 0.85, 4.53), COL_AZUL)
+
+	# ── Costados: ventanas de pasajeros + franjas azules + rombo ────────
+	var ventanas_z: Array[float] = [-2.8, -1.4, 0.0, 1.4, 2.8]
 	for s in 2:
 		var lado: float = -1.0 if s == 0 else 1.0
-		_caja(Vector3(0.04, 0.12, 7.5), Vector3(lado * 1.01, 0.85, -0.25), COL_STRIPE_BLUE)
-		_caja(Vector3(0.04, 0.18, 7.5), Vector3(lado * 1.01, 1.05, -0.25), color_linea)
-
-	# ── Indicadores de puertas a lo largo del costado ────────────────────
-	var puertas_z: Array[float] = [-2.5, -0.5, 1.5]
-	for s in 2:
-		var lado: float = -1.0 if s == 0 else 1.0
-		for pz in puertas_z:
-			_caja(Vector3(0.03, 1.8, 0.04), Vector3(lado * 1.01, 1.45, pz), COL_PUERTA)
-
-	# ── Rombo rojo de Metro de Madrid en el costado de la cabina ─────────
-	for s in 2:
-		var lado: float = -1.0 if s == 0 else 1.0
-		_caja(Vector3(0.04, 0.18, 0.18), Vector3(lado * 1.01, 1.85, 4.1), COL_ROMBO)
+		# Ventanas tintadas a lo largo del cuerpo
+		for vz in ventanas_z:
+			_caja(Vector3(0.04, 0.8, 0.9), Vector3(lado * 1.01, 1.95, vz), COL_VENTANA)
+		# Franja azul superior (sobre las ventanas)
+		_caja(Vector3(0.04, 0.08, 7.5), Vector3(lado * 1.01, 2.45, -0.25), COL_AZUL)
+		# Franja azul inferior (bajo las ventanas)
+		_caja(Vector3(0.04, 0.12, 7.5), Vector3(lado * 1.01, 1.4, -0.25), COL_AZUL)
+		# Franja del color de línea (justo por encima del faldón)
+		_caja(Vector3(0.04, 0.08, 7.5), Vector3(lado * 1.01, 0.65, -0.25), color_linea)
+		# Rombo rojo de Metro en el costado de la cabina
+		_caja(Vector3(0.04, 0.28, 0.28), Vector3(lado * 1.015, 1.7, 4.1), COL_ROMBO)
+		# Rombo rojo de Metro en mitad del costado del cuerpo
+		_caja(Vector3(0.04, 0.22, 0.22), Vector3(lado * 1.015, 1.0, 0.0), COL_ROMBO)
+		# Franja azul continúa en el costado de la cabina (efecto swoosh)
+		_caja(Vector3(0.045, 0.12, 0.9), Vector3(lado * 1.015, 0.85, 4.05), COL_AZUL)
 
 
 func _construir_colision() -> void:

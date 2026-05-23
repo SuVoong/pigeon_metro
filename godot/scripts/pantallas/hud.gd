@@ -1,7 +1,10 @@
 extends Control
 
-# HUD del modo juego — muestra un mapa lineal con las 20 estaciones de L3 y
-# un marcador que indica cuánto queda para llegar a la próxima estación.
+# HUD del modo juego — muestra:
+#   · Mapa lineal con las 20 estaciones de L3 y marcador de posición.
+#   · Nombre de la próxima estación.
+#   · Vidas restantes del run (3 círculos arriba a la derecha).
+#   · Puntuación (estaciones cruzadas) a la derecha del título.
 # Lee el estado del nivel desde el Mundo3D / mundo_juego.gd.
 
 const COLOR_BG := Color(0.0, 0.0, 0.0, 0.55)
@@ -10,12 +13,17 @@ const COLOR_LINEA_L3 := Color("#f39200")        # naranja L3
 const COLOR_DOT := Color("#cccccc")
 const COLOR_DOT_ACTIVO := Color("#f5c518")
 const COLOR_MARCADOR := Color("#ffffff")
+const COLOR_VIDA_LLENA := Color("#cc2211")      # rojo Metro
+const COLOR_VIDA_VACIA := Color(0.2, 0.2, 0.25, 1.0)
+const COLOR_SCORE := Color("#ffffff")
 
 const PANEL_ALTO: float = 80.0
 const PAD_X: float = 40.0
 const Y_NOMBRE: float = 22.0
 const Y_DOTS: float = 56.0
 const FONT_SIZE_NOMBRE: int = 16
+const VIDAS_RADIO: float = 9.0
+const VIDAS_GAP: float = 28.0
 
 @onready var _mundo: Node = get_node("/root/Main/Mundo3D")
 
@@ -41,6 +49,8 @@ func _draw() -> void:
 	var idx: int = _mundo.indice_proxima()
 	var progreso: float = _mundo.progreso_ciclo()
 	var nombre: String = _mundo.proxima_estacion_nombre()
+	var vidas: int = _mundo.vidas()
+	var score: int = _mundo.puntuacion()
 
 	var w: float = size.x
 	var n: int = stations.size()
@@ -54,6 +64,20 @@ func _draw() -> void:
 	draw_string(_font, Vector2(PAD_X, Y_NOMBRE),
 			"PRÓXIMA  ·  " + nombre.to_upper(),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE_NOMBRE, COLOR_TITULO)
+
+	# Puntuación + récord a la mitad del panel
+	var record: int = GameState.record_puntuacion
+	var score_txt: String = "ESTACIONES  ·  %d   (MEJOR  ·  %d)" % [score, record]
+	draw_string(_font, Vector2(w * 0.5, Y_NOMBRE),
+			score_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE_NOMBRE, COLOR_SCORE)
+
+	# Vidas (3 círculos arriba a la derecha)
+	var vidas_max: int = 3
+	var vidas_x_base: float = w - PAD_X - VIDAS_RADIO
+	for i in vidas_max:
+		var cx: float = vidas_x_base - float(i) * VIDAS_GAP
+		var color: Color = COLOR_VIDA_LLENA if (vidas_max - 1 - i) < vidas else COLOR_VIDA_VACIA
+		draw_circle(Vector2(cx, Y_NOMBRE + 2), VIDAS_RADIO, color)
 
 	# Línea base de la L3
 	draw_line(Vector2(PAD_X, Y_DOTS), Vector2(PAD_X + bar_w, Y_DOTS),

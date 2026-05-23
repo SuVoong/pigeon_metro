@@ -21,12 +21,23 @@ const VELOCIDAD_MAX: float = 6.0      # MAX_VELOCITY
 const SUAVIZADO: float = 0.15         # EASING (lerp por frame a 60 fps)
 const BANCO_MAX: float = 0.3          # inclinación al virar (tilt * 0.3)
 
-# ── Límites de vuelo dentro del bore del túnel (media elipse 8.6 × 4.2) ──
-# El techo elíptico baja hacia los lados: LIMITE_Y_MAX deja a la paloma por
-# debajo de la bóveda incluso con |X| máximo.
-const LIMITE_X: float = 2.3
+# ── Límites de vuelo ─────────────────────────────────────────────────────
+# Se aplica un tope global LIMITE_X y un clamp dinámico por altura:
+#   · En el túnel: la paloma se estrecha lateralmente al subir, siguiendo el
+#     arco elíptico del bore (BORE_RX x BORE_RY).
+#   · En la estación (señalada por mundo_juego.gd con set_en_estacion(true)):
+#     se libera el clamp del arco y se permite hasta los pilares (LIMITE_X),
+#     con un sub-clamp al borde interior del andén cuando vuela por debajo
+#     de la altura del andén (la paloma no puede meterse en la losa del
+#     andén). El y_min sube a la altura del andén si está volando por fuera
+#     del andén interior para no atravesar la losa.
+const LIMITE_X: float = 3.7              # tope global (entre pilares)
 const LIMITE_Y_MIN: float = 0.7
 const LIMITE_Y_MAX: float = 2.9
+const ARCH_RX: float = 4.3               # = BORE_RX de tunel_base.gd
+const ARCH_RY: float = 4.2               # = BORE_RY de tunel_base.gd
+const ANDEN_X_INT: float = 3.15          # borde interior del andén con margen
+const ANDEN_Y_TOP_CS: float = 1.275      # andén top (1.0) + CS half-h (0.275)
 const POS_INICIAL: Vector3 = Vector3(0.0, 2.0, -7.0)
 
 # ── Aleteo e invencibilidad ──────────────────────────────────────────────
@@ -49,6 +60,7 @@ var _vivo: bool = true
 var _invencible: float = 0.0
 var _parpadeo: float = 0.0
 var _tiempo: float = 0.0
+var _en_estacion: bool = false      # mundo_juego.gd lo activa al solapar
 var _modelo: Node3D
 var _ala_izq: Node3D
 var _ala_der: Node3D
@@ -90,13 +102,41 @@ func _mover(delta: float) -> void:
 	var t := 1.0 - pow(1.0 - SUAVIZADO, delta * 60.0)
 	_vel = _vel.lerp(objetivo, t)
 
+	# Y primero — el X máximo depende de la altura.
+	# En la estación, si la paloma vuela alta y a los lados, no puede bajar
+	# por encima del andén (la losa la detiene desde abajo).
 	var p := position
-	p.x = clampf(p.x + _vel.x * delta, -LIMITE_X, LIMITE_X)
-	p.y = clampf(p.y + _vel.y * delta, LIMITE_Y_MIN, LIMITE_Y_MAX)
+	var y_min_dyn: float = LIMITE_Y_MIN
+	if _en_estacion and absf(p.x) > ANDEN_X_INT:
+		y_min_dyn = ANDEN_Y_TOP_CS
+	p.y = clampf(p.y + _vel.y * delta, y_min_dyn, LIMITE_Y_MAX)
+	var x_max: float = _max_x_a_altura(p.y)
+	p.x = clampf(p.x + _vel.x * delta, -x_max, x_max)
 	position = p
 
 	# Inclinación visual al virar (pigeon.tilt en paloma.js).
 	_modelo.rotation.z = -_vel.x / VELOCIDAD_MAX * BANCO_MAX
+
+
+# Devuelve el |X| máximo permitido a la altura y.
+# En estación (set_en_estacion=true): por encima del andén se puede llegar
+# hasta los pilares (LIMITE_X); por debajo, al borde interior del andén.
+# En túnel: la elipse del bore con la esquina superior del hitbox.
+func _max_x_a_altura(y: float) -> float:
+	if _en_estacion:
+		if y >= ANDEN_Y_TOP_CS:
+			return LIMITE_X
+		return ANDEN_X_INT
+	var y_arr: float = y + 0.275  # esquina superior del hitbox (CS size_y/2)
+	var ratio: float = clampf(y_arr / ARCH_RY, 0.0, 0.99)
+	var x_arch: float = ARCH_RX * sqrt(1.0 - ratio * ratio) - 0.375
+	return clampf(x_arch, 0.5, LIMITE_X)
+
+
+# mundo_juego.gd lo invoca cuando una estación está atravesando la paloma,
+# para que los límites de vuelo cambien al recinto de la estación.
+func set_en_estacion(activa: bool) -> void:
+	_en_estacion = activa
 
 
 func _aletear() -> void:
