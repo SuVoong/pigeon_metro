@@ -9,6 +9,7 @@ extends Node
 @onready var _ui_arcade: CanvasLayer = $UI_Arcade
 @onready var _ui_hud: CanvasLayer = $UI_HUD
 @onready var _ui_gameover: CanvasLayer = $UI_Gameover
+@onready var _ui_personaje: CanvasLayer = $UI_Personaje
 
 
 func _ready() -> void:
@@ -21,12 +22,13 @@ func _on_phase_changed(new_phase: GameState.Phase) -> void:
 
 
 func _aplicar_fase(phase: GameState.Phase) -> void:
-	# Fases con UI propia: START (menú), ARCADE (mapa), GAMEOVER.
-	# Fase 3D: PLAYING (mundo del túnel) + HUD del nivel.
-	# Otras (HISTORY, CHARACTER, ACHIEVEMENTS, SETTINGS, PAUSED, etc.) aún sin
-	# pantalla propia → se quedan en negro hasta ESC.
+	# Fases con UI propia: START (menú), ARCADE (mapa), CHARACTER (selección),
+	# GAMEOVER. Fase 3D: PLAYING (mundo del túnel) + HUD del nivel.
+	# Otras (HISTORY, ACHIEVEMENTS, SETTINGS, PAUSED, etc.) aún sin pantalla
+	# propia → se quedan en negro hasta ESC.
 	_ui_inicio.visible = phase == GameState.Phase.START
 	_ui_arcade.visible = phase == GameState.Phase.ARCADE
+	_ui_personaje.visible = phase == GameState.Phase.CHARACTER
 	_ui_hud.visible = phase == GameState.Phase.PLAYING
 	_ui_gameover.visible = phase == GameState.Phase.GAMEOVER
 	_mundo_3d.visible = phase == GameState.Phase.PLAYING

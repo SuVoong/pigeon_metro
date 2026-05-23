@@ -17,7 +17,7 @@ signal murio
 @export var vidas_iniciales: int = 3
 
 # ── Movimiento (feel portado de paloma.js) ───────────────────────────────
-const VELOCIDAD_MAX: float = 6.0      # MAX_VELOCITY
+const VELOCIDAD_MAX: float = 4.5      # MAX_VELOCITY (-25% sobre el feel original)
 const SUAVIZADO: float = 0.15         # EASING (lerp por frame a 60 fps)
 const BANCO_MAX: float = 0.3          # inclinación al virar (tilt * 0.3)
 
@@ -31,9 +31,9 @@ const BANCO_MAX: float = 0.3          # inclinación al virar (tilt * 0.3)
 #     de la altura del andén (la paloma no puede meterse en la losa del
 #     andén). El y_min sube a la altura del andén si está volando por fuera
 #     del andén interior para no atravesar la losa.
-const LIMITE_X: float = 3.7              # tope global (entre pilares)
-const LIMITE_Y_MIN: float = 0.7
-const LIMITE_Y_MAX: float = 2.9
+const LIMITE_X: float = 4.2              # tope global (entre pilares)
+const LIMITE_Y_MIN: float = 0.5          # ras de las traviesas, sobre el rail
+const LIMITE_Y_MAX: float = 3.6          # casi a la altura de los focos del techo
 const ARCH_RX: float = 4.3               # = BORE_RX de tunel_base.gd
 const ARCH_RY: float = 4.2               # = BORE_RY de tunel_base.gd
 const ANDEN_X_INT: float = 3.15          # borde interior del andén con margen

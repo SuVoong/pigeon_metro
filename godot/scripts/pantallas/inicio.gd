@@ -12,6 +12,14 @@ const MENU_ITEMS: Array[Dictionary] = [
 	{"label": "LOGROS",        "phase": "ACHIEVEMENTS"},
 ]
 
+# Misma lista de personajes que en personaje.gd; basta con el nombre y el
+# color de cuerpo para pintar el preview.
+const PERSONAJES_PREVIEW: Array[Dictionary] = [
+	{"nombre": "PALOMA", "color": Color("#8899aa")},
+	{"nombre": "PIDGEY", "color": Color("#c8a040")},
+	{"nombre": "RED",    "color": Color("#e02020")},
+]
+
 # Paleta — derivada de PAL en js/mecanica/estado.js.
 const COLOR_BG := Color("#0d0d1a")
 const COLOR_TRAIN_YELLOW := Color("#f5c518")
@@ -149,11 +157,17 @@ func _draw() -> void:
 	draw_rect(Rect2(preview_cx - box / 2.0, preview_y, box, box), COLOR_PREVIEW_BG)
 	draw_rect(Rect2(preview_cx - box / 2.0, preview_y, box, box),
 		COLOR_TRAIN_YELLOW, false, 1.5)
-	# Placeholder hasta B9 (personajes): texto centrado.
-	draw_string(_font, Vector2(preview_cx - 28, preview_y + box / 2.0 + 4),
-		"PALOMA", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, COLOR_HUD)
+	# Preview pixel-art: bloque de color del cuerpo del personaje activo
+	# centrado en la caja, con su nombre debajo.
+	var idx: int = clampi(GameState.selected_character_idx, 0,
+		PERSONAJES_PREVIEW.size() - 1)
+	var datos: Dictionary = PERSONAJES_PREVIEW[idx]
+	var blob: float = box * 0.45
+	draw_rect(Rect2(preview_cx - blob / 2.0,
+			preview_y + box / 2.0 - blob / 2.0,
+			blob, blob), datos.color)
 	draw_string(_font, Vector2(preview_cx - 28, preview_y + box + 18),
-		"PALOMA", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, COLOR_TRAIN_YELLOW)
+		datos.nombre, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, COLOR_TRAIN_YELLOW)
 
 	# Hint de controles parpadeante (esquina inferior izquierda)
 	if int(_frame / 40) % 2 == 0:

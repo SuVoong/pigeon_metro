@@ -83,8 +83,8 @@ func _draw() -> void:
 	draw_line(Vector2(PAD_X, Y_DOTS), Vector2(PAD_X + bar_w, Y_DOTS),
 			COLOR_LINEA_L3, 2.0)
 
-	# Puntos de estación
-	var prev_idx: int = (idx - 1 + n) % n
+	# Puntos de estación — `prev_idx` lo da el mundo según la dirección elegida.
+	var prev_idx: int = _mundo.indice_previa()
 	for i in n:
 		var px: float = PAD_X + float(i) * step
 		var es_actual: bool = i == idx or i == prev_idx

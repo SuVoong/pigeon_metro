@@ -27,6 +27,13 @@ const TREN_VEL_INC_MAX: float = 6.0
 # Vidas del run completo (no las "vidas" internas de la paloma).
 const VIDAS_INICIALES: int = 3
 
+# Personajes seleccionables. Se cicla con la tecla C en PLAYING.
+const CHARACTER_SCENES: Array[PackedScene] = [
+	preload("res://scenes/personajes/paloma.tscn"),
+	preload("res://scenes/personajes/pidgey.tscn"),
+	preload("res://scenes/personajes/angry_bird.tscn"),
+]
+
 # ── Ciclo de estaciones (B6) ─────────────────────────────────────────────
 const ESTACION_SCENE: PackedScene = preload("res://scenes/escenarios/estacion/estacion_base.tscn")
 const CICLO_SEG: float = 22.0
@@ -48,7 +55,10 @@ var _estado: Estado = Estado.JUGANDO
 var _cooldown: float = 0.0
 
 var _l3_stations: Array[String] = []
+var _l3_to: String = "MONCLOA"
+var _l3_from: String = "EL CASAR"
 var _idx_proxima: int = IDX_INICIAL
+var _direccion: int = 1            # +1 hacia `to`, -1 hacia `from`
 var _t_ciclo: float = 0.0
 var _estacion: Node3D = null
 
@@ -56,6 +66,7 @@ var _estacion: Node3D = null
 var _vidas_totales: int = VIDAS_INICIALES
 var _puntuacion: int = 0
 var _ultimo_record_nuevo: bool = false   # true si el último GAME OVER batió el récord
+var _character_idx: int = 0              # personaje activo (índice en CHARACTER_SCENES)
 
 
 func _ready() -> void:
@@ -63,6 +74,40 @@ func _ready() -> void:
 	_crear_trenes()
 	_paloma.murio.connect(_on_paloma_murio)
 	GameState.phase_changed.connect(_on_phase_changed)
+	# Sincroniza el personaje arrancable con el guardado en GameState.
+	if GameState.selected_character_idx != _character_idx:
+		_character_idx = GameState.selected_character_idx
+		_swap_personaje()
+
+
+# Tecla C en PLAYING: cicla paloma → pidgey → angry_bird → paloma → ...
+func _unhandled_input(event: InputEvent) -> void:
+	if GameState.current_phase != GameState.Phase.PLAYING:
+		return
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_C:
+		_ciclar_personaje()
+		get_viewport().set_input_as_handled()
+
+
+func _ciclar_personaje() -> void:
+	_character_idx = (_character_idx + 1) % CHARACTER_SCENES.size()
+	GameState.set_personaje(_character_idx)
+	_swap_personaje()
+	print("[MundoJuego] Personaje cambiado a índice %d" % _character_idx)
+
+
+# Reemplaza la paloma activa por una nueva instancia según _character_idx,
+# preservando posición y reconectando la señal `murio`.
+func _swap_personaje() -> void:
+	var pos: Vector3 = _paloma.position
+	_paloma.murio.disconnect(_on_paloma_murio)
+	_paloma.queue_free()
+	var nuevo: Paloma = CHARACTER_SCENES[_character_idx].instantiate() as Paloma
+	nuevo.name = "Paloma"
+	nuevo.position = pos
+	add_child(nuevo)
+	_paloma = nuevo
+	_paloma.murio.connect(_on_paloma_murio)
 
 
 func _process(delta: float) -> void:
@@ -86,7 +131,7 @@ func _process(delta: float) -> void:
 	if _t_ciclo >= CICLO_SEG:
 		_t_ciclo -= CICLO_SEG
 		if _l3_stations.size() > 0:
-			_idx_proxima = (_idx_proxima + 1) % _l3_stations.size()
+			_idx_proxima = wrapi(_idx_proxima + _direccion, 0, _l3_stations.size())
 		_puntuacion += 1
 		if _estacion != null:
 			_estacion.queue_free()
@@ -127,6 +172,8 @@ func _cargar_estaciones_l3() -> void:
 		return
 	for s in linea_3.stations:
 		_l3_stations.append(String(s.name))
+	_l3_to = String(linea_3.get("to", "MONCLOA"))
+	_l3_from = String(linea_3.get("from", "EL CASAR"))
 
 
 func _spawn_estacion() -> void:
@@ -145,7 +192,7 @@ func _spawn_estacion() -> void:
 		est.remove_child(env)
 		env.queue_free()
 	est.set("nombre_estacion", _l3_stations[_idx_proxima])
-	est.set("direccion", "MONCLOA")
+	est.set("direccion", (_l3_to if _direccion > 0 else _l3_from).to_upper())
 	est.set("numero_linea", 3)
 	est.position = Vector3(0.0, 0.0, EST_SPAWN_Z)
 	add_child(est)
@@ -159,6 +206,14 @@ func estaciones_linea() -> Array:
 
 func indice_proxima() -> int:
 	return _idx_proxima
+
+
+# Índice de la estación que acabamos de dejar atrás — el HUD interpola el
+# marcador entre este y `indice_proxima` según el progreso del ciclo.
+func indice_previa() -> int:
+	if _l3_stations.is_empty():
+		return 0
+	return wrapi(_idx_proxima - _direccion, 0, _l3_stations.size())
 
 
 func progreso_ciclo() -> float:
@@ -237,8 +292,14 @@ func _reset_muerte() -> void:
 	_estado = Estado.JUGANDO
 
 
-# Al (re)entrar en PLAYING: empezamos el nivel desde Delicias.
+# Al (re)entrar en PLAYING: arrancamos en la estación y dirección elegidas
+# desde la pantalla ARCADE (Delicias hacia Moncloa por defecto).
 func _reset_completo() -> void:
+	# Si el jugador eligió otro personaje desde la pantalla de selección,
+	# aplica el cambio antes del respawn.
+	if GameState.selected_character_idx != _character_idx:
+		_character_idx = GameState.selected_character_idx
+		_swap_personaje()
 	_paloma.reiniciar()
 	for i in _trenes.size():
 		_colocar_tren(_trenes[i], -50.0 - float(i) * TREN_SEPARACION)
@@ -246,7 +307,12 @@ func _reset_completo() -> void:
 		_estacion.queue_free()
 		_estacion = null
 	_t_ciclo = 0.0
-	_idx_proxima = IDX_INICIAL
+	if _l3_stations.size() > 0:
+		_idx_proxima = clampi(GameState.selected_station_idx, 0,
+				_l3_stations.size() - 1)
+	else:
+		_idx_proxima = IDX_INICIAL
+	_direccion = 1 if GameState.selected_direction >= 0 else -1
 	_vidas_totales = VIDAS_INICIALES
 	_puntuacion = 0
 	_estado = Estado.JUGANDO
