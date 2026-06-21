@@ -1,0 +1,81 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://scenes/escenarios/tunel/tunel_base.tscn" id="2_tunel"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/inicio.tscn" id="3_inicio"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/arcade.tscn" id="4_arcade"]
+[ext_resource type="Script" path="res://scripts/escenarios/mundo_juego.gd" id="5_mundo"]
+[ext_resource type="PackedScene" path="res://scenes/personajes/paloma.tscn" id="6_paloma"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/hud.tscn" id="7_hud"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/gameover.tscn" id="8_gameover"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/personaje.tscn" id="9_personaje"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/historia.tscn" id="10_historia"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/logros.tscn" id="11_logros"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/ajustes.tscn" id="12_ajustes"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/pausa.tscn" id="13_pausa"]
+[ext_resource type="PackedScene" path="res://scenes/pantallas/fin_nivel.tscn" id="14_finnivel"]
+
+[node name="Main" type="Node"]
+script = ExtResource("1_main")
+
+[node name="Mundo3D" type="Node3D" parent="."]
+visible = false
+script = ExtResource("5_mundo")
+
+[node name="TunelBase" parent="Mundo3D" instance=ExtResource("2_tunel")]
+
+[node name="Paloma" parent="Mundo3D" instance=ExtResource("6_paloma")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -7)
+
+[node name="UI_Inicio" type="CanvasLayer" parent="."]
+
+[node name="Inicio" parent="UI_Inicio" instance=ExtResource("3_inicio")]
+
+[node name="UI_Arcade" type="CanvasLayer" parent="."]
+visible = false
+
+[node name="Arcade" parent="UI_Arcade" instance=ExtResource("4_arcade")]
+
+[node name="UI_HUD" type="CanvasLayer" parent="."]
+visible = false
+
+[node name="HUD" parent="UI_HUD" instance=ExtResource("7_hud")]
+
+[node name="UI_Gameover" type="CanvasLayer" parent="."]
+visible = false
+
+[node name="Gameover" parent="UI_Gameover" instance=ExtResource("8_gameover")]
+
+[node name="UI_Personaje" type="CanvasLayer" parent="."]
+visible = false
+
+[node name="Personaje" parent="UI_Personaje" instance=ExtResource("9_personaje")]
+
+[node name="UI_Historia" type="CanvasLayer" parent="."]
+visible = false
+
+[node name="Historia" parent="UI_Historia" instance=ExtResource("10_historia")]
+
+[node name="UI_Logros" type="CanvasLayer" parent="."]
+visible = false
+
+[node name="Logros" parent="UI_Logros" instance=ExtResource("11_logros")]
+
+[node name="UI_Ajustes" type="CanvasLayer" parent="."]
+visible = false
+
+[node name="Ajustes" parent="UI_Ajustes" instance=ExtResource("12_ajustes")]
+
+[node name="UI_Pausa" type="CanvasLayer" parent="."]
+process_mode = 3
+visible = false
+layer = 10
+
+[node name="Pausa" parent="UI_Pausa" instance=ExtResource("13_pausa")]
+
+[node name="UI_FinNivel" type="CanvasLayer" parent="."]
+process_mode = 3
+visible = false
+layer = 10
+
+[node name="FinNivel" parent="UI_FinNivel" instance=ExtResource("14_finnivel")]

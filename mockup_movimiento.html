@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Prueba de movimiento — Pigeon Metro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0e;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #ddd;
+    padding: 16px;
+  }
+  h1 {
+    color: #FFCC00;
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+  .subtitle {
+    color: #888;
+    font-size: 11px;
+    margin-bottom: 14px;
+    text-align: center;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+  .panel {
+    background: #14141a;
+    border: 1px solid #2a2a30;
+    border-radius: 4px;
+    padding: 8px;
+  }
+  .panel h3 {
+    font-size: 11px;
+    color: #FFCC00;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+  }
+  .panel .meta {
+    font-size: 9px;
+    color: #888;
+    margin-bottom: 6px;
+    font-family: monospace;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #000;
+    border-radius: 2px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Prueba de movimiento · 6 posiciones de cámara</h1>
+<div class="subtitle">
+  La paloma se mueve por la estación · cada panel muestra una posición
+  distinta para verificar cómo se comporta la perspectiva
+</div>
+
+<!-- Canvas oculto requerido por estado.js (busca id="game") -->
+<canvas id="game" width="1280" height="720" style="display:none"></canvas>
+
+<div class="grid">
+  <div class="panel">
+    <h3>1 · Frontal centrada</h3>
+    <div class="meta">X=0 %, Y=40 %</div>
+    <canvas id="c1" width="640" height="360"></canvas>
+  </div>
+  <div class="panel">
+    <h3>2 · Bajada (vuelo bajo)</h3>
+    <div class="meta">X=0 %, Y=70 %</div>
+    <canvas id="c2" width="640" height="360"></canvas>
+  </div>
+  <div class="panel">
+    <h3>3 · Alta (vuelo alto)</h3>
+    <div class="meta">X=0 %, Y=15 %</div>
+    <canvas id="c3" width="640" height="360"></canvas>
+  </div>
+  <div class="panel">
+    <h3>4 · Lateral izquierda</h3>
+    <div class="meta">X=-60 %, Y=50 %</div>
+    <canvas id="c4" width="640" height="360"></canvas>
+  </div>
+  <div class="panel">
+    <h3>5 · Lateral derecha</h3>
+    <div class="meta">X=60 %, Y=50 %</div>
+    <canvas id="c5" width="640" height="360"></canvas>
+  </div>
+  <div class="panel">
+    <h3>6 · Rasante (al ras del rail)</h3>
+    <div class="meta">X=0 %, Y=90 %</div>
+    <canvas id="c6" width="640" height="360"></canvas>
+  </div>
+</div>
+
+<script type="module">
+import { canvas as mainCanvas, ctx as mainCtx, STATE, pigeon } from './js/mecanica/estado.js';
+import { EstacionBase } from './js/escenarios/metro_base/estacion_base.js';
+import {
+  camera, applyCamera, unapplyCamera,
+  CAMERA_RANGE_X, CAMERA_RANGE_Y_DOWN, initCamera,
+  getCameraVpY,
+} from './js/mecanica/camara.js';
+
+initCamera();
+STATE.phase = '_MOCKUP_MOVIMIENTO_';
+
+const stationName = 'Nombre Estación';
+const est = new EstacionBase({
+  stationName,
+  stationDirection: 'MONCLOA',
+  lineNumber: 3,
+  lineColor: '#F39200',
+  showHangingSigns: false,
+  showLEDScreen: false,
+  showMetroLogo: false,
+  showEmergencyBoxes: false,
+  showCatenary: false,
+});
+est.init(stationName);
+for (let i = 0; i < 60; i++) est.update(1);
+
+pigeon.vx = 0; pigeon.vy = 0; pigeon.tilt = 0; pigeon.invincible = 0;
+
+// Lista de cámaras a renderizar [id, cxPct, cyPct]
+const VIEWS = [
+  ['c1',  0.00, 0.40],
+  ['c2',  0.00, 0.70],
+  ['c3',  0.00, 0.15],
+  ['c4', -0.60, 0.50],
+  ['c5',  0.60, 0.50],
+  ['c6',  0.00, 0.90],
+];
+
+// El render de EstacionBase usa el canvas global `mainCanvas`. Para
+// renderizar varias cámaras, ponemos en mainCanvas el dibujo, luego
+// copiamos al canvas destino.
+mainCanvas.width  = 1280;
+mainCanvas.height = 720;
+
+function renderView(cxPct, cyPct) {
+  camera.offsetX = mainCanvas.width  * CAMERA_RANGE_X      * cxPct;
+  camera.offsetY = mainCanvas.height * CAMERA_RANGE_Y_DOWN * cyPct;
+  pigeon.x = camera.offsetX;
+  pigeon.y = camera.offsetY;
+
+  est.update(1);
+  mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+  applyCamera(mainCtx);
+  est.render(mainCtx);
+  unapplyCamera(mainCtx);
+}
+
+function copyToCanvas(destId) {
+  const dest = document.getElementById(destId);
+  const dctx = dest.getContext('2d');
+  dctx.clearRect(0, 0, dest.width, dest.height);
+  dctx.drawImage(mainCanvas, 0, 0, mainCanvas.width, mainCanvas.height,
+                              0, 0, dest.width, dest.height);
+}
+
+// Dibuja el SUELO DEL ANDÉN (zona visible NO tapada por la cara del
+// bordillo) como overlay verde semitransparente. La cara se dibuja hasta
+// el canto inferior del canvas, así que el suelo VISIBLE queda entre la
+// pared y la línea diagonal del borde del andén.
+function overlaySueloAnden(destId) {
+  const W = mainCanvas.width;
+  const H = mainCanvas.height;
+  // Después de applyCamera, el VP world está en x=W/2; en coords del canvas
+  // queda en x = W/2 - camera.offsetX porque hicimos translate(-offsetX, 0)
+  const vpXScreen = W / 2 - camera.offsetX;
+  const vpY = getCameraVpY(H * est.cfg.vanishingPointY);
+  const pR    = est.cfg.platformEdgeOffset  / 100;
+  const pVR   = est.cfg.platformEdgeOffsetVP / 100;
+  const overhangBase = W * 0.020;
+  const overhangVP   = W * 0.003;
+
+  const pBL_s   = vpXScreen - W * pR;
+  const pBR_s   = vpXScreen + W * pR;
+  const pVL_s   = vpXScreen - W * pVR;
+  const pVR_s   = vpXScreen + W * pVR;
+  // xBaseInner: borde donde TERMINA el suelo del andén (frontera con la
+  // cara del bordillo). Coincide con el rail externo en la base.
+  const xBaseInnerL_s = pBL_s + overhangBase;
+  const xBaseInnerR_s = pBR_s - overhangBase;
+  const xVPInnerL_s   = pVL_s + overhangVP;
+  const xVPInnerR_s   = pVR_s - overhangVP;
+  const platformTop   = H * est.cfg.platformTopRatio;
+  const platformVP    = vpY + 5;
+  // Altura de la cara del bordillo (igual que repisaH del render)
+  const repisaH       = Math.max(14, H * 0.04);
+  const repisaHVP     = Math.max(3, H * 0.010);
+
+  const dest = document.getElementById(destId);
+  const dctx = dest.getContext('2d');
+  const sx = dest.width  / W;
+  const sy = dest.height / H;
+
+  dctx.save();
+  dctx.fillStyle = 'rgba(40, 240, 100, 0.42)';
+  dctx.strokeStyle = 'rgba(40, 240, 100, 0.95)';
+  dctx.lineWidth = 2;
+
+  // SUELO IZQ: zona entre la pared y el borde-del-andén (línea donde
+  // empieza la cara del bordillo). Vértices:
+  //   TL = (0, platformTop)         — pared cerca cámara, top
+  //   TR = (vpXScreen, platformVP)  — VP, donde el suelo converge
+  //   BR = (xBaseInnerL, platformTop) — borde del andén cerca cámara
+  //   BL = (0, platformTop)         — pared cerca cámara, mismo punto que TL
+  // Nota: el suelo en perspectiva es ALMOST un triángulo (TL→TR→BR)
+  // porque el "suelo" desde la cámara se ve como una franja inclinada.
+  dctx.beginPath();
+  dctx.moveTo(0,                    platformTop  * sy);
+  dctx.lineTo(pVL_s * sx,           platformVP   * sy);
+  dctx.lineTo(xBaseInnerL_s * sx,   platformTop  * sy);
+  dctx.closePath();
+  dctx.fill();
+  dctx.stroke();
+
+  // SUELO DER (espejo)
+  dctx.beginPath();
+  dctx.moveTo(pVR_s * sx,           platformVP   * sy);
+  dctx.lineTo(dest.width,           platformTop  * sy);
+  dctx.lineTo(xBaseInnerR_s * sx,   platformTop  * sy);
+  dctx.closePath();
+  dctx.fill();
+  dctx.stroke();
+
+  // ── DESNIVEL (cara del bordillo) en MORADO ─────────────────────────────
+  // Geometría reducida un 44 % (desnivelRatio=0.5625) para coincidir con
+  // el render real.
+  const railOuter   = est.cfg.trackOuterOffset  / 100;
+  const railOuterVP = est.cfg.trackOuterOffsetVP / 100;
+  const railBaseL_s = vpXScreen - W * railOuter;
+  const railBaseR_s = vpXScreen + W * railOuter;
+  const railVPL_s   = vpXScreen - W * railOuterVP;
+  const railVPR_s   = vpXScreen + W * railOuterVP;
+  const desnivelRatio = 0.5625;
+  const dropNear   = (H - platformTop) * desnivelRatio;
+  const dropFar    = ((vpY + 8) - platformVP) * desnivelRatio;
+  const bottomNearY = platformTop + dropNear;
+  const bottomFarY  = platformVP + dropFar;
+
+  dctx.fillStyle = 'rgba(190, 80, 240, 0.50)';
+  dctx.strokeStyle = 'rgba(190, 80, 240, 0.95)';
+  dctx.lineWidth = 2;
+
+  // CARA IZQ
+  dctx.beginPath();
+  dctx.moveTo(xBaseInnerL_s * sx, platformTop * sy);
+  dctx.lineTo(railBaseL_s * sx,   bottomNearY * sy);
+  dctx.lineTo(railVPL_s * sx,     bottomFarY * sy);
+  dctx.lineTo(xVPInnerL_s * sx,   platformVP * sy);
+  dctx.closePath();
+  dctx.fill();
+  dctx.stroke();
+
+  // CARA DER (espejo)
+  dctx.beginPath();
+  dctx.moveTo(xBaseInnerR_s * sx, platformTop * sy);
+  dctx.lineTo(railBaseR_s * sx,   bottomNearY * sy);
+  dctx.lineTo(railVPR_s * sx,     bottomFarY * sy);
+  dctx.lineTo(xVPInnerR_s * sx,   platformVP * sy);
+  dctx.closePath();
+  dctx.fill();
+  dctx.stroke();
+
+  // ── Etiquetas con sombra negra ──────────────────────────────────────
+  dctx.fillStyle = 'rgba(255, 255, 255, 1)';
+  dctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+  dctx.lineWidth = 3;
+  dctx.font = 'bold 12px "Segoe UI", monospace';
+
+  // SUELO (verde)
+  const labelSueloY = (platformTop + platformVP) / 2 * sy;
+  const labelSueloLX = (pVL_s + xBaseInnerL_s) / 2 * sx - 40;
+  dctx.strokeText('SUELO', Math.max(8, labelSueloLX), labelSueloY);
+  dctx.fillText  ('SUELO', Math.max(8, labelSueloLX), labelSueloY);
+  const labelSueloRX = (pVR_s + xBaseInnerR_s) / 2 * sx - 12;
+  dctx.strokeText('SUELO', Math.min(dest.width - 60, labelSueloRX), labelSueloY);
+  dctx.fillText  ('SUELO', Math.min(dest.width - 60, labelSueloRX), labelSueloY);
+
+  // DESNIVEL (morado)
+  const labelDesnivelY = (platformTop + repisaH / 2) * sy + 4;
+  const labelDesnivelLX = xBaseInnerL_s * sx + 4;
+  dctx.strokeText('DESNIVEL', Math.max(8, labelDesnivelLX), labelDesnivelY);
+  dctx.fillText  ('DESNIVEL', Math.max(8, labelDesnivelLX), labelDesnivelY);
+  const labelDesnivelRX = xBaseInnerR_s * sx - 78;
+  dctx.strokeText('DESNIVEL', Math.min(dest.width - 80, labelDesnivelRX), labelDesnivelY);
+  dctx.fillText  ('DESNIVEL', Math.min(dest.width - 80, labelDesnivelRX), labelDesnivelY);
+
+  dctx.restore();
+}
+
+// Render inmediato de las 6 vistas (no espera rAF)
+for (const [id, cx, cy] of VIEWS) {
+  renderView(cx, cy);
+  copyToCanvas(id);
+  overlaySueloAnden(id);
+}
+</script>
+
+</body>
+</html>
